@@ -17,11 +17,11 @@ This guide will help you get started as an Implementer in the Phoenix project.
 
 3. **Create a branch for your task**
    ```bash
-   hack/create-branch.sh implementer PID-001 "Add feature"
+   scripts/dev/create-branch.sh implementer PID-001 "Add feature"
    ```
 
 4. **Write code and tests**
-   - If creating a new component: `hack/new-component.sh processor my_processor`
+   - If creating a new component: `scripts/dev/new-component.sh processor my_processor`
    - Make sure to write tests: `test/interfaces/updateable_processor_test.go` has examples
    - Add appropriate logging and metrics
 
@@ -43,7 +43,7 @@ This guide will help you get started as an Implementer in the Phoenix project.
 ### Adding a new processor
 
 ```bash
-hack/new-component.sh processor my_processor
+scripts/dev/new-component.sh processor my_processor
 ```
 
 ### Implementing the UpdateableProcessor interface

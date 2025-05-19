@@ -15,7 +15,7 @@ This guide will help you get started as a Planner in the Phoenix project.
 
 3. **Create a new task**
    ```bash
-   hack/create-task.sh "Implement feature X"
+   scripts/dev/create-task.sh "Implement feature X"
    ```
 
 4. **Edit the task file to add details**

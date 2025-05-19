@@ -41,7 +41,7 @@ phoenix/
 ├── test/                # Test framework
 ├── docs/                # Documentation
 │   └── adr/             # Architecture Decision Records
-├── hack/                # Development scripts
+├── scripts/dev/         # Development scripts
 ├── deploy/              # Deployment files
 ├── tasks/               # Task definitions
 └── agents/              # Agent role definitions
@@ -53,7 +53,7 @@ To add a new processor, extension, or connector:
 
 1. Call the appropriate script: 
    ```
-   hack/new-component.sh processor example_processor
+   scripts/dev/new-component.sh processor example_processor
    ```
 
 2. This will:

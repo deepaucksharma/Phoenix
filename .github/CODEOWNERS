@@ -20,7 +20,7 @@
 # Infrastructure
 /.github/            @devops-team
 /deploy/             @devops-team
-/hack/               @devops-team
+/scripts/dev/        @devops-team
 
 # Documentation
 /docs/               @docs-team
