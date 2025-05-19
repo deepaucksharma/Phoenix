@@ -1,33 +1,65 @@
-# Binaries and build output
+# Binaries
 /bin/
-/dist/
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
 
-# Test binaries
+# Test and coverage
 *.test
 *.out
-coverage.out
 coverage.html
+coverage.txt
+test_results/
+
+# Dependencies
+# vendor/ is committed intentionally for offline builds
 
 # IDE files
 .idea/
-.vscode/
-*.swp
-*.swo
+.vscode/*
+\!.vscode/settings.json
+\!.vscode/extensions.json
+*.code-workspace
+.history/
+*.iml
 .DS_Store
 
-# Dependency directories
-# Commenting out vendor to allow offline builds
-# /vendor/
+# Environment
+.env
+.env.local
+*.env.local
 
-# Log files
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.swp
+*.bak
+
+# Generated files
+*.pb.go
+mock_*.go
+*_mock.go
+*_gen.go
+
+# Build artifacts
+dist/
+.tmp/
+
+# Logs
 *.log
+logs/
 
-# Specific to this project
-/dashboards/*.json.swp
-/test-environments/*/data
-/test-environments/*/grafana/data
+# Configuration overrides for local development
+.local/
+
+# Container volumes
+volumes/
+
+# Misc
+*~
+notes.md
+.debug/
+EOF < /dev/null
