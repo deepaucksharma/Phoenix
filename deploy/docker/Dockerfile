@@ -14,7 +14,7 @@ RUN make build LDFLAGS="-X github.com/yourorg/sa-omf/cmd/sa-omf-otelcol/version.
                          -X github.com/yourorg/sa-omf/cmd/sa-omf-otelcol/version.BuildDate=${BUILD_DATE}"
 
 # Runtime stage
-FROM alpine:3.19
+FROM alpine:3.21
 
 RUN apk --no-cache add ca-certificates tzdata libc6-compat
 
