@@ -1,18 +1,19 @@
 id: PID-001
 title: "Add integrator anti-windup mechanism to PID controller"
-state: open
+state: closed
 priority: high
 created_at: "2025-05-19"
 assigned_to: "implementer"
 area: internal/control/pid
 depends_on: []
+closed_by_commit: 35f90e5b28479b640691027c9151c8c3266b35c0
 acceptance:
   - "Unit tests cover windup scenarios"
   - "Performance doesn't degrade"
   - "API remains backward compatible"
   - "Documentation is updated"
 description: |
-  The current PID controller implementation needs an anti-windup mechanism 
+  The current PID controller implementation needs an anti-windup mechanism
   to prevent integral term from growing too large when the output is saturated.
   
   This should:
