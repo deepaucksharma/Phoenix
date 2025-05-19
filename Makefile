@@ -25,6 +25,12 @@ test-integration:
 	@echo "Running integration tests..."
 	@go test -v ./test/integration/...
 
+# Verify drift - Code consistency check for interdependent files
+drift-check:
+	@echo "Checking for code drift..."
+	@hack/check_component_registry.sh
+	@go mod tidy
+
 # Run tests with coverage
 test-coverage:
 	@echo "Running tests with coverage..."
@@ -35,7 +41,7 @@ test-coverage:
 # Run benchmarks
 benchmark:
 	@echo "Running benchmarks..."
-	@go test -bench=. -benchmem ./test/unit/...
+	@go test -bench=. -benchmem ./test/benchmark/...
 
 # Clean build artifacts
 clean:
@@ -69,7 +75,7 @@ docker:
 # Run collector with default config
 run:
 	@echo "Running SA-OMF with default config..."
-	@go run ./cmd/sa-omf-otelcol/main.go --config=deploy/config.yaml
+	@go run ./cmd/sa-omf-otelcol/main.go --config=config/config.yaml
 
 # Create a tag and version for release
 release:

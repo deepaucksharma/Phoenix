@@ -5,8 +5,8 @@ services:
     image: yourorg/sa-omf-collector:latest
     container_name: sa-omf-collector
     volumes:
-      - ./examples/config.yaml:/etc/sa-omf/config.yaml
-      - ./examples/policy.yaml:/etc/sa-omf/policy.yaml
+      - ../config/config.yaml:/etc/sa-omf/config.yaml
+      - ./policy.yaml:/etc/sa-omf/policy.yaml
       - /proc:/proc:ro  # For host metrics access
       - /sys:/sys:ro    # For host metrics access
     ports:

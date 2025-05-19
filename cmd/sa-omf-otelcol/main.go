@@ -17,7 +17,7 @@ import (
 	"github.com/yourorg/sa-omf/internal/extension/piccontrolext"
 	"github.com/yourorg/sa-omf/internal/connector/picconnector"
 	"github.com/yourorg/sa-omf/internal/processor/prioritytagger"
-	"github.com/yourorg/sa-omf/internal/processor/adaptivepid"
+	"github.com/yourorg/sa-omf/internal/processor/adaptive_pid"
 	// Add more component imports as they are implemented
 )
 
@@ -70,7 +70,7 @@ func components() (otelcol.Factories, error) {
 	processors := []processor.Factory{
 		// Add custom processors as they are implemented:
 		prioritytagger.NewFactory(),
-		adaptivepid.NewFactory(),
+		adaptive_pid.NewFactory(),
 		// etc.
 	}
 	factories.Processors, err = processor.MakeFactoryMap(processors...)

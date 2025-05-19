@@ -41,7 +41,7 @@ The Self-Aware OpenTelemetry Metrics Fabric (SA-OMF) is an advanced metrics coll
 
 3. Run with a local configuration:
    ```bash
-   ./bin/sa-omf-otelcol --config=./examples/config.yaml
+   ./bin/sa-omf-otelcol --config=./config/config.yaml
    ```
 
 ## Architecture

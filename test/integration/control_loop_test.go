@@ -14,8 +14,8 @@ import (
 	"go.opentelemetry.io/collector/processor"
 
 	"github.com/yourorg/sa-omf/internal/extension/piccontrolext"
-	"github.com/yourorg/sa-omf/internal/processor/adaptivepid"
-	"github.com/yourorg/sa-omf/internal/processor/adaptivetopk"
+	"github.com/yourorg/sa-omf/internal/processor/adaptive_pid"
+	"github.com/yourorg/sa-omf/internal/processor/adaptive_topk"
 	"github.com/yourorg/sa-omf/test/testutils"
 )
 
@@ -47,7 +47,7 @@ func TestControlLoopIntegration(t *testing.T) {
 	require.NoError(t, err, "Failed to start pic_control extension")
 
 	// Create adaptive_topk processor (to be controlled)
-	topkFactory := adaptivetopk.NewFactory()
+	topkFactory := adaptive_topk.NewFactory()
 	topkConfig := topkFactory.CreateDefaultConfig().(*adaptivetopk.Config)
 	topkConfig.KValue = 30
 	topkConfig.KMin = 10

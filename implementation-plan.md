@@ -71,7 +71,8 @@ sa-omf/
 │   └── docker/                      # Dockerfile
 └── docs/                            # Documentation
     ├── design/                      # Architecture documentation
-    ├── examples/                    # Example configurations
+    ├── config/                      # Collector configuration
+    ├── examples/                    # Example configurations and symbolic links
     └── tutorials/                   # User guides
 ```
 

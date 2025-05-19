@@ -18,7 +18,7 @@ import (
 
 	"github.com/yourorg/sa-omf/internal/extension/piccontrolext"
 	"github.com/yourorg/sa-omf/internal/interfaces"
-	"github.com/yourorg/sa-omf/internal/processor/adaptivepid"
+	"github.com/yourorg/sa-omf/internal/processor/adaptive_pid"
 	"github.com/yourorg/sa-omf/pkg/metrics"
 )
 
@@ -34,8 +34,8 @@ func TestControlLoop(t *testing.T) {
 	mockPICControl := newMockPICControl(t)
 
 	// Create processors
-	factory := adaptivepid.NewFactory()
-	cfg := factory.CreateDefaultConfig().(*adaptivepid.Config)
+	factory := adaptive_pid.NewFactory()
+	cfg := factory.CreateDefaultConfig().(*adaptive_pid.Config)
 	
 	// Set up a controller targeting a specific KPI
 	cfg.Controllers[0].KPIMetricName = "aemf_impact_adaptive_topk_resource_coverage_percent"

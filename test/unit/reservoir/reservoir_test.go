@@ -1,9 +1,11 @@
-package reservoir
+package reservoir_test
 
 import (
 	"fmt"
 	"math"
 	"testing"
+	
+	"github.com/yourorg/sa-omf/pkg/util/reservoir"
 )
 
 func TestReservoirSampler(t *testing.T) {
@@ -19,7 +21,7 @@ func TestReservoirSampler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rs := NewReservoirSampler(tt.capacity)
+			rs := reservoir.NewReservoirSampler(tt.capacity)
 
 			// Add items
 			for i := 0; i < tt.items; i++ {
@@ -64,7 +66,7 @@ func TestReservoirSamplerDistribution(t *testing.T) {
 	capacity := 1000
 	itemCount := 100000
 	
-	rs := NewReservoirSampler(capacity)
+	rs := reservoir.NewReservoirSampler(capacity)
 
 	// Add items
 	for i := 0; i < itemCount; i++ {
@@ -102,7 +104,7 @@ func TestReservoirSamplerDistribution(t *testing.T) {
 }
 
 func TestStratifiedReservoirSampler(t *testing.T) {
-	srs := NewStratifiedReservoirSampler()
+	srs := reservoir.NewStratifiedReservoirSampler()
 	
 	// Add items to different strata
 	strata := []string{"low", "medium", "high"}
