@@ -1,10 +1,28 @@
 package benchmark
 
 import (
+	"os"
+	"runtime/pprof"
 	"testing"
 
 	"github.com/deepaucksharma/Phoenix/internal/control/pid"
 )
+
+// Helper function to start CPU profiling
+func startCPUProfile(b *testing.B, name string) func() {
+	f, err := os.Create(name)
+	if err != nil {
+		b.Fatal(err)
+	}
+	if err := pprof.StartCPUProfile(f); err != nil {
+		f.Close()
+		b.Fatal(err)
+	}
+	return func() {
+		pprof.StopCPUProfile()
+		f.Close()
+	}
+}
 
 func BenchmarkPIDControllerCompute(b *testing.B) {
 	ctrl := pid.NewController(0.1, 0.01, 0.05, 10)
