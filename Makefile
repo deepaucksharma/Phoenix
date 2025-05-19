@@ -28,7 +28,7 @@ test-integration:
 # Verify drift - Code consistency check for interdependent files
 drift-check:
 	@echo "Checking for code drift..."
-	@hack/check_component_registry.sh
+	@scripts/ci/check_component_registry.sh
 	@go mod tidy
 
 # Run tests with coverage
@@ -75,7 +75,7 @@ docker:
 # Run collector with default config
 run:
 	@echo "Running SA-OMF with default config..."
-	@go run ./cmd/sa-omf-otelcol/main.go --config=config/config.yaml
+	@go run ./cmd/sa-omf-otelcol/main.go --config=configs/default/config.yaml
 
 # Create a tag and version for release
 release:

@@ -48,7 +48,7 @@ func TestControlLoopIntegration(t *testing.T) {
 
 	// Create adaptive_topk processor (to be controlled)
 	topkFactory := adaptive_topk.NewFactory()
-	topkConfig := topkFactory.CreateDefaultConfig().(*adaptivetopk.Config)
+	topkConfig := topkFactory.CreateDefaultConfig().(*adaptive_topk.Config)
 	topkConfig.KValue = 30
 	topkConfig.KMin = 10
 	topkConfig.KMax = 100
@@ -71,9 +71,9 @@ func TestControlLoopIntegration(t *testing.T) {
 	require.NoError(t, err, "Failed to start adaptive_topk processor")
 
 	// Create pid_decider processor
-	pidFactory := adaptivepid.NewFactory()
-	pidConfig := pidFactory.CreateDefaultConfig().(*adaptivepid.Config)
-	pidConfig.Controllers = []adaptivepid.ControllerConfig{
+	pidFactory := adaptive_pid.NewFactory()
+	pidConfig := pidFactory.CreateDefaultConfig().(*adaptive_pid.Config)
+	pidConfig.Controllers = []adaptive_pid.ControllerConfig{
 		{
 			Name:              "coverage_controller",
 			Enabled:           true,
@@ -82,7 +82,7 @@ func TestControlLoopIntegration(t *testing.T) {
 			KP:                10.0,
 			KI:                0.0,
 			KD:                0.0,
-			OutputConfigPatches: []adaptivepid.OutputConfigPatch{
+			OutputConfigPatches: []adaptive_pid.OutputConfigPatch{
 				{
 					TargetProcessorName: "adaptive_topk",
 					ParameterPath:       "k_value",

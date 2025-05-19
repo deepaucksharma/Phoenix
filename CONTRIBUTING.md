@@ -8,10 +8,31 @@ Thank you for considering contributing to the Phoenix project! This document out
 - Docker for containerized testing
 - Make for build automation
 
+## Project Structure
+
+The project is organized as follows:
+- `cmd/`: Application entrypoints
+- `configs/`: Configuration files
+- `deploy/`: Deployment resources
+- `docs/`: Documentation
+- `internal/`: Internal packages
+- `pkg/`: Public packages
+- `scripts/`: Helper scripts
+- `test/`: Test code
+- `tasks/`: Task definitions
+
+See the [README.md](README.md) for more detailed information about the repository structure.
+
 ## Development Workflow
 
 1. Pick a task from the `tasks/` directory or create a new one
+   ```bash
+   ./scripts/dev/create-task.sh "Your task description"
+   ```
 2. Create a feature branch from `main`
+   ```bash
+   ./scripts/dev/create-branch.sh feature "Your feature description"
+   ```
 3. Implement your changes
 4. Run tests locally (`make test`)
 5. Run linting (`make lint`)
@@ -20,7 +41,7 @@ Thank you for considering contributing to the Phoenix project! This document out
 
 ## Agent-Based Workflow
 
-Phoenix uses a structured agent-based workflow where contributors take on specific roles. See `AGENTS.md` for details on roles and responsibilities.
+Phoenix uses a structured agent-based workflow where contributors take on specific roles. See `docs/agents/AGENTS.md` for details on roles and responsibilities.
 
 ## Pull Request Process
 
