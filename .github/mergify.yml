@@ -1,0 +1,45 @@
+pull_request_rules:
+  - name: Automatic merge on approval and passing CI
+    conditions:
+      - "#approved-reviews-by>=1"
+      - check-success=lint
+      - check-success=test
+      - base=main
+      - label!=do-not-merge
+    actions:
+      merge:
+        method: squash
+        strict: smart
+        commit_message: title+body
+      delete_head_branch: {}
+
+  - name: Automatic merge for dependabot PRs
+    conditions:
+      - author=dependabot[bot]
+      - check-success=lint
+      - check-success=test
+      - base=main
+    actions:
+      merge:
+        method: squash
+        strict: smart
+        commit_message: title+body
+      delete_head_branch: {}
+
+  - name: Label PRs with conflicts
+    conditions:
+      - conflict
+    actions:
+      comment:
+        message: "This PR has conflicts that must be resolved before it can be merged."
+      label:
+        add:
+          - conflict
+
+  - name: Remove conflict label when conflicts resolved
+    conditions:
+      - -conflict
+    actions:
+      label:
+        remove:
+          - conflict

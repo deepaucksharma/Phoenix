@@ -1,0 +1,44 @@
+documentation:
+  - 'docs/**/*'
+  - '**/*.md'
+  - 'README.md'
+  - 'CONTRIBUTING.md'
+
+ci:
+  - '.github/**/*'
+  - '.github/workflows/*'
+
+dependencies:
+  - 'go.mod'
+  - 'go.sum'
+
+core:
+  - 'internal/interfaces/**/*'
+  - 'internal/control/**/*'
+
+processors:
+  - 'internal/processor/**/*'
+
+extensions:
+  - 'internal/extension/**/*'
+
+connectors:
+  - 'internal/connector/**/*'
+
+tests:
+  - 'test/**/*'
+  - '**/*_test.go'
+
+config:
+  - 'config/**/*'
+  - 'deploy/**/*'
+  - '*.yaml'
+  - '*.yml'
+
+utilities:
+  - 'pkg/**/*'
+
+build:
+  - 'Makefile'
+  - 'tools.mk'
+  - 'cmd/**/*'

@@ -1,0 +1,16 @@
+# Configuration for welcome - https://github.com/behaviorbot/welcome
+
+# Comment to be posted to on first time issues
+newIssueWelcomeComment: >
+  Thanks for opening your first issue in the Phoenix project! 🎉 
+  We'll review it as soon as possible.
+
+# Comment to be posted to on PRs from first time contributors
+newPRWelcomeComment: >
+  Thanks for opening this pull request! 🚀
+  Please make sure you've read our [contributing guidelines](CONTRIBUTING.md).
+  Someone from the team will review your PR shortly.
+
+# Comment to be posted to on pull requests merged by a first time user
+firstPRMergeComment: >
+  Congratulations on getting your first PR merged! 🎊 Thank you for your contribution to the Phoenix project!
