@@ -51,7 +51,7 @@ func TestProcessContextLearner(t *testing.T) {
 
 	lp := proc.(*learner.ProcessorImpl)
 	scores := lp.GetScores()
-	require.Len(t, scores, 4)
+	require.Len(t, scores, 5)
 
 	assert.Greater(t, scores[1], scores[2])
 	assert.Greater(t, scores[2], scores[3])
