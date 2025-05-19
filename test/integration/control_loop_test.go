@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/consumer/consumertest"
+	"go.opentelemetry.io/collector/extension"
 	"go.opentelemetry.io/collector/processor"
 
 	"github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
@@ -21,8 +21,8 @@ import (
 
 // TestControlLoopIntegration tests the end-to-end control loop.
 func TestControlLoopIntegration(t *testing.T) {
-	// Create test host
-	host := &componenttest.TestHost{}
+	// Create a custom test host
+	host := testutils.NewTestHost()
 
 	// Create pic_control extension
 	picCtrlFactory := pic_control_ext.NewFactory()
@@ -31,9 +31,14 @@ func TestControlLoopIntegration(t *testing.T) {
 	picCtrlConfig.MaxPatchesPerMinute = 10
 	picCtrlConfig.PatchCooldownSeconds = 1
 
-	picCtrlExt, err := picCtrlFactory.CreateExtension(
+	// Use the factory's WithExtensions method to create the extension
+	createExtension := picCtrlFactory.(extension.Factory).WithExtensions()
+	picCtrlExt, err := createExtension(
 		context.Background(),
-		component.ExtensionCreateSettings{},
+		extension.Settings{
+			TelemetrySettings: component.TelemetrySettings{},
+			ID: component.NewID(component.MustNewType("pic_control")),
+		},
 		picCtrlConfig,
 	)
 	require.NoError(t, err, "Failed to create pic_control extension")
@@ -54,9 +59,14 @@ func TestControlLoopIntegration(t *testing.T) {
 	topkConfig.KMax = 100
 
 	topkSink := new(consumertest.MetricsSink)
-	topkProc, err := topkFactory.CreateMetricsProcessor(
+	// Use the factory's WithMetrics method to create the processor
+	createProcessor := topkFactory.(processor.Factory).WithMetrics()
+	topkProc, err := createProcessor(
 		context.Background(),
-		processor.CreateSettings{},
+		processor.Settings{
+			TelemetrySettings: component.TelemetrySettings{},
+			ID: component.NewID(component.MustNewType("adaptive_topk")),
+		},
 		topkConfig,
 		topkSink,
 	)
@@ -96,9 +106,14 @@ func TestControlLoopIntegration(t *testing.T) {
 
 	// Create a test sink for PID processor output
 	pidSink := new(consumertest.MetricsSink)
-	pidProc, err := pidFactory.CreateMetricsProcessor(
+	// Use the factory's WithMetrics method to create the processor
+	createPIDProcessor := pidFactory.(processor.Factory).WithMetrics()
+	pidProc, err := createPIDProcessor(
 		context.Background(),
-		processor.CreateSettings{},
+		processor.Settings{
+			TelemetrySettings: component.TelemetrySettings{},
+			ID: component.NewID(component.MustNewType("adaptive_pid")),
+		},
 		pidConfig,
 		pidSink,
 	)
@@ -116,7 +131,7 @@ func TestControlLoopIntegration(t *testing.T) {
 		pidSink.Reset()
 
 		// Test scenario 1: Coverage too low (0.7), should increase k_value
-		kValueBefore := topkConfig.KValue
+		// kValueBefore := topkConfig.KValue // Unused variable
 		coverageMetrics := testutils.GenerateControlMetrics(0.7) // 70% coverage
 		
 		// Send metrics to PID controller
