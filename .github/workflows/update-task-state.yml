@@ -1,0 +1,57 @@
+name: Update Task State
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  update-task-state:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: main
+
+      - name: Extract tasks from PR
+        id: extract_tasks
+        run: |
+          PR_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" \
+            | jq -r '.body')
+          
+          TASKS=$(echo "$PR_BODY" | grep -Po '(?<=`TASKS: ).*?(?=`)' || echo "")
+          
+          if [ -z "$TASKS" ] || [ "$TASKS" = "N/A" ]; then
+            echo "No tasks to update"
+            exit 0
+          fi
+          
+          echo "tasks=$TASKS" >> $GITHUB_OUTPUT
+          echo "Found tasks: $TASKS"
+
+      - name: Update task state
+        if: steps.extract_tasks.outputs.tasks != ''
+        run: |
+          TASKS="${{ steps.extract_tasks.outputs.tasks }}"
+          IFS=',' read -ra TASK_IDS <<< "$TASKS"
+          
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          for task_id in "${TASK_IDS[@]}"; do
+            task_id=$(echo $task_id | xargs)  # Trim whitespace
+            
+            if [ -f "tasks/$task_id.yaml" ]; then
+              echo "Updating task $task_id to state: done"
+              sed -i 's/^state: .*/state: done/' "tasks/$task_id.yaml"
+              git add "tasks/$task_id.yaml"
+            fi
+          done
+          
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: Mark tasks as done [skip ci]"
+            git push
+          fi

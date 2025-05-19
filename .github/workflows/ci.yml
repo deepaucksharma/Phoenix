@@ -44,7 +44,10 @@ jobs:
         run: make build
         
       - name: Validate Policy
-        run: go run hack/validate_policy.go deploy/policy.yaml
+        run: bash hack/validate_policy_schema.sh
+        
+      - name: Check Component Registry
+        run: bash hack/check_component_registry.sh
 
   docker:
     name: Docker

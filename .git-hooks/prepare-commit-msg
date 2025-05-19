@@ -1,0 +1,33 @@
+#!/bin/bash
+# pre-commit hook - Ensure commit messages include ROLE and TASKS
+
+commit_msg_file=$1
+commit_msg=$(cat "$commit_msg_file")
+
+# Get current role from git config
+ROLE=$(git config --get user.role 2>/dev/null || echo "")
+
+if [ -z "$ROLE" ]; then
+  echo "Warning: No role set. Please run: git config --global user.role <role>"
+fi
+
+# Check if commit message already includes ROLE
+if ! grep -q "ROLE:" "$commit_msg_file"; then
+  echo "" >> "$commit_msg_file"
+  echo "ROLE: $ROLE" >> "$commit_msg_file"
+fi
+
+# Get current branch to detect task
+BRANCH=$(git symbolic-ref --short HEAD)
+TASK_ID=$(echo "$BRANCH" | grep -o 'PID-[0-9]\+' || echo "")
+
+# Check if commit message already includes TASKS
+if ! grep -q "TASKS:" "$commit_msg_file" && [ -n "$TASK_ID" ]; then
+  echo "TASKS: $TASK_ID" >> "$commit_msg_file"
+fi
+
+# Print a reminder about the role
+echo "Committing as role: $ROLE"
+if [ -n "$TASK_ID" ]; then
+  echo "For task: $TASK_ID"
+fi
