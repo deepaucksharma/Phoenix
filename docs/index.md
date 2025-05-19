@@ -1,4 +1,4 @@
-# Phoenix Documentation
+# Phoenix Project Documentation
 
 Welcome to the documentation for the **Phoenix** project (SA-OMF: Self-Aware OpenTelemetry Metrics Fabric), an advanced metrics collection and processing system built on top of OpenTelemetry that features adaptive processing through PID control loops.
 
@@ -39,11 +39,18 @@ Welcome to the documentation for the **Phoenix** project (SA-OMF: Self-Aware Ope
 - [Contributing Guide](./contributing.md) - How to contribute to Phoenix
 - [Testing Framework](./testing/validation-framework.md) - Framework for testing
 - [Development Workflow](./development-guide.md) - Development workflow and practices
-- [Agent Configuration](./agents/README.md) - Claude Code agent configurations
+- [Agent Framework](./agents/README.md) - Claude Code agent configurations
+
+### Audit Framework
+
+- [Audit Overview](../audit/README.md) - Overview of the audit framework
+- [Audit Agenda](../audit/AUDIT_AGENDA.md) - Structured audit process
+- [Audit Metrics](../audit/AUDIT_METRICS.md) - Metrics for measuring audit effectiveness
+- [Component Audit Results](../audit/summary.md) - Summary of audit findings
 
 ## Reference
 
-- [Changelog](./changelog.md) - Version history and changes
+- [Changelog](../CHANGELOG.md) - Version history and changes
 - [Configuration Reference](./configuration-reference.md) - Complete configuration options
 - [API Reference](./api-reference.md) - API details
 

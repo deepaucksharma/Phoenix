@@ -9,22 +9,40 @@ This directory contains a comprehensive testing framework for the SA-OMF (Phoeni
   - `reservoir/` - Reservoir sampling algorithm tests
   - `topk/` - Space-Saving algorithm tests
   - `pid/` - PID controller tests
+  - `causality/` - Causality detection algorithm tests
+  - `timeseries/` - Time series analysis tests
+  - `metrics/` - Metrics utilities tests
+  - `policy/` - Policy validation tests
+
+- `benchmarks/` - Performance and benchmarking tests
+  - `algorithms/` - Algorithm performance tests
+  - `component/` - Component benchmark tests
+
+- `e2e/` - End-to-end tests
+  - `integration/` - Integration tests for component interactions
+  - `benchmarks/` - End-to-end performance benchmarks
+
 - `interfaces/` - Interface contract tests (e.g., UpdateableProcessor)
+
 - `processors/` - Tests for specific metric processors
   - `adaptive_pid/` - Tests for the PID decision processor
-  - `adaptive_topk/` - Tests for the adaptive TopK processor
-  - `prioritytagger/` - Tests for the priority tagging processor
+  - `priority_tagger/` - Tests for the priority tagging processor
+  - `process_context_learner/` - Tests for the context learning processor
+  - `others_rollup/` - Tests for the others rollup processor
+  - `cardinality_guardian/` - Tests for the cardinality guardian processor
   - `templates/` - Shared test templates for processors
+
 - `extensions/` - Tests for custom extensions
-  - `piccontrolext/` - Tests for the PIC control extension
-- `integration/` - Component interaction tests
-- `e2e_tests/` - End-to-end system tests
-- `benchmarks/` - Performance and benchmarking tests
-  - `processors/` - Processor performance tests
-  - `algorithms/` - Algorithm performance tests
-  - `performance/` - End-to-end performance tests
+  - `pic_control_ext/` - Tests for the PIC control extension
+
 - `testutils/` - Shared testing utilities
+  - `metrics_generator.go` - Generates test metrics
+  - `metrics_helper.go` - Helpers for testing with metrics
+  - `pid_helper.go` - Helpers for testing PID controllers
+
 - `generator/` - Test data generation utilities
+
+- `chaos/` - Chaos testing framework for system resilience
 
 ## Running Tests
 
@@ -55,6 +73,9 @@ make benchmark
 # Test specific components
 go test -v ./test/processors/adaptive_pid/...
 go test -v ./test/unit/hll/...
+
+# Run e2e tests
+go test -v ./test/e2e/...
 
 # Run benchmarks for specific algorithms
 go test -v ./test/benchmarks/algorithms/... -bench=.

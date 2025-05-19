@@ -1,6 +1,6 @@
 id: PID-001
 title: "Add integrator anti-windup mechanism to PID controller"
-state: open
+state: completed
 priority: high
 created_at: "2025-05-19"
 assigned_to: "implementer"

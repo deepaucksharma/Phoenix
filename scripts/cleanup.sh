@@ -29,9 +29,9 @@ run_script_if_exists() {
 }
 
 # Run all cleanup scripts
-run_script_if_exists "standardize_yaml.sh"
-run_script_if_exists "standardize_scripts.sh"
-run_script_if_exists "format_dashboards.sh"
+run_script_if_exists "standardize-yaml.sh"
+run_script_if_exists "standardize-scripts.sh"
+run_script_if_exists "format-dashboards.sh"
 
 echo "=== Cleanup Complete ==="
 echo ""

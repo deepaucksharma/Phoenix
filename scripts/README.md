@@ -5,7 +5,7 @@ This directory contains scripts that support development, CI/CD, and validation 
 ## Directory Structure
 
 - **ci/**: Continuous Integration scripts
-  - **check_component_registry.sh**: Verifies that all components are properly registered in main.go
+  - **check-component-registry.sh**: Verifies that all components are properly registered in main.go
 - **dev/**: Development workflow scripts
   - **create-branch.sh**: Creates a new git branch with proper naming
   - **create-task.sh**: Creates a new task file

@@ -165,7 +165,7 @@ release:
 # Set up local development environment
 dev-setup:
 	@echo "Setting up development environment..."
-	@bash setup_offline_build.sh || true
+	@bash scripts/setup/setup_offline_build.sh || true
 	@if command -v golangci-lint &> /dev/null; then \
 		echo "golangci-lint already installed."; \
 	else \

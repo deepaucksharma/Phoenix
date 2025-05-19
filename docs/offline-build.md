@@ -8,7 +8,7 @@ The easiest way to get started with offline building is:
 
 ```bash
 # Run the setup script to configure environment
-./setup_offline_build.sh
+./scripts/setup/setup-offline-build.sh
 
 # Build the project
 make build
