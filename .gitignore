@@ -1,0 +1,32 @@
+# Binaries and build output
+/bin/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+*.out
+coverage.out
+coverage.html
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Dependency directories
+/vendor/
+
+# Log files
+*.log
+
+# Specific to this project
+/dashboards/*.json.swp
+/test-environments/*/data
+/test-environments/*/grafana/data

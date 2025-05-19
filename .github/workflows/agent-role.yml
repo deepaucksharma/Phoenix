@@ -1,0 +1,129 @@
+name: Agent Role Validation
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+jobs:
+  validate-role:
+    name: Validate Agent Role
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Needed to get all commits
+
+      - name: Extract role from PR body
+        id: extract_role
+        run: |
+          PR_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" \
+            | jq -r '.body')
+          
+          ROLE=$(echo "$PR_BODY" | grep -Po '(?<=`ROLE: ).*?(?=`)' || echo "")
+          TASKS=$(echo "$PR_BODY" | grep -Po '(?<=`TASKS: ).*?(?=`)' || echo "")
+          
+          echo "role=$ROLE" >> $GITHUB_OUTPUT
+          echo "tasks=$TASKS" >> $GITHUB_OUTPUT
+          
+          if [ -z "$ROLE" ]; then
+            echo "Error: No role declared in PR body. Add 'ROLE: role_name' to your PR description."
+            exit 1
+          fi
+          
+          echo "Declared role: $ROLE"
+          echo "Referenced tasks: $TASKS"
+      
+      - name: Check role exists
+        run: |
+          ROLE="${{ steps.extract_role.outputs.role }}"
+          if [ ! -f "agents/$ROLE.yaml" ]; then
+            echo "Error: Role '$ROLE' not found in agents/ directory"
+            echo "Available roles: $(ls agents/ | sed 's/\.yaml//')"
+            exit 1
+          fi
+
+      - name: Check file permissions
+        run: |
+          ROLE="${{ steps.extract_role.outputs.role }}"
+          
+          # Get allowed paths from role definition
+          CAN_TOUCH=$(yq -r '.can_touch[]' agents/$ROLE.yaml)
+          BLOCKED_FILES=$(yq -r '.blocked_files[]' agents/$ROLE.yaml)
+          MUST_TOUCH=$(yq -r '.must_touch[]' agents/$ROLE.yaml)
+          
+          # Get files changed in this PR
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+          
+          # Check blocked files
+          for blocked in $BLOCKED_FILES; do
+            for file in $CHANGED_FILES; do
+              if [[ "$file" == $blocked ]]; then
+                echo "Error: '$file' cannot be modified by role '$ROLE'"
+                exit 1
+              fi
+            done
+          done
+          
+          # Check if all files are allowed
+          for file in $CHANGED_FILES; do
+            ALLOWED=false
+            for pattern in $CAN_TOUCH; do
+              if [[ "$file" == $pattern ]]; then
+                ALLOWED=true
+                break
+              fi
+            done
+            
+            if [ "$ALLOWED" = false ]; then
+              echo "Error: '$file' is not allowed to be modified by role '$ROLE'"
+              exit 1
+            fi
+          done
+          
+          # Check must_touch requirements
+          if [ -n "$MUST_TOUCH" ]; then
+            for pattern in $MUST_TOUCH; do
+              TOUCHED=false
+              for file in $CHANGED_FILES; do
+                if [[ "$file" == $pattern ]]; then
+                  TOUCHED=true
+                  break
+                fi
+              done
+              
+              if [ "$TOUCHED" = false ]; then
+                echo "Error: Role '$ROLE' must modify files matching '$pattern'"
+                exit 1
+              fi
+            done
+          fi
+          
+          echo "All file changes comply with role '$ROLE' permissions"
+
+      - name: Validate task references
+        if: steps.extract_role.outputs.tasks != 'N/A'
+        run: |
+          TASKS="${{ steps.extract_role.outputs.tasks }}"
+          IFS=',' read -ra TASK_IDS <<< "$TASKS"
+          
+          for task_id in "${TASK_IDS[@]}"; do
+            task_id=$(echo $task_id | xargs)  # Trim whitespace
+            
+            if [ ! -f "tasks/$task_id.yaml" ]; then
+              echo "Error: Task '$task_id' not found in tasks/ directory"
+              exit 1
+            fi
+            
+            TASK_STATE=$(yq -r '.state' "tasks/$task_id.yaml")
+            if [ "$TASK_STATE" = "done" ]; then
+              echo "Error: Task '$task_id' is already marked as done"
+              exit 1
+            fi
+          done
+          
+          echo "All referenced tasks exist and are not completed"
