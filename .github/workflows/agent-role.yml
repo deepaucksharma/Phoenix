@@ -3,9 +3,6 @@ name: Agent Role Validation
 on:
   pull_request:
     branches: [ main ]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
 
 # Ensure only one agent role validation job runs at a time, and cancel in-progress runs
 concurrency:
@@ -42,15 +39,18 @@ jobs:
             ROLE="dependabot"
             TASKS="N/A"
           else
-            ROLE=$(echo "$PR_BODY" | grep -Po '(?<=`ROLE: ).*?(?=`)' || echo "")
-            TASKS=$(echo "$PR_BODY" | grep -Po '(?<=`TASKS: ).*?(?=`)' || echo "")
+            ROLE=$(echo "$PR_BODY" | grep -Po '(?<=ROLE: <!-- ).*?(?= -->)' | xargs || echo "")
+            TASKS=$(echo "$PR_BODY" | grep -Po '(?<=TASKS: <!-- ).*?(?= -->)' | xargs || echo "")
           fi
           
           echo "role=$ROLE" >> $GITHUB_OUTPUT
           echo "tasks=$TASKS" >> $GITHUB_OUTPUT
           
           if [ -z "$ROLE" ]; then
-            echo "Error: No role declared in PR body. Add 'ROLE: role_name' to your PR description."
+            echo "Error: No role declared in PR body. Add 'ROLE: <!-- role_name -->' to your PR description."
+            exit 1
+          elif [ "$ROLE" == "N/A" ]; then
+            echo "Error: 'ROLE: <!-- N/A -->' is not permitted. A specific role must be declared."
             exit 1
           fi
           

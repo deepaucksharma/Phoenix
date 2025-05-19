@@ -17,8 +17,8 @@ Each agent must work within a specific role as defined in `/agents/*.yaml`. The 
 
 All agents must:
 1. Declare their role in PRs (using `ROLE: role_name`)
-2. Reference tasks they're working on (using `TASKS: task-id`)
-3. Respect the file permissions defined for their role
+2. Reference tasks they're working on (using `TASKS: task-id` or `TASKS: N/A`)
+3. Respect the file permissions defined for their role. These permissions (`can_touch`, `blocked_files`, `must_touch` in `agents/*.yaml`) apply to the **entire repository** and use **glob patterns** for path matching.
 
 ## Directory Structure
 

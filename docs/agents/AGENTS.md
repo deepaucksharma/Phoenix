@@ -1,6 +1,6 @@
 # Phoenix – Agent Role Framework
 
-This document defines the roles, responsibilities, and boundaries for agents and human contributors working on the Phoenix project. By following these guidelines, we can maintain code quality and consistency while enabling parallel development.
+This document defines the roles, responsibilities, and boundaries for agents and human contributors working on the Phoenix project. These roles and their associated permissions (defined in their respective `.yaml` files in this directory) apply project-wide and are enforced by CI checks. By following these guidelines, we can maintain code quality and consistency while enabling parallel development.
 
 ## Role Catalogue
 
