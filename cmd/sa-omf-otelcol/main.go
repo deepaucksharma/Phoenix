@@ -14,10 +14,11 @@ import (
 	"go.opentelemetry.io/collector/receiver"
 
 	// Import your components here
-	"github.com/yourorg/sa-omf/internal/extension/piccontrolext"
 	"github.com/yourorg/sa-omf/internal/connector/picconnector"
-	"github.com/yourorg/sa-omf/internal/processor/prioritytagger"
+	"github.com/yourorg/sa-omf/internal/extension/piccontrolext"
 	"github.com/yourorg/sa-omf/internal/processor/adaptive_pid"
+	"github.com/yourorg/sa-omf/internal/processor/adaptive_topk"
+	"github.com/yourorg/sa-omf/internal/processor/prioritytagger"
 	// Add more component imports as they are implemented
 )
 
@@ -60,7 +61,7 @@ func components() (otelcol.Factories, error) {
 	// Receivers
 	// Use standard receivers from contrib packages
 	factories.Receivers, err = receiver.MakeFactoryMap(
-		// Add receivers as needed
+	// Add receivers as needed
 	)
 	if err != nil {
 		return otelcol.Factories{}, fmt.Errorf("failed to create receiver factories: %w", err)
@@ -71,6 +72,7 @@ func components() (otelcol.Factories, error) {
 		// Add custom processors as they are implemented:
 		prioritytagger.NewFactory(),
 		adaptive_pid.NewFactory(),
+		adaptive_topk.NewFactory(),
 		// etc.
 	}
 	factories.Processors, err = processor.MakeFactoryMap(processors...)
@@ -98,7 +100,7 @@ func run(factories otelcol.Factories, info component.BuildInfo) error {
 		Factories:  factories,
 		ConfigFile: getConfigFile(),
 	}
-	
+
 	col, err := otelcol.NewCollector(params)
 	if err != nil {
 		return fmt.Errorf("failed to create collector: %w", err)
@@ -112,7 +114,7 @@ func getConfigFile() string {
 	if len(os.Args) > 1 && os.Args[1] == "--config" && len(os.Args) > 2 {
 		return os.Args[2]
 	}
-	
+
 	// Default config file location
 	return "config/config.yaml"
 }
