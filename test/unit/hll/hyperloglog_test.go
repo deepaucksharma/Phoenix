@@ -3,7 +3,6 @@ package hll_test
 
 import (
 	"fmt"
-	"math/rand"
 	"sync"
 	"testing"
 
@@ -192,6 +191,6 @@ func TestHyperLogLogConcurrency(t *testing.T) {
 	count := h.Count()
 	
 	// Should be reasonably close to the actual count
-	assert.InDelta(t, itemCount, count, itemCount*0.1, 
+	assert.InDelta(t, float64(itemCount), float64(count), float64(itemCount)*0.1, 
 		"Count should be within 10%% of actual after concurrent additions")
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 	
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -61,7 +62,7 @@ func CreatePatchMetric(patch *interfaces.ConfigPatch) pmetric.Metrics {
 	
 	dp := m.SetEmptyGauge().DataPoints().AppendEmpty()
 	dp.SetDoubleValue(1.0) // Always 1.0 to indicate a patch
-	dp.SetTimestamp(pmetric.NewTimestampFromTime(time.Unix(patch.Timestamp, 0)))
+	dp.SetTimestamp(pcommon.NewTimestampFromTime(time.Unix(patch.Timestamp, 0)))
 	
 	// Add attributes from the patch
 	dp.Attributes().PutStr("patch_id", patch.PatchID)

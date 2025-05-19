@@ -3,7 +3,6 @@ package interfaces
 
 import (
 	"context"
-	"time"
 
 	"go.opentelemetry.io/collector/component"
 )

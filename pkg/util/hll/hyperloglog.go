@@ -4,7 +4,6 @@
 package hll
 
 import (
-	"encoding/binary"
 	"fmt"
 	"hash/fnv"
 	"math"
@@ -118,7 +117,7 @@ func (h *HyperLogLog) Count() uint64 {
 			// Linear counting for small ranges
 			return uint64(float64(h.m) * math.Log(float64(h.m)/float64(zeros)))
 		}
-	} else if estimate > float64(uint32(1)<<32)/30.0 {
+	} else if estimate > float64(uint64(1)<<32)/30.0 {
 		// Large range correction
 		return uint64(-math.Pow(2.0, 32) * math.Log(1.0-estimate/math.Pow(2.0, 32)))
 	}
