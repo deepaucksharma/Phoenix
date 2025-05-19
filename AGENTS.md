@@ -58,7 +58,7 @@ An automated dashboard tracks these metrics in real-time.
 
 ## Documentation
 
-All major design decisions must be documented in Architecture Decision Records (ADRs) in the `docs/adr` directory.
+All major design decisions must be documented in Architecture Decision Records (ADRs) in the `docs/architecture/adr` directory.
 
 ## Tooling
 

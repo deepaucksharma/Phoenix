@@ -11,8 +11,8 @@ This directory contains a comprehensive testing framework for the SA-OMF (Phoeni
   - `pid/` - PID controller tests
 - `interfaces/` - Interface contract tests (e.g., UpdateableProcessor)
 - `processors/` - Tests for specific metric processors
-  - `adaptivepid/` - Tests for the PID decision processor
-  - `adaptivetopk/` - Tests for the adaptive TopK processor
+  - `adaptive_pid/` - Tests for the PID decision processor
+  - `adaptive_topk/` - Tests for the adaptive TopK processor
   - `prioritytagger/` - Tests for the priority tagging processor
 - `integration/` - End-to-end and integration tests
 - `testutils/` - Shared testing utilities
@@ -57,7 +57,7 @@ go test -v ./test/integration/...
 To run performance benchmarks:
 
 ```bash
-go test -v ./test/benchmarks/... -bench=.
+go test -v ./test/benchmark/... -bench=.
 ```
 
 ## Writing New Tests

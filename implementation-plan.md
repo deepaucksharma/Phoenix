@@ -38,7 +38,7 @@ sa-omf/
 │   │   └── picconnector/            # pic_connector implementation
 │   ├── processor/                   # All custom processors
 │   │   ├── prioritytagger/
-│   │   ├── adaptivepid/             # pid_decider
+│   │   ├── adaptive_pid/             # pid_decider
 │   │   ├── adaptivesampler/
 │   │   ├── cardinalityguardian/
 │   │   ├── reservoirsampler/
@@ -616,9 +616,9 @@ type picControlExtension struct {
 For brevity, we'll show just the adaptive_topk implementation as it's a critical component:
 
 ```go
-// File: internal/processor/adaptiveTopk/processor.go
+// File: internal/processor/adaptive_topk/processor.go
 
-package adaptiveTopk
+package adaptive_topk
 
 import (
     "context"
@@ -702,9 +702,9 @@ type processorMetrics struct {
 #### pid_decider Processor
 
 ```go
-// File: internal/processor/adaptivepid/processor.go
+// File: internal/processor/adaptive_pid/processor.go
 
-package adaptivepid
+package adaptive_pid
 
 import (
     "context"

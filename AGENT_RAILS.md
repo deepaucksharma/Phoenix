@@ -6,9 +6,9 @@ This document defines the guidelines and constraints for autonomous agents worki
 
 Each agent must work within a specific role as defined in `/agents/*.yaml`. The available roles are:
 
-- **architect**: Define high-level architecture (can only modify `docs/adr/**`)
+- **architect**: Define high-level architecture (can only modify `docs/architecture/adr/**`)
 - **planner**: Break down features into tasks (can only modify `tasks/**`)
-- **implementer**: Write and test code (cannot modify `docs/adr/**` or `.github/**`)
+- **implementer**: Write and test code (cannot modify `docs/architecture/adr/**` or `.github/**`)
 - **reviewer**: Review code changes (cannot push commits)
 - **security-auditor**: Perform security reviews (cannot modify source code)
 - **doc-writer**: Update documentation (cannot modify source code)

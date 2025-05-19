@@ -12,7 +12,7 @@ This document outlines recommendations for consolidating and improving the Phoen
 
 2. **Missing Tests**:
    - No tests for configpatch/validator.go and safety/monitor.go
-   - Missing tests for adaptivetopk and adaptivepid processors
+   - Missing tests for adaptive_topk and adaptive_pid processors
    - No tests for picconnector components
    - Missing tests for selfmetrics.go
 
@@ -27,7 +27,7 @@ This document outlines recommendations for consolidating and improving the Phoen
 
 2. **Fill Test Coverage Gaps**:
    - Add tests for all components, especially processors and core functionality
-   - Implement missing tests for adaptivetopk and adaptivepid processors
+   - Implement missing tests for adaptive_topk and adaptive_pid processors
 
 3. **Standardize Integration Tests**:
    - Merge `test/e2e/` and `test/integration/` for consistency
