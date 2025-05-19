@@ -1,0 +1,102 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  pr-validation:
+    name: PR Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Validate PR title format
+      - name: Check PR title
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types:
+            - feat
+            - fix
+            - docs
+            - style
+            - refactor
+            - perf
+            - test
+            - build
+            - ci
+            - chore
+            - revert
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$
+          wip: true
+
+      # Check agent role permissions
+      - name: Check agent role
+        run: |
+          # Handle dependabot PRs automatically
+          if [[ "${{ github.actor }}" == "dependabot[bot]" ]]; then
+            echo "dependabot PR - skipping role check"
+            exit 0
+          fi
+          
+          # Extract from PR body using simple grep
+          PR_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" \
+            | jq -r '.body // ""')
+          
+          ROLE=$(echo "$PR_BODY" | grep -Po '(?<=ROLE: <!-- ).*?(?= -->)' | xargs || echo "")
+          
+          # Skip if no role specified
+          if [ -z "$ROLE" ]; then
+            echo "No agent role specified in PR body - skipping check"
+            exit 0
+          fi
+          
+          # Check if role exists and validate permissions
+          ROLE_FILE="agents/$ROLE.yaml"
+          if [ ! -f "$ROLE_FILE" ]; then
+            echo "Error: Role '$ROLE' not found in agents/ directory"
+            echo "Available roles: $(ls agents/ | grep '.yaml' | sed 's/\.yaml//')"
+            exit 1
+          fi
+          
+          # Simple file permission checks
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+          
+          # Read permissions from role file
+          ALLOWED_PATTERNS=$(grep "can_touch:" -A 100 "$ROLE_FILE" | grep -v "can_touch:" | grep "^  -" | sed 's/^  - //' | sed 's/"//g')
+          BLOCKED_PATTERNS=$(grep "blocked_files:" -A 100 "$ROLE_FILE" | grep -v "blocked_files:" | grep "^  -" | sed 's/^  - //' | sed 's/"//g')
+          
+          # Check files against permissions
+          for file in $CHANGED_FILES; do
+            # Check blocked patterns
+            for pattern in $BLOCKED_PATTERNS; do
+              if [[ -n "$pattern" && "$file" == $pattern ]]; then
+                echo "Error: '$file' cannot be modified by role '$ROLE'"
+                exit 1
+              fi
+            done
+            
+            # Check allowed patterns
+            ALLOWED=false
+            for pattern in $ALLOWED_PATTERNS; do
+              if [[ -n "$pattern" && "$file" == $pattern ]]; then
+                ALLOWED=true
+                break
+              fi
+            done
+            
+            if [ "$ALLOWED" = false ]; then
+              echo "Error: '$file' is not allowed to be modified by role '$ROLE'"
+              exit 1
+            fi
+          done
+          
+          echo "All file changes comply with role '$ROLE' permissions"

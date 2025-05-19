@@ -1,0 +1,107 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Ensure only one workflow run happens at a time for a given ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for git operations
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      # Run tests with race detection (but skip integration tests in PRs)
+      - name: Run unit tests
+        run: |
+          go test -mod=vendor -race -v ./test/unit/... ./test/interfaces/... ./test/processors/... ./test/extensions/...
+
+      # Run integration tests (but only on main branch or workflow_dispatch)
+      - name: Run integration tests
+        if: github.event_name != 'pull_request'
+        run: |
+          go test -mod=vendor -race -v ./test/integration/...
+
+      # Check for code consistency
+      - name: Drift check
+        run: |
+          make drift-check
+
+      # Generate and upload test coverage reports
+      - name: Generate test coverage report
+        run: |
+          go test -mod=vendor -coverprofile=coverage.out -covermode=atomic ./internal/... ./pkg/... ./test/...
+          go tool cover -html=coverage.out -o coverage.html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.html
+          retention-days: 7
+
+  # Only run benchmarks when requested via label
+  benchmark:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    # Only run benchmarks on workflow_dispatch or if PR is labeled with "run-benchmarks"
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-benchmarks')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Run benchmarks
+        run: go test -mod=vendor -run=^$ -bench=. -benchmem ./...
+        continue-on-error: true
+
+  # Security scanning with CodeQL
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    # Only run on main pushes, PRs, or workflow_dispatch
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: go
+          queries: security-extended
+
+      # Build the code for analysis
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+          
+      - name: Build for analysis
+        run: go build -mod=vendor -v ./cmd/...
+        continue-on-error: true
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
