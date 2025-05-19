@@ -18,6 +18,7 @@ import (
 	"github.com/yourorg/sa-omf/internal/connector/picconnector"
 	"github.com/yourorg/sa-omf/internal/processor/prioritytagger"
 	"github.com/yourorg/sa-omf/internal/processor/adaptive_pid"
+	"github.com/yourorg/sa-omf/internal/processor/adaptive_topk"
 	// Add more component imports as they are implemented
 )
 
@@ -71,6 +72,7 @@ func components() (otelcol.Factories, error) {
 		// Add custom processors as they are implemented:
 		prioritytagger.NewFactory(),
 		adaptive_pid.NewFactory(),
+		adaptive_topk.NewFactory(),
 		// etc.
 	}
 	factories.Processors, err = processor.MakeFactoryMap(processors...)

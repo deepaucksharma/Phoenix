@@ -65,6 +65,6 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./deploy/docker/Dockerfile
+          file: deploy/docker/Dockerfile
           push: false
           tags: yourorg/sa-omf-collector:latest,yourorg/sa-omf-collector:dev
