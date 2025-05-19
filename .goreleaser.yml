@@ -21,8 +21,10 @@ builds:
       - -trimpath
     ldflags:
       - -s -w 
-      - -X github.com/yourorg/sa-omf/cmd/sa-omf-otelcol/version.Version={{.Version}} 
-      - -X github.com/yourorg/sa-omf/cmd/sa-omf-otelcol/version.Commit={{.ShortCommit}} 
+      - -X github.com/deepaucksharma/Phoenix/cmd/sa-omf-otelcol/version.Version={{.Version}} 
+      - -X github.com/deepaucksharma/Phoenix/cmd/sa-omf-otelcol/version.Commit={{.ShortCommit}} 
+      - -X github.com/deepaucksharma/Phoenix/cmd/sa-omf-otelcol/version.BuildDate={{.Date}} 
+      - -X github.com/deepaucksharma/Phoenix/cmd/sa-omf-otelcol/version.GoVersion={{.Env.GOVERSION}}- -X github.com/yourorg/sa-omf/cmd/sa-omf-otelcol/version.Commit={{.ShortCommit}} 
       - -X github.com/yourorg/sa-omf/cmd/sa-omf-otelcol/version.BuildDate={{.Date}} 
       - -X github.com/yourorg/sa-omf/cmd/sa-omf-otelcol/version.GoVersion={{.Env.GOVERSION}}
 

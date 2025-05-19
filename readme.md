@@ -21,3 +21,4 @@ The Self-Aware OpenTelemetry Metrics Fabric (SA-OMF) is an advanced metrics coll
 - **Dual pipeline architecture**: Data pipeline for metrics processing and control pipeline for self-monitoring
 - **PID control loops**: Self-regulation of key parameters to maintain optimal performance
 - **Safety mechanisms**: Built-in guard rails to prevent resource exhaustion
+- **Offline-capable**: Uses vendored dependencies for builds in network-restricted environments

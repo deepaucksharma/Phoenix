@@ -9,12 +9,14 @@ ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
 
-RUN make build LDFLAGS="-X github.com/yourorg/sa-omf/cmd/sa-omf-otelcol/version.Version=${VERSION} \
-                         -X github.com/yourorg/sa-omf/cmd/sa-omf-otelcol/version.Commit=${COMMIT} \
-                         -X github.com/yourorg/sa-omf/cmd/sa-omf-otelcol/version.BuildDate=${BUILD_DATE}"
+RUN GOVERSION=$(go version) && \
+    make build LDFLAGS="-X github.com/deepaucksharma/Phoenix/cmd/sa-omf-otelcol/version.Version=${VERSION} \
+                         -X github.com/deepaucksharma/Phoenix/cmd/sa-omf-otelcol/version.Commit=${COMMIT} \
+                         -X github.com/deepaucksharma/Phoenix/cmd/sa-omf-otelcol/version.BuildDate=${BUILD_DATE} \
+                         -X 'github.com/deepaucksharma/Phoenix/cmd/sa-omf-otelcol/version.GoVersion=${GOVERSION}'"
 
 # Runtime stage
-FROM alpine:3.21
+FROM alpine:3.20  # Aligning with a common recent alpine version
 
 RUN apk --no-cache add ca-certificates tzdata libc6-compat
 

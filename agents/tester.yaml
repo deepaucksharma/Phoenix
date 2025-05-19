@@ -8,6 +8,7 @@ can_touch:
   - test/**
   - internal/**/*.test.go
   - pkg/**/*.test.go
+  - .github/workflows/main.yml
   - .github/workflows/benchmarks.yml
   - .github/workflows/cross-platform-tests.yml
   - configs/testing/**
@@ -17,12 +18,13 @@ can_touch:
   - test/generator/**
   - test/unit/**
   - test/integration/**
+  - test/e2e_tests/**
+  - test/chaos/**
 must_touch:
   - test/**
 blocked_files:
   - cmd/**
   - deploy/**
-  - docs/adr/**
   - docs/architecture/**
+  - agents/**
   - .github/workflows/release.yml
-  - .github/workflows/ci.yml

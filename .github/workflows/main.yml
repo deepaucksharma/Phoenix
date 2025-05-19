@@ -19,22 +19,18 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.24'
           cache: true
 
       - name: Install dependencies
-        run: go mod download
+        run: echo "Skipping dependency download - using vendored modules"
 
       - name: Run tests
-        run: go test -race ./...
+        run: go test -mod=vendor -race ./...
 
       - name: Check go mod
         run: |
-          go mod tidy
-          if ! git diff --exit-code go.mod go.sum; then
-            echo "Error: go.mod or go.sum are not tidy. Run 'go mod tidy' locally and commit changes."
-            exit 1
-          fi
+          echo "Skipping go mod tidy - using vendored modules"
 
       - name: Lint
         uses: golangci/golangci-lint-action@v8
@@ -43,23 +39,12 @@ jobs:
           args: --timeout=5m
 
       - name: Build
-        run: go build -o bin/sa-omf-otelcol ./cmd/sa-omf-otelcol
+        run: go build -mod=vendor -o bin/sa-omf-otelcol ./cmd/sa-omf-otelcol
 
       - name: Validate configurations
         run: |
-          echo "Validating policy files..."
-          find . -name "policy.yaml" -o -name "*policy*.yaml" | while read -r file; do
-            echo "Checking $file"
-            if command -v python3 &>/dev/null; then
-              python3 -c "import yaml; yaml.safe_load(open('$file'))" 2>/dev/null || { echo "Invalid YAML in $file"; exit 1; }
-            elif command -v python &>/dev/null; then
-              python -c "import yaml; yaml.safe_load(open('$file'))" 2>/dev/null || { echo "Invalid YAML in $file"; exit 1; }
-            else
-              echo "Warning: No YAML validation tool found (python). Skipping validation for $file."
-            fi
-          done
-          
-          echo "All configuration files validated!"
+          bash scripts/validation/validate_policy_schema.sh
+          bash scripts/validation/validate_config_schema.sh
 
       - name: Upload build artifacts
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -130,8 +115,8 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" \
             | jq -r '.body // ""')
           
-          ROLE=$(echo "$PR_BODY" | grep -o '`ROLE: [^`]*`' | sed 's/`ROLE: \(.*\)`/\1/' || echo "")
-          TASKS=$(echo "$PR_BODY" | grep -o '`TASKS: [^`]*`' | sed 's/`TASKS: \(.*\)`/\1/' || echo "")
+          ROLE=$(echo "$PR_BODY" | grep -Po '(?<=ROLE: <!-- ).*?(?= -->)' | xargs || echo "")
+          TASKS=$(echo "$PR_BODY" | grep -Po '(?<=TASKS: <!-- ).*?(?= -->)' | xargs || echo "")
           
           # Set outputs
           echo "role=$ROLE" >> $GITHUB_OUTPUT

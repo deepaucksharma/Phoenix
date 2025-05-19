@@ -5,12 +5,12 @@ include tools.mk
 # Build the collector binary
 build:
 	@echo "Building SA-OMF OpenTelemetry Collector..."
-	@go build -o bin/sa-omf-otelcol ./cmd/sa-omf-otelcol
+	@go build -mod=vendor -o bin/sa-omf-otelcol ./cmd/sa-omf-otelcol
 
 # Run standard tests
 test:
 	@echo "Running tests..."
-	@go test -v ./...
+	@go test -mod=vendor -v ./...
 
 # Run all enhanced tests
 test-all: test-unit test-integration
@@ -18,31 +18,30 @@ test-all: test-unit test-integration
 # Run unit tests only
 test-unit:
 	@echo "Running unit tests..."
-	@go test -v ./test/unit/... ./test/interfaces/... ./test/processors/... ./test/extensions/...
+	@go test -mod=vendor -v ./test/unit/... ./test/interfaces/... ./test/processors/... ./test/extensions/...
 
 # Run integration tests only
 test-integration:
 	@echo "Running integration tests..."
-	@go test -v ./test/integration/...
+	@go test -mod=vendor -v ./test/integration/...
 
 # Verify drift - Code consistency check for interdependent files
 drift-check:
 	@echo "Checking for code drift..."
 	@scripts/ci/check_component_registry.sh
-	@go mod tidy
+	@echo "Note: Skip go mod tidy in offline mode; dependencies are vendored"
 
 # Run tests with coverage
 test-coverage:
 	@echo "Running tests with coverage..."
-	@go test -coverprofile=coverage.out -covermode=atomic ./internal/... ./pkg/... ./test/...
+	@go test -mod=vendor -coverprofile=coverage.out -covermode=atomic ./internal/... ./pkg/... ./test/...
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated at coverage.html"
 	
 # Run benchmarks
 benchmark:
 	@echo "Running benchmarks..."
-	@go test -bench=. -benchmem ./test/benchmark/...
-	@go test -bench=. -benchmem ./test/benchmarks/...
+	@go test -mod=vendor -bench=. -benchmem ./test/benchmarks/...
 
 # Clean build artifacts
 clean:
@@ -76,8 +75,8 @@ docker:
 # Run collector with default config
 run:
 	@echo "Running SA-OMF with default config..."
-	@echo "Ensure policy.yaml is available at the path specified in configs/default/config.yaml (e.g. /etc/sa-omf/policy.yaml or a local relative path if customized)"
-	@go run ./cmd/sa-omf-otelcol/main.go --config=configs/default/config.yaml
+	@echo "Tip: For local development, using configs/development/config.yaml which points to a local policy file"
+	@go run -mod=vendor ./cmd/sa-omf-otelcol/main.go --config=configs/development/config.yaml
 
 # Create a tag and version for release
 release:

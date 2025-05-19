@@ -1,7 +1,7 @@
 run:
   timeout: 5m
   modules-download-mode: readonly
-  go: '1.21'
+  go: '1.24'
 
 linters:
   enable:
@@ -23,7 +23,7 @@ linters-settings:
   gofmt:
     simplify: true
   goimports:
-    local-prefixes: github.com/yourorg/sa-omf
+    local-prefixes: github.com/deepaucksharma/Phoenix
   govet:
     check-shadowing: true
   revive:
