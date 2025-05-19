@@ -11,5 +11,5 @@
 
 ## Agent Info
 <!-- Only for Claude Code agents, leave as N/A otherwise -->
-`ROLE: <!-- architect|implementer|integrator|tester|devops|doc-writer|reviewer|security-auditor|planner|N/A -->`
+`ROLE: <!-- architect|implementer|integrator|tester|devops|doc-writer|reviewer|security-auditor|planner -->`
 `TASKS: <!-- task IDs or N/A -->`

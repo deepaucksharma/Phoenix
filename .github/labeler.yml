@@ -1,44 +1,35 @@
+# PR Labeler Configuration
+# Documentation: https://github.com/actions/labeler
+
 documentation:
-  - 'docs/**/*'
-  - '**/*.md'
-  - 'README.md'
-  - 'CONTRIBUTING.md'
+- any: ['docs/**/*', '**/*.md', 'README.md', 'CONTRIBUTING.md']
 
 ci:
-  - '.github/**/*'
-  - '.github/workflows/*'
+- any: ['.github/**/*', '.github/workflows/*']
 
-dependencies:
-  - 'go.mod'
-  - 'go.sum'
+dependencies: 
+- any: ['go.mod', 'go.sum']
 
 core:
-  - 'internal/interfaces/**/*'
-  - 'internal/control/**/*'
+- any: ['internal/interfaces/**/*', 'internal/control/**/*']
 
 processors:
-  - 'internal/processor/**/*'
+- any: ['internal/processor/**/*']
 
 extensions:
-  - 'internal/extension/**/*'
+- any: ['internal/extension/**/*']
 
 connectors:
-  - 'internal/connector/**/*'
+- any: ['internal/connector/**/*']
 
 tests:
-  - 'test/**/*'
-  - '**/*_test.go'
+- any: ['test/**/*', '**/*_test.go']
 
 config:
-  - 'config/**/*'
-  - 'deploy/**/*'
-  - '*.yaml'
-  - '*.yml'
+- any: ['configs/**/*', 'deploy/**/*', '*.yaml', '*.yml']
 
 utilities:
-  - 'pkg/**/*'
+- any: ['pkg/**/*']
 
 build:
-  - 'Makefile'
-  - 'tools.mk'
-  - 'cmd/**/*'
+- any: ['Makefile', 'tools.mk', 'cmd/**/*']

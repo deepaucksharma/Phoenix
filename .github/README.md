@@ -19,7 +19,7 @@ This directory contains the GitHub Actions workflows and configuration for the P
 
 ## Agent Roles
 
-The project uses an agent role system to manage permissions and responsibilities. Agent role definitions are stored in `docs/agents/`.
+The project uses an agent role system to manage permissions and responsibilities. Agent role definitions are stored in the `agents/` directory at the root of the repository.
 
 Each PR must declare a role using the format `` `ROLE: role_name` `` in the PR description. The agent-role-validation workflow enforces that changes in the PR are allowed for the declared role.
 

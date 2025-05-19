@@ -41,7 +41,7 @@ See the [README.md](README.md) for more detailed information about the repositor
 
 ## Agent-Based Workflow
 
-Phoenix uses a structured agent-based workflow where contributors take on specific roles. See `docs/agents/AGENTS.md` for details on roles and responsibilities.
+Phoenix uses a structured agent-based workflow where contributors take on specific roles. See `agents/AGENTS.md` for details on roles and responsibilities.
 
 ## Pull Request Process
 

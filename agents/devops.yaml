@@ -7,8 +7,9 @@ required_checks:
 can_touch:
   - .github/workflows/**
   - deploy/**
-  - docker/**
+  - deploy/docker/**
   - hack/**
+  - scripts/**
 must_touch: []
 blocked_files:
   - cmd/**

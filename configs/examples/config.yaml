@@ -1,6 +1,6 @@
 extensions:
   pic_control:
-    policy_file_path: ./deploy/policy.yaml
+    policy_file_path: /etc/sa-omf/policy.yaml # Example, typically overridden by example-specific policy.yaml
     max_patches_per_minute: 3
     patch_cooldown_seconds: 10
     safe_mode_processor_configs:

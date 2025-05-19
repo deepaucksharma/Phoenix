@@ -41,19 +41,17 @@ phoenix/
 ├── test/                # Test framework
 ├── docs/                # Documentation
 │   └── adr/             # Architecture Decision Records
-├── hack/                # Development scripts
+├── scripts/             # Development scripts
 ├── deploy/              # Deployment files
 ├── tasks/               # Task definitions
 └── agents/              # Agent role definitions
-```
-
-## Adding New Components
+```## Adding New Components
 
 To add a new processor, extension, or connector:
 
 1. Call the appropriate script: 
    ```
-   hack/new-component.sh processor example_processor
+   scripts/dev/new-component.sh processor example_processor
    ```
 
 2. This will:
@@ -110,9 +108,7 @@ Use consistent branch naming:
 - `feature/description` for new features
 - `fix/description` for bug fixes
 - `refactor/description` for refactoring
-- `docs/description` for documentation changes
-
-## Commit Messages
+- `docs/description` for documentation changes## Commit Messages
 
 Follow the Conventional Commits specification:
 
