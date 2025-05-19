@@ -41,6 +41,25 @@ func createDefaultConfig() component.Config {
 					},
 				},
 			},
+			{
+				Name:              "cardinality_controller",
+				Enabled:           true,
+				KPIMetricName:     "aemf_impact_cardinality_reduction_ratio",
+				KPITargetValue:    0.80,
+				KP:                10,
+				KI:                2,
+				KD:                0,
+				HysteresisPercent: 2,
+				OutputConfigPatches: []OutputConfigPatch{
+					{
+						TargetProcessorName: "cardinality_guardian",
+						ParameterPath:       "max_unique",
+						ChangeScaleFactor:   -100,
+						MinValue:            100,
+						MaxValue:            10000,
+					},
+				},
+			},
 		},
 	}
 }
