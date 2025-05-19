@@ -1,11 +1,13 @@
 # Agent Roles Documentation
 
-This directory contains comprehensive documentation for the agent roles in the Phoenix project.
+Agent roles documentation has been moved to the root-level `/agents/` directory.
 
-## Available Documentation
+## Available Documentation (in `/agents/` directory)
 
-- [CONSOLIDATED_AGENTS.md](./CONSOLIDATED_AGENTS.md) - **Primary documentation** with all roles, responsibilities, and workflows
-- [AGENTS.md](./AGENTS.md) - Basic role definitions and responsibilities
-- [AGENT_RAILS.md](./AGENT_RAILS.md) - Guidelines for autonomous agents
+- [/agents/CONSOLIDATED_AGENTS.md](/agents/CONSOLIDATED_AGENTS.md) - **Primary documentation** with all roles, responsibilities, and workflows
+- [/agents/AGENTS.md](/agents/AGENTS.md) - Basic role definitions and responsibilities
+- [/agents/AGENT_RAILS.md](/agents/AGENT_RAILS.md) - Guidelines for autonomous agents
 
-Agent role YAML definition files are stored in the root-level `/agents/` directory for better visibility and integration with CI/CD tools.
+All agent YAML definition files are also stored in the root-level `/agents/` directory for better visibility and integration with CI/CD tools.
+
+> **Note**: Please do not use the files in the `/docs/agents/` directory as they are deprecated and will be removed in a future update.
