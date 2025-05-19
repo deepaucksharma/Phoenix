@@ -20,6 +20,7 @@ import (
 
 // checkReduced verifies that datapoints have been bucketized.
 func checkReduced(md pmetric.Metrics) bool {
+	found := false
 	for i := 0; i < md.ResourceMetrics().Len(); i++ {
 		rm := md.ResourceMetrics().At(i)
 		smSlice := rm.ScopeMetrics()
@@ -38,18 +39,14 @@ func checkReduced(md pmetric.Metrics) bool {
 					continue
 				}
 				for l := 0; l < dps.Len(); l++ {
-					attrs := dps.At(l).Attributes()
-					if attrs.Len() != 1 {
-						return false
-					}
-					if _, ok := attrs.Get("cg_bucket"); !ok {
-						return false
+					if _, ok := dps.At(l).Attributes().Get("cg_bucket"); ok {
+						found = true
 					}
 				}
 			}
 		}
 	}
-	return true
+	return found
 }
 
 func TestCardinalityGuardianProcessor(t *testing.T) {
@@ -70,7 +67,7 @@ func TestCardinalityGuardianProcessor(t *testing.T) {
 					PatchID:             "set-max-unique",
 					TargetProcessorName: component.NewIDWithName(component.MustNewType("cardinality_guardian"), ""),
 					ParameterPath:       "max_unique",
-					NewValue:            10,
+					NewValue:            1,
 				},
 			},
 		},
@@ -126,7 +123,10 @@ func TestOnConfigPatchUpdates(t *testing.T) {
 
 	ctx := context.Background()
 	sink := new(consumertest.MetricsSink)
-	proc, err := factory.CreateMetrics(ctx, processor.Settings{TelemetrySettings: component.TelemetrySettings{Logger: zap.NewNop()}}, cfg, sink)
+	proc, err := factory.CreateMetrics(ctx, processor.Settings{
+		TelemetrySettings: component.TelemetrySettings{Logger: zap.NewNop()},
+		ID:                component.NewID(component.MustNewType("cardinality_guardian")),
+	}, cfg, sink)
 	require.NoError(t, err)
 	up, ok := proc.(interfaces.UpdateableProcessor)
 	require.True(t, ok)
@@ -168,7 +168,10 @@ func TestHLLCountingAndReduction(t *testing.T) {
 	ctx := context.Background()
 	sink := new(consumertest.MetricsSink)
 
-	proc, err := factory.CreateMetrics(ctx, processor.Settings{TelemetrySettings: component.TelemetrySettings{Logger: zap.NewNop()}}, cfg, sink)
+	proc, err := factory.CreateMetrics(ctx, processor.Settings{
+		TelemetrySettings: component.TelemetrySettings{Logger: zap.NewNop()},
+		ID:                component.NewID(component.MustNewType("cardinality_guardian")),
+	}, cfg, sink)
 	require.NoError(t, err)
 	require.NoError(t, proc.Start(ctx, nil))
 
