@@ -9,7 +9,7 @@ POLICY_FILES=$(find . -name "policy.yaml" -o -name "*policy*.yaml")
 echo "Validating policy files..."
 for policy_file in $POLICY_FILES; do
   echo "Checking $policy_file..."
-  go run hack/validate_policy.go "$policy_file"
+  go run scripts/validation/validate_policy.go "$policy_file"
   if [ $? -ne 0 ]; then
     echo "Error: Policy file $policy_file failed validation"
     exit 1

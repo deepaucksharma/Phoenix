@@ -15,6 +15,9 @@ This directory contains scripts that support development, CI/CD, and validation 
 - **validation/**: Configuration validation scripts
   - **validate_policy_schema.sh**: Validates policy.yaml files against schema
   - **validate_config_schema.sh**: Validates config.yaml files against schema
+  - **validate_policy.go**: CLI tool to validate a policy file
+  - **validate_config.go**: CLI tool to validate a config file against a schema
+  - **generate_config_schemas.go**: Generates JSON schemas for component configs
 
 ## Using the Scripts
 
@@ -25,6 +28,11 @@ Most scripts are self-documenting and will show usage instructions when run with
 ./scripts/dev/new-component.sh processor my_processor
 ./scripts/dev/new-adr.sh "Use PID Controllers for Adaptive Processing"
 ./scripts/validation/validate_policy_schema.sh configs/default/policy.yaml
+# Validate a single policy file
+go run scripts/validation/validate_policy.go configs/default/policy.yaml
+# Generate schemas and validate configs
+go run scripts/validation/generate_config_schemas.go .tmp/schemas
+go run scripts/validation/validate_config.go configs/default/config.yaml .tmp/schemas/default.json
 ```
 
 ## CI Integration
