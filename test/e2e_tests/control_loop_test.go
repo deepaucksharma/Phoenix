@@ -4,22 +4,17 @@ package e2e
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/pdata/pmetric"
-	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
-	"github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
-	"github.com/deepaucksharma/Phoenix/pkg/metrics"
 )
 
 // TestControlLoop verifies the basic closed-loop operation of the SA-OMF system.
@@ -41,14 +36,13 @@ func TestControlLoop(t *testing.T) {
 	cfg.Controllers[0].KPIMetricName = "aemf_impact_adaptive_topk_resource_coverage_percent"
 	cfg.Controllers[0].KPITargetValue = 0.9
 	
-	processor, err := factory.CreateMetricsProcessor(
+	processor, err := factory.CreateDefaultMetricsProcessor(
 		ctx,
-		processor.CreateSettings{
+		component.ProcessorSettings{
 			TelemetrySettings: component.TelemetrySettings{
 				Logger:         logger,
 				TracerProvider: nil,
 				MeterProvider:  nil,
-				MetricsLevel:   configtelemetry.LevelNone,
 			},
 			BuildInfo: component.BuildInfo{},
 		},

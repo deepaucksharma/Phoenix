@@ -159,12 +159,11 @@ pic_control_config:
 		TelemetrySettings: component.TelemetrySettings{
 			Logger: zap.NewNop(),
 		},
-		ID: component.NewID(component.MustNewType("pic_control")),
+		ID: component.NewID("pic_control"),
 	}
 	
-	// Use the factory's method to create the extension
-	createExtension := factory.(extension.Factory).WithExtensions()
-	ext, err := createExtension(ctx, settings, cfg)
+	// Create the extension directly
+	ext, err := factory.CreateExtension(ctx, settings, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, ext)
 	
@@ -176,7 +175,7 @@ pic_control_config:
 	host := newMockHost()
 	
 	// Add a mock processor
-	procID := component.NewID(component.MustNewType("priority_tagger"))
+	procID := component.NewID("priority_tagger")
 	mockProc := newMockProcessor()
 	host.AddProcessor(procID, mockProc)
 	
