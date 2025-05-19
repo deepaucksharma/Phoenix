@@ -17,6 +17,11 @@ jobs:
         with:
           fetch-depth: 0  # Needed to get all commits
 
+      - name: Install yq
+        run: |
+          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+
       - name: Extract role from PR body
         id: extract_role
         run: |
@@ -37,8 +42,9 @@ jobs:
             ROLE="dependabot"
             TASKS="N/A"
           else
-            ROLE=$(echo "$PR_BODY" | grep -Po '(?<=`ROLE: ).*?(?=`)' || echo "")
-            TASKS=$(echo "$PR_BODY" | grep -Po '(?<=`TASKS: ).*?(?=`)' || echo "")
+            # Try different regex patterns for better cross-platform compatibility
+            ROLE=$(echo "$PR_BODY" | grep -o '`ROLE: [^`]*`' | sed 's/`ROLE: \(.*\)`/\1/' || echo "")
+            TASKS=$(echo "$PR_BODY" | grep -o '`TASKS: [^`]*`' | sed 's/`TASKS: \(.*\)`/\1/' || echo "")
           fi
           
           echo "role=$ROLE" >> $GITHUB_OUTPUT
@@ -96,8 +102,18 @@ EOF
           # Get files changed in this PR
           CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
           
+          # Check if there are any changed files
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No files changed in this PR."
+            exit 0
+          fi
+          
           # Check blocked files
           for blocked in $BLOCKED_FILES; do
+            if [ -z "$blocked" ]; then
+              continue
+            fi
+            
             for file in $CHANGED_FILES; do
               if [[ "$file" == $blocked ]]; then
                 echo "Error: '$file' cannot be modified by role '$ROLE'"
@@ -110,6 +126,10 @@ EOF
           for file in $CHANGED_FILES; do
             ALLOWED=false
             for pattern in $CAN_TOUCH; do
+              if [ -z "$pattern" ]; then
+                continue
+              fi
+              
               if [[ "$file" == $pattern ]]; then
                 ALLOWED=true
                 break
@@ -125,6 +145,10 @@ EOF
           # Check must_touch requirements
           if [ -n "$MUST_TOUCH" ]; then
             for pattern in $MUST_TOUCH; do
+              if [ -z "$pattern" ]; then
+                continue
+              fi
+              
               TOUCHED=false
               for file in $CHANGED_FILES; do
                 if [[ "$file" == $pattern ]]; then
