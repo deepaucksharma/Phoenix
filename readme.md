@@ -1,5 +1,7 @@
 # SA-OMF: Self-Aware OpenTelemetry Metrics Fabric
 
+[![CI](https://github.com/yourorg/sa-omf/actions/workflows/ci.yml/badge.svg)](https://github.com/yourorg/sa-omf/actions/workflows/ci.yml)
+
 A self-optimizing OpenTelemetry Collector designed to intelligently adapt its processing behavior based on real-time performance metrics.
 
 ## Project Overview

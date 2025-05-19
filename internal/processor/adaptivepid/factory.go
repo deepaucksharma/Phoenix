@@ -1,5 +1,4 @@
-// Package adaptivepid implements the pid_decider processor which generates configuration
-// patches using PID control loops to maintain KPI targets.
+// Package adaptivepid implements a processor that uses PID control for adaptive configuration.
 package adaptivepid
 
 import (
@@ -10,12 +9,7 @@ import (
 	"go.opentelemetry.io/collector/processor"
 )
 
-const (
-	// typeStr is the unique identifier for the adaptivepid processor.
-	typeStr = "pid_decider"
-)
-
-// NewFactory creates a factory for the pid_decider processor.
+// NewFactory creates a factory for the pid_decider processor
 func NewFactory() processor.Factory {
 	return processor.NewFactory(
 		typeStr,
@@ -24,27 +18,34 @@ func NewFactory() processor.Factory {
 	)
 }
 
-// createDefaultConfig creates the default configuration for the processor.
+// createDefaultConfig creates the default configuration for the processor
 func createDefaultConfig() component.Config {
 	return &Config{
 		Controllers: []ControllerConfig{
 			{
-				Name:               "default",
-				Enabled:            false,
-				KPIMetricName:      "aemf_impact_adaptive_topk_resource_coverage_percent_avg_1m",
-				KPITargetValue:     0.90,
-				KP:                 30.0,
-				KI:                 5.0,
-				KD:                 0.0,
-				IntegralWindupLimit: 60.0,
-				HysteresisPercent:  3.0,
-				OutputConfigPatches: []OutputConfigPatch{},
+				Name:              "coverage_controller",
+				Enabled:           true,
+				KPIMetricName:     "aemf_impact_adaptive_topk_resource_coverage_percent_avg_1m",
+				KPITargetValue:    0.90,
+				KP:                30,
+				KI:                5,
+				KD:                0,
+				HysteresisPercent: 3,
+				OutputConfigPatches: []OutputConfigPatch{
+					{
+						TargetProcessorName: "adaptive_topk",
+						ParameterPath:       "k_value",
+						ChangeScaleFactor:   -20,
+						MinValue:            10,
+						MaxValue:            60,
+					},
+				},
 			},
 		},
 	}
 }
 
-// createMetricsProcessor creates a metrics processor based on the config.
+// createMetricsProcessor creates a processor based on the config
 func createMetricsProcessor(
 	ctx context.Context,
 	set processor.CreateSettings,

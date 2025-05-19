@@ -1,0 +1,34 @@
+# Phoenix CODEOWNERS File
+
+# Default owners for everything
+*                   @deepaucksharma
+
+# Core components
+/cmd/                @core-team
+/internal/           @core-team
+/pkg/                @core-team
+
+# Specific component ownership
+/internal/processor/  @processor-team
+/internal/extension/  @extension-team
+/internal/connector/  @connector-team
+/internal/control/    @control-team
+
+# Test ownership
+/test/               @test-team
+
+# Infrastructure
+/.github/            @devops-team
+/deploy/             @devops-team
+/hack/               @devops-team
+
+# Documentation
+/docs/               @docs-team
+*.md                 @docs-team
+
+# Task definitions
+/tasks/              @project-team
+
+# Agent definitions
+/agents/             @admin-team
+/AGENTS.md           @admin-team

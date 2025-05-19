@@ -1,11 +1,11 @@
-// Package picconnector implements an exporter that forwards configuration 
-// patches from pid_decider to pic_control.
+// Package picconnector implements an exporter that connects the pid_decider processor to the pic_control extension.
 package picconnector
 
 import (
 	"context"
 	"fmt"
-
+	"strings"
+	
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -15,31 +15,48 @@ import (
 	"github.com/yourorg/sa-omf/internal/interfaces"
 )
 
-// ensureInterface checks that the pic_connector implements the required interfaces.
-var _ exporter.Metrics = (*picConnectorExporter)(nil)
+const (
+	typeStr = "pic_connector"
+)
 
-// picConnectorExporter is the implementation of the pic_connector exporter.
-type picConnectorExporter struct {
+// Config holds configuration for the pic_connector exporter
+type Config struct {
+	// Currently no custom configuration needed
+}
+
+var _ component.Config = (*Config)(nil)
+
+// Validate checks if the exporter configuration is valid
+func (cfg *Config) Validate() error {
+	// No validation needed for now
+	return nil
+}
+
+// exporter implements the pic_connector exporter
+type exporter struct {
 	logger     *zap.Logger
 	picControl piccontrolext.PicControl
 }
 
-// newExporter creates a new pic_connector exporter.
-func newExporter(set exporter.CreateSettings) (*picConnectorExporter, error) {
-	return &picConnectorExporter{
-		logger: set.Logger,
+// Ensure our exporter implements the required interfaces
+var _ exporter.Metrics = (*exporter)(nil)
+
+// newExporter creates a new pic_connector exporter
+func newExporter(config component.Config, settings exporter.CreateSettings) (*exporter, error) {
+	return &exporter{
+		logger: settings.Logger,
 	}, nil
 }
 
-// Start implements the Component interface.
-func (e *picConnectorExporter) Start(ctx context.Context, host component.Host) error {
+// Start implements the Component interface
+func (e *exporter) Start(ctx context.Context, host component.Host) error {
 	// Retrieve pic_control extension
 	extensions := host.GetExtensions()
 	for id, ext := range extensions {
-		if id.Type() == "pic_control" {
-			if pc, ok := ext.(piccontrolext.PicControl); ok {
-				e.picControl = pc
-				e.logger.Info("Successfully connected to pic_control extension")
+		if strings.Contains(id.String(), "pic_control") {
+			if picControl, ok := ext.(piccontrolext.PicControl); ok {
+				e.picControl = picControl
+				e.logger.Info("Found pic_control extension", zap.String("id", id.String()))
 				return nil
 			}
 		}
@@ -47,52 +64,43 @@ func (e *picConnectorExporter) Start(ctx context.Context, host component.Host) e
 	return fmt.Errorf("pic_control extension not found")
 }
 
-// Shutdown implements the Component interface.
-func (e *picConnectorExporter) Shutdown(ctx context.Context) error {
+// Shutdown implements the Component interface
+func (e *exporter) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// Capabilities implements the exporter.Metrics interface.
-func (e *picConnectorExporter) Capabilities() consumer.Capabilities {
-	return consumer.Capabilities{MutatesData: false}
-}
-
-// ConsumeMetrics implements the consumer.Metrics interface.
-func (e *picConnectorExporter) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
+// ConsumeMetrics processes incoming metrics
+func (e *exporter) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
 	if e.picControl == nil {
 		return fmt.Errorf("pic_control not initialized")
 	}
-
+	
 	// Extract ConfigPatch objects from metrics
-	patches := e.extractConfigPatches(md)
-	if len(patches) == 0 {
-		// No patches found, nothing to do
-		return nil
-	}
-
+	patches := extractConfigPatches(md)
+	
 	// Submit each patch to pic_control
 	for _, patch := range patches {
 		err := e.picControl.SubmitConfigPatch(ctx, patch)
 		if err != nil {
-			// Log error but continue with other patches
-			e.logger.Error("Failed to submit ConfigPatch",
-				zap.String("patch_id", patch.PatchID),
-				zap.Error(err))
+			e.logger.Error("Failed to submit ConfigPatch", 
+			              zap.String("patch_id", patch.PatchID),
+			              zap.String("target", patch.TargetProcessorName.String()),
+			              zap.Error(err))
 		} else {
 			e.logger.Info("Successfully submitted ConfigPatch",
-				zap.String("patch_id", patch.PatchID),
-				zap.String("target", patch.TargetProcessorName.String()),
-				zap.String("parameter", patch.ParameterPath))
+			             zap.String("patch_id", patch.PatchID),
+			             zap.String("target", patch.TargetProcessorName.String()),
+			             zap.String("parameter", patch.ParameterPath))
 		}
 	}
-
+	
 	return nil
 }
 
-// extractConfigPatches extracts ConfigPatch objects from OTLP metrics.
-func (e *picConnectorExporter) extractConfigPatches(md pmetric.Metrics) []interfaces.ConfigPatch {
+// extractConfigPatches extracts ConfigPatch objects from OTLP metrics
+func extractConfigPatches(md pmetric.Metrics) []interfaces.ConfigPatch {
 	var patches []interfaces.ConfigPatch
-
+	
 	// Iterate through metrics looking for aemf_ctrl_proposed_patch
 	for i := 0; i < md.ResourceMetrics().Len(); i++ {
 		rm := md.ResourceMetrics().At(i)
@@ -100,16 +108,17 @@ func (e *picConnectorExporter) extractConfigPatches(md pmetric.Metrics) []interf
 			sm := rm.ScopeMetrics().At(j)
 			for k := 0; k < sm.Metrics().Len(); k++ {
 				metric := sm.Metrics().At(k)
-
+				
 				if metric.Name() != "aemf_ctrl_proposed_patch" {
 					continue
 				}
-
-				// Handle gauge metrics
-				if metric.Type() == pmetric.MetricTypeGauge {
+				
+				// Handle different metric types
+				switch metric.Type() {
+				case pmetric.MetricTypeGauge:
 					for l := 0; l < metric.Gauge().DataPoints().Len(); l++ {
 						dp := metric.Gauge().DataPoints().At(l)
-						patch := e.configPatchFromDataPoint(dp)
+						patch := configPatchFromDataPoint(dp)
 						if patch != nil {
 							patches = append(patches, *patch)
 						}
@@ -118,107 +127,60 @@ func (e *picConnectorExporter) extractConfigPatches(md pmetric.Metrics) []interf
 			}
 		}
 	}
-
+	
 	return patches
 }
 
-// configPatchFromDataPoint creates a ConfigPatch from metric data point attributes.
-func (e *picConnectorExporter) configPatchFromDataPoint(dp pmetric.NumberDataPoint) *interfaces.ConfigPatch {
-	// Extract required attributes
-	var patchID, targetProcessorName, parameterPath, reason, severity, source string
-	var timestamp int64
-	var ttlSeconds int
-	var newValue interface{}
-
-	// Extract string attributes
-	attrs := dp.Attributes()
+// configPatchFromDataPoint creates a ConfigPatch from metric data point attributes
+func configPatchFromDataPoint(dp pmetric.NumberDataPoint) *interfaces.ConfigPatch {
+	patch := &interfaces.ConfigPatch{
+		Timestamp:  dp.Timestamp().AsTime().Unix(),
+		TTLSeconds: 300, // Default TTL
+	}
 	
-	// Get PatchID - required
-	if val, exists := attrs.Get("patch_id"); exists {
-		patchID = val.AsString()
-	} else {
-		e.logger.Warn("ConfigPatch metric missing patch_id attribute")
-		return nil
+	// Extract required attributes
+	patchID, ok := dp.Attributes().Get("patch_id")
+	if !ok {
+		return nil // Missing required attribute
 	}
-
-	// Get TargetProcessorName - required
-	if val, exists := attrs.Get("target_processor_name"); exists {
-		targetProcessorName = val.AsString()
-	} else {
-		e.logger.Warn("ConfigPatch metric missing target_processor_name attribute",
-			zap.String("patch_id", patchID))
-		return nil
+	patch.PatchID = patchID.Str()
+	
+	procName, ok := dp.Attributes().Get("target_processor_name")
+	if !ok {
+		return nil // Missing required attribute
 	}
-
-	// Get ParameterPath - required
-	if val, exists := attrs.Get("parameter_path"); exists {
-		parameterPath = val.AsString()
-	} else {
-		e.logger.Warn("ConfigPatch metric missing parameter_path attribute",
-			zap.String("patch_id", patchID))
-		return nil
+	patch.TargetProcessorName = component.MustNewIDFromString(procName.Str())
+	
+	paramPath, ok := dp.Attributes().Get("parameter_path")
+	if !ok {
+		return nil // Missing required attribute
 	}
-
-	// Get Reason - optional
-	if val, exists := attrs.Get("reason"); exists {
-		reason = val.AsString()
+	patch.ParameterPath = paramPath.Str()
+	
+	// Extract value based on type
+	valueInt, ok := dp.Attributes().Get("new_value_int")
+	if ok {
+		patch.NewValue = valueInt.Int()
+		return patch
 	}
-
-	// Get Severity - optional
-	if val, exists := attrs.Get("severity"); exists {
-		severity = val.AsString()
-	} else {
-		severity = "normal" // Default severity
+	
+	valueDouble, ok := dp.Attributes().Get("new_value_double")
+	if ok {
+		patch.NewValue = valueDouble.Double()
+		return patch
 	}
-
-	// Get Source - optional
-	if val, exists := attrs.Get("source"); exists {
-		source = val.AsString()
-	} else {
-		source = "unknown" // Default source
+	
+	valueString, ok := dp.Attributes().Get("new_value_string")
+	if ok {
+		patch.NewValue = valueString.Str()
+		return patch
 	}
-
-	// Get Timestamp - optional
-	if val, exists := attrs.Get("timestamp"); exists {
-		timestamp = val.AsInt()
-	} else {
-		// Use the datapoint timestamp if available
-		timestamp = dp.Timestamp().AsTime().Unix()
+	
+	valueBool, ok := dp.Attributes().Get("new_value_bool")
+	if ok {
+		patch.NewValue = valueBool.Bool()
+		return patch
 	}
-
-	// Get TTLSeconds - optional
-	if val, exists := attrs.Get("ttl_seconds"); exists {
-		ttlSeconds = int(val.AsInt())
-	} else {
-		ttlSeconds = 300 // Default 5 minutes TTL
-	}
-
-	// Extract new value based on type
-	// Try different attribute names for different types
-	if val, exists := attrs.Get("new_value_int"); exists {
-		newValue = val.AsInt()
-	} else if val, exists := attrs.Get("new_value_double"); exists {
-		newValue = val.AsDouble()
-	} else if val, exists := attrs.Get("new_value_string"); exists {
-		newValue = val.AsString()
-	} else if val, exists := attrs.Get("new_value_bool"); exists {
-		newValue = val.AsBool()
-	} else {
-		e.logger.Warn("ConfigPatch metric missing new_value attribute",
-			zap.String("patch_id", patchID))
-		return nil
-	}
-
-	// Create and return the ConfigPatch
-	return &interfaces.ConfigPatch{
-		PatchID:             patchID,
-		TargetProcessorName: component.MustNewIDFromString(targetProcessorName),
-		ParameterPath:       parameterPath,
-		NewValue:            newValue,
-		Reason:              reason,
-		Severity:            severity,
-		Source:              source,
-		Timestamp:           timestamp,
-		TTLSeconds:          ttlSeconds,
-	}
+	
+	return nil // No value found
 }

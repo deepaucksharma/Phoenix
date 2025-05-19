@@ -1,5 +1,4 @@
-// Package picconnector implements an exporter that forwards configuration 
-// patches from pid_decider to pic_control.
+// Package picconnector implements an exporter that connects the pid_decider processor to the pic_control extension.
 package picconnector
 
 import (
@@ -9,30 +8,25 @@ import (
 	"go.opentelemetry.io/collector/exporter"
 )
 
-const (
-	// typeStr is the unique identifier for the pic_connector exporter.
-	typeStr = "pic_connector"
-)
-
-// NewFactory creates a factory for the pic_connector exporter.
+// NewFactory creates a factory for the pic_connector exporter
 func NewFactory() exporter.Factory {
 	return exporter.NewFactory(
 		typeStr,
 		createDefaultConfig,
-		exporter.WithMetrics(createMetricsExporter, component.StabilityLevelDevelopment),
+		exporter.WithMetrics(createExporter, component.StabilityLevelDevelopment),
 	)
 }
 
-// createDefaultConfig creates the default configuration for the exporter.
+// createDefaultConfig creates the default configuration for the exporter
 func createDefaultConfig() component.Config {
 	return &Config{}
 }
 
-// createMetricsExporter creates a metrics exporter based on the config.
-func createMetricsExporter(
+// createExporter creates a metrics exporter based on the config
+func createExporter(
 	ctx context.Context,
 	set exporter.CreateSettings,
 	cfg component.Config,
 ) (exporter.Metrics, error) {
-	return newExporter(set)
+	return newExporter(cfg, set)
 }
