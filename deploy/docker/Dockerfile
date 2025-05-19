@@ -22,7 +22,7 @@ WORKDIR /
 COPY --from=builder /app/bin/sa-omf-otelcol /usr/local/bin/
 
 # Default config location
-COPY config/config.yaml /etc/sa-omf/config.yaml
+COPY configs/default/config.yaml /etc/sa-omf/config.yaml
 COPY deploy/policy.yaml /etc/sa-omf/policy.yaml
 
 USER nobody

@@ -76,6 +76,7 @@ docker:
 # Run collector with default config
 run:
 	@echo "Running SA-OMF with default config..."
+	@echo "Ensure policy.yaml is available at the path specified in configs/default/config.yaml (e.g. /etc/sa-omf/policy.yaml or a local relative path if customized)"
 	@go run ./cmd/sa-omf-otelcol/main.go --config=configs/default/config.yaml
 
 # Create a tag and version for release

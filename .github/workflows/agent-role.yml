@@ -159,6 +159,10 @@ EOF
           IFS=',' read -ra TASK_IDS <<< "$TASKS"
           
           for task_id in "${TASK_IDS[@]}"; do
+            if [ "$task_id" == "N/A" ]; then
+              echo "Skipping task validation for N/A."
+              continue
+            fi
             task_id=$(echo $task_id | xargs)  # Trim whitespace
             
             if [ ! -f "tasks/$task_id.yaml" ]; then
