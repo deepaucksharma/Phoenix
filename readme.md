@@ -60,6 +60,7 @@ SA-OMF follows a dual pipeline architecture:
 - **UpdateableProcessor (Interface)**: Contract for dynamic reconfiguration
 - **pid_decider (Processor)**: Generates configuration patches using PID control
 - **pic_connector (Exporter)**: Connects pid_decider to pic_control
+- **priority_tagger (Processor)**: Assigns priorities to metrics based on process patterns
 - **Policy Management**: policy.yaml defines KPIs, thresholds, and guard-rails
 
 ## Development
