@@ -20,12 +20,26 @@ jobs:
       - name: Extract role from PR body
         id: extract_role
         run: |
+          # Check if we're in a pull request
+          if [ -z "${{ github.event.pull_request.number }}" ]; then
+            echo "This workflow should only run on pull requests"
+            echo "role=skip" >> $GITHUB_OUTPUT
+            echo "tasks=skip" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
           PR_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" \
-            | jq -r '.body')
+            | jq -r '.body // ""')
           
-          ROLE=$(echo "$PR_BODY" | grep -Po '(?<=`ROLE: ).*?(?=`)' || echo "")
-          TASKS=$(echo "$PR_BODY" | grep -Po '(?<=`TASKS: ).*?(?=`)' || echo "")
+          # Set default role for Dependabot PRs
+          if [[ "${{ github.actor }}" == "dependabot[bot]" ]]; then
+            ROLE="dependabot"
+            TASKS="N/A"
+          else
+            ROLE=$(echo "$PR_BODY" | grep -Po '(?<=`ROLE: ).*?(?=`)' || echo "")
+            TASKS=$(echo "$PR_BODY" | grep -Po '(?<=`TASKS: ).*?(?=`)' || echo "")
+          fi
           
           echo "role=$ROLE" >> $GITHUB_OUTPUT
           echo "tasks=$TASKS" >> $GITHUB_OUTPUT
@@ -39,22 +53,45 @@ jobs:
           echo "Referenced tasks: $TASKS"
       
       - name: Check role exists
+        if: steps.extract_role.outputs.role != 'skip'
         run: |
           ROLE="${{ steps.extract_role.outputs.role }}"
-          if [ ! -f "agents/$ROLE.yaml" ]; then
-            echo "Error: Role '$ROLE' not found in agents/ directory"
-            echo "Available roles: $(ls agents/ | sed 's/\.yaml//')"
+          if [[ "$ROLE" == "dependabot" ]]; then
+            # Skip check for dependabot - create the role file if it doesn't exist
+            if [ ! -f "docs/agents/$ROLE.yaml" ]; then
+              echo "Creating dependabot role file"
+              mkdir -p docs/agents
+              cat > docs/agents/dependabot.yaml << EOF
+id: dependabot
+description: "Automated dependency updater"
+git_permissions: push
+required_checks: []
+can_touch:
+  - ".github/workflows/**"
+  - "go.mod"
+  - "go.sum"
+  - "package.json"
+  - "package-lock.json"
+  - "yarn.lock"
+blocked_files: []
+must_touch: []
+EOF
+            fi
+          elif [ ! -f "docs/agents/$ROLE.yaml" ]; then
+            echo "Error: Role '$ROLE' not found in docs/agents/ directory"
+            echo "Available roles: $(ls docs/agents/ | grep '.yaml' | sed 's/\.yaml//')"
             exit 1
           fi
 
       - name: Check file permissions
+        if: steps.extract_role.outputs.role != 'skip' && steps.extract_role.outputs.role != 'dependabot'
         run: |
           ROLE="${{ steps.extract_role.outputs.role }}"
           
           # Get allowed paths from role definition
-          CAN_TOUCH=$(yq -r '.can_touch[]' agents/$ROLE.yaml)
-          BLOCKED_FILES=$(yq -r '.blocked_files[]' agents/$ROLE.yaml)
-          MUST_TOUCH=$(yq -r '.must_touch[]' agents/$ROLE.yaml)
+          CAN_TOUCH=$(yq -r '.can_touch[]' docs/agents/$ROLE.yaml)
+          BLOCKED_FILES=$(yq -r '.blocked_files[]' docs/agents/$ROLE.yaml 2>/dev/null || echo "")
+          MUST_TOUCH=$(yq -r '.must_touch[]' docs/agents/$ROLE.yaml 2>/dev/null || echo "")
           
           # Get files changed in this PR
           CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
@@ -106,9 +143,14 @@ jobs:
           echo "All file changes comply with role '$ROLE' permissions"
 
       - name: Validate task references
-        if: steps.extract_role.outputs.tasks != 'N/A'
+        if: steps.extract_role.outputs.tasks != 'N/A' && steps.extract_role.outputs.role != 'dependabot' && steps.extract_role.outputs.role != 'skip'
         run: |
           TASKS="${{ steps.extract_role.outputs.tasks }}"
+          if [ -z "$TASKS" ]; then
+            echo "No tasks specified, skipping validation"
+            exit 0
+          fi
+          
           IFS=',' read -ra TASK_IDS <<< "$TASKS"
           
           for task_id in "${TASK_IDS[@]}"; do
@@ -119,7 +161,7 @@ jobs:
               exit 1
             fi
             
-            TASK_STATE=$(yq -r '.state' "tasks/$task_id.yaml")
+            TASK_STATE=$(yq -r '.state' "tasks/$task_id.yaml" 2>/dev/null || echo "")
             if [ "$TASK_STATE" = "done" ]; then
               echo "Error: Task '$task_id' is already marked as done"
               exit 1
