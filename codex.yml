@@ -1,0 +1,6 @@
+entry_build: make build
+entry_test: make test
+entry_run: make run
+
+golden_tests:
+  - test/integration/control_loop_test.go

@@ -95,3 +95,11 @@ The implementation is structured into multiple phases:
 ## License
 
 This project is licensed under the Apache 2.0 License - see the LICENSE file for details.
+
+## Using Codex
+
+This repository includes basic configuration for the [Codex](https://github.com/prometheus/prometheus/?) automation tool.
+
+- `codex.yml` defines standard entry commands used by Codex. The `entry_build`, `entry_test`, and `entry_run` keys run `make build`, `make test`, and `make run` respectively. The `golden_tests` section lists known failing tests (`test/integration/control_loop_test.go`).
+- `.codexignore` tells Codex to ignore files in `vendor/` and all Markdown documents.
+
