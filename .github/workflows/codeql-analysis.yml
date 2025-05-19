@@ -46,14 +46,14 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.22'
           cache: true
           
       - name: Basic Build for CodeQL
         run: |
-          go mod download || true
+          echo "Skipping dependency download - using vendored modules"
           # Only build essential code for analysis
-          go build -v ./cmd/... || echo "Build failed, but CodeQL may still produce results"
+          go build -mod=vendor -v ./cmd/... || echo "Build failed, but CodeQL may still produce results"
         continue-on-error: true
 
       - name: Perform CodeQL Analysis

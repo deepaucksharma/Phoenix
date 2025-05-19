@@ -28,11 +28,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.22'
           cache: true
 
       - name: Run basic benchmarks (non-blocking)
         run: |
           # Run benchmarks but don't fail the build if they fail
-          go test -run=^$ -bench=. -benchmem ./... || echo "Some benchmarks failed but continuing"
+          go test -mod=vendor -run=^$ -bench=. -benchmem ./... || echo "Some benchmarks failed but continuing"
         continue-on-error: true
