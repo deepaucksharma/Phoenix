@@ -25,35 +25,8 @@ import (
 // This const is defined in factory.go
 // var typeStr = "pid_decider"
 
-// Config defines configuration for the pid_decider processor
-type Config struct {
-	Controllers []ControllerConfig `mapstructure:"controllers"`
-}
-
-// ControllerConfig holds configuration for a PID controller
-type ControllerConfig struct {
-	Name                string              `mapstructure:"name"`
-	Enabled             bool                `mapstructure:"enabled"`
-	KPIMetricName       string              `mapstructure:"kpi_metric_name"`
-	KPITargetValue      float64             `mapstructure:"kpi_target_value"`
-	KP                  float64             `mapstructure:"kp"`
-	KI                  float64             `mapstructure:"ki"`
-	KD                  float64             `mapstructure:"kd"`
-	IntegralWindupLimit float64             `mapstructure:"integral_windup_limit"`
-	HysteresisPercent   float64             `mapstructure:"hysteresis_percent"`
-	UseBayesian         bool                `mapstructure:"use_bayesian"`
-	StallThreshold      int                 `mapstructure:"stall_threshold"`
-	OutputConfigPatches []OutputConfigPatch `mapstructure:"output_config_patches"`
-}
-
-// OutputConfigPatch defines how a PID controller affects a processor parameter
-type OutputConfigPatch struct {
-	TargetProcessorName string  `mapstructure:"target_processor_name"`
-	ParameterPath       string  `mapstructure:"parameter_path"`
-	ChangeScaleFactor   float64 `mapstructure:"change_scale_factor"`
-	MinValue            float64 `mapstructure:"min_value"`
-	MaxValue            float64 `mapstructure:"max_value"`
-}
+// Removed duplicate Config, ControllerConfig, and OutputConfigPatch definitions
+// These are already defined in config.go
 
 var _ component.Config = (*Config)(nil)
 
@@ -202,7 +175,7 @@ func (p *pidProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) e
 					ctrl.lastOutputs[outConfig.ParameterPath] = newValue
 					patch := interfaces.ConfigPatch{
 						PatchID:             uuid.New().String(),
-						TargetProcessorName: component.MustNewIDFromString(outConfig.TargetProcessorName),
+						TargetProcessorName: component.NewID(component.MustNewType(outConfig.TargetProcessorName)),
 						ParameterPath:       outConfig.ParameterPath,
 						NewValue:            newValue,
 						Reason:              "bayesian_fallback",

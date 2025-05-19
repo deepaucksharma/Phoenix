@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/extension"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
@@ -179,4 +181,53 @@ func GenerateControlLoopMetrics(kpiValues map[string]float64) pmetric.Metrics {
 	}
 	
 	return metrics
+}
+
+// TestHost implements component.Host for testing
+type TestHost struct {
+	processors map[component.ID]component.Component
+	extensions map[component.ID]extension.Extension
+}
+
+// NewTestHost creates a new test host for testing
+func NewTestHost() *TestHost {
+	return &TestHost{
+		processors: make(map[component.ID]component.Component),
+		extensions: make(map[component.ID]extension.Extension),
+	}
+}
+
+// ReportFatalError implements component.Host
+func (h *TestHost) ReportFatalError(err error) {
+	// Do nothing in tests
+}
+
+// GetFactory implements component.Host
+func (h *TestHost) GetFactory(kind component.Kind, componentType component.Type) component.Factory {
+	return nil
+}
+
+// GetExtensions implements component.Host
+func (h *TestHost) GetExtensions() map[component.ID]extension.Extension {
+	return h.extensions
+}
+
+// GetExporters implements component.Host
+func (h *TestHost) GetExporters() map[component.Type]map[component.ID]component.Component {
+	return nil
+}
+
+// GetProcessors implements host.Host returning processors as generic components
+func (h *TestHost) GetProcessors() map[component.ID]component.Component {
+	return h.processors
+}
+
+// AddProcessor adds a processor to the host
+func (h *TestHost) AddProcessor(id component.ID, processor component.Component) {
+	h.processors[id] = processor
+}
+
+// AddExtension adds an extension to the host
+func (h *TestHost) AddExtension(id component.ID, ext extension.Extension) {
+	h.extensions[id] = ext
 }

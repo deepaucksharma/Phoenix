@@ -73,18 +73,21 @@ func (gp *GaussianProcess) Predict(x []float64) (float64, float64) {
 	// Solve for alpha = K^{-1} y
 	yVec := mat.NewVecDense(n, gp.y)
 	alpha := mat.NewVecDense(n, nil)
-	if err := chol.SolveVec(alpha, yVec); err != nil {
-		return 0, 1
-	}
+	// Use alternative solution since SolveVec method is not available
+	cholMat := &mat.Dense{}
+	chol.SolveTo(cholMat, mat.NewDense(n, 1, yVec.RawVector().Data))
+	alpha.CopyVec(mat.NewVecDense(n, cholMat.RawMatrix().Data))
 
 	// Compute mean = k^T * alpha
 	mean := mat.Dot(mat.NewVecDense(n, kVec), alpha)
 
 	// Solve for v = K^{-1} k
 	v := mat.NewVecDense(n, nil)
-	if err := chol.SolveVec(v, mat.NewVecDense(n, kVec)); err != nil {
-		return mean, 1
-	}
+	// Use alternative solution since SolveVec method is not available
+	kVecDense := mat.NewDense(n, 1, kVec)
+	vDense := &mat.Dense{}
+	chol.SolveTo(vDense, kVecDense)
+	v.CopyVec(mat.NewVecDense(n, vDense.RawMatrix().Data))
 	kxx := rbf(x, x, gp.lengthScale) + gp.noise
 	varience := kxx - mat.Dot(mat.NewVecDense(n, kVec), v)
 	if varience < 1e-8 {

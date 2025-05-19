@@ -31,11 +31,10 @@ func TestControlLoopIntegration(t *testing.T) {
 	picCtrlConfig.MaxPatchesPerMinute = 10
 	picCtrlConfig.PatchCooldownSeconds = 1
 
-	// Use the factory's WithExtensions method to create the extension
-	createExtension := picCtrlFactory.(extension.Factory).WithExtensions()
-	picCtrlExt, err := createExtension(
+	// Create the extension using the factory directly
+	picCtrlExt, err := picCtrlFactory.CreateExtension(
 		context.Background(),
-		extension.Settings{
+		component.ExtensionCreateSettings{
 			TelemetrySettings: component.TelemetrySettings{},
 			ID: component.NewID(component.MustNewType("pic_control")),
 		},
@@ -59,11 +58,10 @@ func TestControlLoopIntegration(t *testing.T) {
 	topkConfig.KMax = 100
 
 	topkSink := new(consumertest.MetricsSink)
-	// Use the factory's WithMetrics method to create the processor
-	createProcessor := topkFactory.(processor.Factory).WithMetrics()
-	topkProc, err := createProcessor(
+	// Create the processor using the factory directly
+	topkProc, err := topkFactory.CreateMetricsProcessor(
 		context.Background(),
-		processor.Settings{
+		processor.CreateSettings{
 			TelemetrySettings: component.TelemetrySettings{},
 			ID: component.NewID(component.MustNewType("adaptive_topk")),
 		},
@@ -106,11 +104,10 @@ func TestControlLoopIntegration(t *testing.T) {
 
 	// Create a test sink for PID processor output
 	pidSink := new(consumertest.MetricsSink)
-	// Use the factory's WithMetrics method to create the processor
-	createPIDProcessor := pidFactory.(processor.Factory).WithMetrics()
-	pidProc, err := createPIDProcessor(
+	// Create the processor using the factory directly
+	pidProc, err := pidFactory.CreateMetricsProcessor(
 		context.Background(),
-		processor.Settings{
+		processor.CreateSettings{
 			TelemetrySettings: component.TelemetrySettings{},
 			ID: component.NewID(component.MustNewType("adaptive_pid")),
 		},
@@ -131,7 +128,8 @@ func TestControlLoopIntegration(t *testing.T) {
 		pidSink.Reset()
 
 		// Test scenario 1: Coverage too low (0.7), should increase k_value
-		// kValueBefore := topkConfig.KValue // Unused variable
+		// Test the initial k_value
+		assert.Equal(t, 30, topkConfig.KValue, "Initial k_value should be 30")
 		coverageMetrics := testutils.GenerateControlMetrics(0.7) // 70% coverage
 		
 		// Send metrics to PID controller
