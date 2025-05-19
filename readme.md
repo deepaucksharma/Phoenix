@@ -92,6 +92,10 @@ The implementation is structured into multiple phases:
 - Security hardening
 - Production deployment tools
 
+## Documentation
+
+- [PID integral controls](docs/pid_integral_controls.md) – how to use `SetIntegralLimit` and `ResetIntegral`.
+
 ## License
 
 This project is licensed under the Apache 2.0 License - see the LICENSE file for details.
