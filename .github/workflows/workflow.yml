@@ -1,0 +1,252 @@
+name: Phoenix
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 16 * * 1'  # Weekly security scans
+  workflow_dispatch:
+
+# Ensure only one workflow run happens at a time for a given ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Core job that handles build, test, lint in one place
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for git operations
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      # Lint code
+      - name: Lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          args: --timeout=5m
+
+      # Validate configurations
+      - name: Validate configurations
+        run: |
+          bash scripts/validation/validate_policy_schema.sh
+          bash scripts/validation/validate_config_schema.sh
+
+      # Run tests with race detection (but skip integration tests in PRs)
+      - name: Run tests
+        run: |
+          # For PRs, skip slow integration tests
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            go test -mod=vendor -race -skip "^TestIntegration|^TestE2E" ./...
+          else
+            # For main branch, run all tests
+            go test -mod=vendor -race ./...
+          fi
+
+      # Build binary
+      - name: Build
+        run: go build -mod=vendor -o bin/sa-omf-otelcol ./cmd/sa-omf-otelcol
+
+      # Upload artifacts for main branch only
+      - name: Upload build artifacts
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary
+          path: bin/sa-omf-otelcol
+          retention-days: 7
+
+  # Security scanning with CodeQL
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    # Only run on schedule, main pushes, or workflow_dispatch
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: go
+          queries: security-extended
+
+      # Build the code for analysis
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+          
+      - name: Build for analysis
+        run: go build -mod=vendor -v ./cmd/...
+        continue-on-error: true
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  # Only run benchmarks when requested via label
+  benchmark:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    # Only run benchmarks on workflow_dispatch or if PR is labeled with "run-benchmarks"
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-benchmarks')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Run benchmarks
+        run: go test -mod=vendor -run=^$ -bench=. -benchmem ./...
+        continue-on-error: true
+
+  # PR validation (title format and agent roles)
+  pr-validation:
+    name: PR Validation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Validate PR title format
+      - name: Check PR title
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types:
+            - feat
+            - fix
+            - docs
+            - style
+            - refactor
+            - perf
+            - test
+            - build
+            - ci
+            - chore
+            - revert
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$
+          wip: true
+
+      # Check agent role permissions
+      - name: Check agent role
+        run: |
+          # Handle dependabot PRs automatically
+          if [[ "${{ github.actor }}" == "dependabot[bot]" ]]; then
+            echo "dependabot PR - skipping role check"
+            exit 0
+          fi
+          
+          # Extract from PR body using simple grep
+          PR_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" \
+            | jq -r '.body // ""')
+          
+          ROLE=$(echo "$PR_BODY" | grep -Po '(?<=ROLE: <!-- ).*?(?= -->)' | xargs || echo "")
+          
+          # Skip if no role specified
+          if [ -z "$ROLE" ]; then
+            echo "No agent role specified in PR body - skipping check"
+            exit 0
+          fi
+          
+          # Check if role exists and validate permissions
+          ROLE_FILE="agents/$ROLE.yaml"
+          if [ ! -f "$ROLE_FILE" ]; then
+            echo "Error: Role '$ROLE' not found in agents/ directory"
+            echo "Available roles: $(ls agents/ | grep '.yaml' | sed 's/\.yaml//')"
+            exit 1
+          fi
+          
+          # Simple file permission checks
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+          
+          # Read permissions from role file
+          ALLOWED_PATTERNS=$(grep "can_touch:" -A 100 "$ROLE_FILE" | grep -v "can_touch:" | grep "^  -" | sed 's/^  - //' | sed 's/"//g')
+          BLOCKED_PATTERNS=$(grep "blocked_files:" -A 100 "$ROLE_FILE" | grep -v "blocked_files:" | grep "^  -" | sed 's/^  - //' | sed 's/"//g')
+          
+          # Check files against permissions
+          for file in $CHANGED_FILES; do
+            # Check blocked patterns
+            for pattern in $BLOCKED_PATTERNS; do
+              if [[ -n "$pattern" && "$file" == $pattern ]]; then
+                echo "Error: '$file' cannot be modified by role '$ROLE'"
+                exit 1
+              fi
+            done
+            
+            # Check allowed patterns
+            ALLOWED=false
+            for pattern in $ALLOWED_PATTERNS; do
+              if [[ -n "$pattern" && "$file" == $pattern ]]; then
+                ALLOWED=true
+                break
+              fi
+            done
+            
+            if [ "$ALLOWED" = false ]; then
+              echo "Error: '$file' is not allowed to be modified by role '$ROLE'"
+              exit 1
+            fi
+          done
+          
+          echo "All file changes comply with role '$ROLE' permissions"
+
+  # Build and push Docker image for main branch
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/sa-omf-collector:latest
+            ghcr.io/${{ github.repository_owner }}/sa-omf-collector:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

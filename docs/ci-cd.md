@@ -1,32 +1,40 @@
 # CI/CD Workflows
 
-This document describes the CI/CD workflows used in the Phoenix project.
+This document describes the CI/CD workflow used in the Phoenix project.
 
 ## Overview
 
-The Phoenix project uses GitHub Actions for continuous integration and deployment. The workflows are designed to be efficient, reliable, and maintainable.
+The Phoenix project uses GitHub Actions for continuous integration and deployment. The workflow is designed to be efficient, reliable, and maintainable.
 
 ## Workflow Structure
 
-The project uses three main workflow files:
+The project uses a single comprehensive workflow file (`.github/workflows/workflow.yml`) that contains multiple jobs:
 
-1. **CI Workflow** (`.github/workflows/ci.yml`)
-   - Handles the core build, test, and deployment processes
+1. **Build & Test**
+   - Handles linting, testing, and building the binary
    - Runs on every push to main and on pull requests
-   - Contains three jobs:
-     - **build**: Runs tests, linting, and builds the binary
-     - **benchmarks**: Runs performance benchmarks (only when triggered)
-     - **docker**: Builds and pushes Docker images (only for main branch)
+   - Skips integration tests on PRs for faster feedback
+   - Uploads build artifacts on main branch pushes
 
-2. **Security Workflow** (`.github/workflows/security.yml`)
+2. **Security Scan**
    - Runs security scanning using CodeQL
-   - Executes weekly and on code changes
+   - Executes weekly, on main branch pushes, and when manually triggered
    - Identifies potential security vulnerabilities
 
-3. **PR Validation Workflow** (`.github/workflows/pr-validation.yml`)
+3. **Benchmarks**
+   - Runs performance benchmarks
+   - Only executes when manually triggered or when a PR has the "run-benchmarks" label
+
+4. **PR Validation**
    - Validates pull request metadata
    - Enforces semantic PR titles
    - Checks agent role permissions when applicable
+   - Only runs on pull requests
+
+5. **Docker**
+   - Builds and pushes Docker images
+   - Only runs on main branch pushes
+   - Creates multi-architecture images (amd64 and arm64)
 
 ## Key Features
 
