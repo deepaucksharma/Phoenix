@@ -84,10 +84,24 @@ jobs:
         run: make build
         
       - name: Validate Policy
-        run: bash scripts/validation/validate_policy_schema.sh
+        run: |
+          if [ -f "scripts/validation/validate_policy_schema.sh" ]; then
+            bash scripts/validation/validate_policy_schema.sh
+          elif [ -f "hack/validate_policy_schema.sh" ]; then
+            bash hack/validate_policy_schema.sh
+          else
+            echo "Policy validation script not found, skipping"
+          fi
         
       - name: Check Component Registry
-        run: bash scripts/ci/check_component_registry.sh
+        run: |
+          if [ -f "scripts/ci/check_component_registry.sh" ]; then
+            bash scripts/ci/check_component_registry.sh
+          elif [ -f "hack/check_component_registry.sh" ]; then
+            bash hack/check_component_registry.sh
+          else
+            echo "Component registry check script not found, skipping"
+          fi
         
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

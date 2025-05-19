@@ -1,0 +1,13 @@
+id: security-auditor
+description: "Performs security reviews and vulnerability assessments"
+git_permissions: comment
+required_checks:
+  - govulncheck
+  - dependency-review
+can_touch:
+  - .github/security/**
+must_touch: []
+blocked_files:
+  - cmd/**
+  - internal/**
+  - pkg/**

@@ -1,26 +1,22 @@
-## Description
+# Pull Request
 
-<!-- Describe the changes in this PR -->
+## 1. Declared Agent Role
+<!-- One of: architect | planner | implementer | reviewer | security-auditor | doc-writer | devops | integrator -->
+<!-- IMPORTANT: This must be in the format `ROLE: role_name` (include the backticks) -->
+`ROLE: `
 
-## Related Issue
+## 2. Linked Task(s)
+<!-- List task IDs from tasks/*.yaml or put N/A -->
+<!-- IMPORTANT: This must be in the format `TASKS: id1, id2` or `TASKS: N/A` (include the backticks) -->
+`TASKS: `
 
-<!-- Link to the related issue(s) -->
+## 3. Changes Summary
+<!-- Provide a clear and concise description of the changes -->
 
-## Motivation and Context
+## 4. Related Issue
+<!-- Link to the related issue(s) if applicable -->
 
-<!-- Why is this change required? What problem does it solve? -->
-
-## How Has This Been Tested?
-
-<!-- Please describe how you tested your changes -->
-
-- [ ] Unit tests
-- [ ] Integration tests
-- [ ] Manual testing
-- [ ] Other: <!-- Specify -->
-
-## Type of Change
-
+## 5. Type of Change
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Performance improvement
@@ -29,19 +25,13 @@
 - [ ] CI/CD improvement
 - [ ] Other: <!-- Specify -->
 
-## Checklist
+## 6. Checklist
+<!-- Mark completed items with an [x] -->
+- [ ] Code follows project style guidelines
+- [ ] Changes respect role boundaries
+- [ ] Documentation has been updated (if required)
+- [ ] Tests have been added or updated
+- [ ] All CI checks pass locally
 
-- [ ] My code follows the project's style guidelines
-- [ ] I have added tests that prove my fix or feature works
-- [ ] I have updated the documentation accordingly
-- [ ] The code builds without any errors or warnings
-- [ ] All tests pass locally and in CI
-- [ ] I have rebased my branch on the latest main
-
-## Additional Context
-
-<!-- Add any other context about the PR here -->
-
-<!-- For Claude Code contributors only -->
-`ROLE: <!-- Insert your agent role here or N/A -->`
-`TASKS: <!-- Insert task IDs separated by comma or N/A -->`
+## 7. Additional Notes
+<!-- Any additional information that reviewers should know -->
