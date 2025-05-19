@@ -16,7 +16,29 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
+    # More frequent checks for vulnerable Go packages
+    security-updates-only: false
+    ignore:
+      # Ignore patch updates for development dependencies
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch"]
+        dependency-type: "development"
 
+  # Dedicated security updates for Go modules (runs daily)
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 15
+    labels:
+      - "dependencies"
+      - "go"
+      - "security"
+    commit-message:
+      prefix: "security"
+      include: "scope"
+    security-updates-only: true
+    
   # Enable version updates for GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -48,3 +70,18 @@ updates:
     commit-message:
       prefix: "docker"
       include: "scope"
+    
+  # Enable security updates for Docker (runs daily)
+  - package-ecosystem: "docker"
+    directory: "/deploy/docker"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "docker"
+      - "security"
+    commit-message:
+      prefix: "security"
+      include: "scope"
+    security-updates-only: true

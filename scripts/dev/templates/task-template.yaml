@@ -1,0 +1,22 @@
+id: TASK-ID
+title: "Task Title"
+state: open
+priority: medium  # high, medium, low
+created_at: "YYYY-MM-DD"
+assigned_to: "role-name"  # architect, implementer, integrator, tester, devops, doc-writer, reviewer, security-auditor, planner
+area: path/to/component
+depends_on: []  # List of task IDs this depends on
+acceptance:
+  - "First acceptance criterion"
+  - "Second acceptance criterion"
+  - "Third acceptance criterion"
+description: |
+  Detailed description of the task. This should provide enough 
+  information for the assigned role to understand what needs to be done.
+  
+  Include:
+  1. Background information
+  2. Specific requirements
+  3. Technical details if relevant
+  4. Any constraints or limitations
+  5. Links to relevant documentation or code

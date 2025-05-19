@@ -1,12 +1,12 @@
 # Phoenix CODEOWNERS File
 
 # Default owners for everything
-*                   @deepaucksharma
+*                     @deepaucksharma
 
 # Core components
-/cmd/                @core-team
-/internal/           @core-team
-/pkg/                @core-team
+/cmd/                 @core-team
+/internal/            @core-team
+/pkg/                 @core-team
 
 # Specific component ownership
 /internal/processor/  @processor-team
@@ -15,20 +15,29 @@
 /internal/control/    @control-team
 
 # Test ownership
-/test/               @test-team
+/test/                @test-team @tester-team
+/test/benchmarks/     @tester-team
+/test/unit/           @tester-team
+/test/integration/    @tester-team
+/test/testutils/      @tester-team
+/test/generator/      @tester-team
+
+# CI/CD and Test Infrastructure
+/.github/workflows/benchmarks.yml      @tester-team @devops-team
+/.github/workflows/cross-platform-tests.yml  @tester-team @devops-team
 
 # Infrastructure
-/.github/            @devops-team
-/deploy/             @devops-team
-/hack/               @devops-team
+/.github/             @devops-team
+/deploy/              @devops-team
+/hack/                @devops-team
 
 # Documentation
-/docs/               @docs-team
-*.md                 @docs-team
+/docs/                @docs-team
+*.md                  @docs-team
 
 # Task definitions
-/tasks/              @project-team
+/tasks/               @project-team
 
 # Agent definitions
-/agents/             @admin-team
-/AGENTS.md           @admin-team
+/docs/agents/         @admin-team
+/docs/agents/AGENTS.md @admin-team

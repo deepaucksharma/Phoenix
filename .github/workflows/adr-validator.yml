@@ -1,0 +1,91 @@
+name: ADR Validation
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docs/architecture/adr/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'docs/architecture/adr/**'
+
+jobs:
+  validate-adrs:
+    name: Validate Architecture Decision Records
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run ADR validation script
+        run: bash scripts/dev/validate-adr.sh
+        
+      - name: Check ADR format
+        run: |
+          # Verify that all ADRs have the required sections
+          echo "Checking ADR format..."
+          
+          errors=0
+          for adr_file in docs/architecture/adr/*.md; do
+            # Skip the README
+            if [[ $(basename "$adr_file") == "README.md" ]]; then
+              continue
+            fi
+            
+            echo "Checking $adr_file"
+            
+            # Check for required sections
+            for section in "# " "## Status" "## Context" "## Decision" "## Consequences"; do
+              if ! grep -q "$section" "$adr_file"; then
+                echo "Error: Missing section '$section' in $adr_file"
+                errors=$((errors+1))
+              fi
+            done
+            
+            # Check for proper naming convention
+            if [[ ! $(basename "$adr_file") =~ ^[0-9]{3}-.*\.md$ ]] && [[ ! $(basename "$adr_file") =~ ^[0-9]{8}-.*\.md$ ]]; then
+              echo "Error: ADR filename doesn't follow the required format (NNN-title.md or YYYYMMDD-title.md): $adr_file"
+              errors=$((errors+1))
+            fi
+          done
+          
+          if [ $errors -gt 0 ]; then
+            echo "Found $errors errors in ADR files"
+            exit 1
+          else
+            echo "All ADRs passed format validation"
+          fi
+          
+      - name: Check ADR References
+        run: |
+          # Verify that all ADRs are referenced in the README
+          echo "Checking ADR references in README..."
+          
+          errors=0
+          readme="docs/architecture/adr/README.md"
+          
+          if [ ! -f "$readme" ]; then
+            echo "Error: ADR README.md not found at $readme"
+            exit 1
+          fi
+          
+          for adr_file in docs/architecture/adr/*.md; do
+            # Skip the README itself
+            if [[ $(basename "$adr_file") == "README.md" ]]; then
+              continue
+            fi
+            
+            basename=$(basename "$adr_file")
+            if ! grep -q "$basename" "$readme"; then
+              echo "Error: ADR $basename is not referenced in $readme"
+              errors=$((errors+1))
+            fi
+          done
+          
+          if [ $errors -gt 0 ]; then
+            echo "Found $errors missing ADR references in README"
+            exit 1
+          else
+            echo "All ADRs are properly referenced in the README"
+          fi

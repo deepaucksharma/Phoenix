@@ -6,10 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SA-OMF (Self-Aware OpenTelemetry Metrics Fabric) is an advanced metrics collection and processing system built on top of OpenTelemetry. It features adaptive processing that automatically adjusts parameters based on system behavior through PID control loops.
 
+**Project Codename**: Phoenix  
+**Current Implementation Timeline**: 18 months  
+**Repository Structure**: Monorepo with modular packages
+
 The architecture consists of:
 - **Dual pipeline architecture**: Data pipeline for metrics processing and control pipeline for self-monitoring
 - **Adaptive processors**: Self-tuning processors that can be dynamically reconfigured
 - **PID control loops**: Self-regulation of key parameters to maintain optimal performance
+- **Safety mechanisms**: Built-in guard rails to prevent resource exhaustion
 
 ## Development Commands
 
@@ -21,6 +26,9 @@ make build
 
 # Run the collector with default config
 make run
+
+# Run with specific config
+./bin/sa-omf-otelcol --config=configs/production/config.yaml
 
 # Run all tests
 make test
@@ -49,6 +57,9 @@ make docker
 # Create a release tag
 make release VERSION=x.y.z
 
+# Code consistency check for interdependent files
+make drift-check
+
 # Show all available commands
 make help
 ```
@@ -68,21 +79,60 @@ cd test && make integration
 # Generate test coverage report
 cd test && make coverage
 
+# Generate comprehensive test report
+cd test && make report
+
 # Run benchmarks in test directory
 cd test && make benchmark
+
+# Run targeted tests for specific components
+go test -v ./test/processors/adaptive_pid/...
+go test -v ./test/unit/hll/...
+
+# Run benchmarks for specific algorithms
+go test -v ./test/benchmarks/algorithms/... -bench=.
 ```
 
 ### Running in Containers
 
 ```bash
 # Run with Docker Compose (bare environment)
-cd test-environments/bare && docker-compose up -d
+cd deploy/compose/bare && docker-compose up -d
 
 # Run with Docker Compose (Prometheus included)
-cd test-environments/prometheus && docker-compose up -d 
+cd deploy/compose/prometheus && docker-compose up -d 
 
 # Run with Docker Compose (full stack with Grafana)
-cd test-environments/full && docker-compose up -d
+cd deploy/compose/full && docker-compose up -d
+
+# Build and run using Docker directly
+docker build -t sa-omf-otelcol:latest -f deploy/docker/Dockerfile .
+docker run -p 8888:8888 -v $PWD/configs/default:/etc/sa-omf sa-omf-otelcol:latest --config=/etc/sa-omf/config.yaml
+
+# Deploy to Kubernetes
+kubectl apply -f deploy/kubernetes/prometheus-operator-resources.yaml
+```
+
+### Validation and Configuration Testing
+
+```bash
+# Validate policy schema
+scripts/validation/validate_policy_schema.sh
+
+# Validate config schema
+scripts/validation/validate_config_schema.sh
+
+# Create a new ADR
+scripts/dev/new-adr.sh "My New Architecture Decision"
+
+# Create a new component
+scripts/dev/new-component.sh processor my_new_processor
+
+# Create a new branch
+scripts/dev/create-branch.sh feature/new-feature
+
+# Create a new task
+scripts/dev/create-task.sh "Add new processor"
 ```
 
 ### Typical Development Workflow
@@ -105,7 +155,7 @@ cd test-environments/full && docker-compose up -d
 
 ### Key Extensions
 
-- **pic_control**: Central governance layer for config changes
+- **pic_control_ext**: Central governance layer for config changes
   - Manages policy file watching
   - Handles configuration change requests
   - Enforces rate limiting and safety measures
@@ -121,28 +171,40 @@ cd test-environments/full && docker-compose up -d
    - Uses Space-Saving algorithm for top-k tracking
    - Self-tunes to achieve target coverage with minimal k-value
 
-3. **Other planned processors**:
+3. **adaptive_pid**: Generates configuration patches using PID control
+   - Monitors KPIs and calculates configuration changes needed
+   - Uses PID controllers for stable adjustments
+   - Emits configuration patches via metrics
+
+4. **Other planned processors**:
    - cardinality_guardian: Controls metrics cardinality
    - reservoir_sampler: Provides statistical sampling with adjustable reservoir sizes
    - others_rollup: Aggregates non-priority processes
 
 ### Control Components
 
-1. **pid_decider**: Generates configuration patches using PID control
-   - Monitors KPIs and calculates configuration changes needed
-   - Uses PID controllers for stable adjustments
-   - Emits configuration patches via metrics
+1. **pid_controller**: Core controller implementation in control/pid package
+   - Computes error between target value and measured value
+   - Applies proportional, integral, and derivative terms
+   - Generates stable control signals for processor reconfiguration
+   - Handles anti-windup protection
 
-2. **pic_connector**: Connects pid_decider to pic_control
+2. **pic_connector**: Connects adaptive_pid to pic_control_ext
    - Extracts ConfigPatch objects from metrics
-   - Submits them to pic_control
+   - Submits them to pic_control_ext
 
-### PID Controller
+3. **safety_monitor**: Provides safeguards against excessive resource usage
+   - Monitors system resources
+   - Can trigger safe mode when thresholds are exceeded
+
+### PID Control System
 
 The PID controller is a key component that provides feedback-based control:
 - Computes error between target value and measured value
-- Applies proportional, integral, and derivative terms
+- Applies proportional, integral, and derivative terms to compute corrections
 - Generates stable control signals for processor reconfiguration
+- Includes configurable integral windup protection
+- Handles hysteresis to prevent oscillation
 
 ### Policy Management
 
@@ -173,41 +235,73 @@ The system is configured through a policy.yaml file which defines:
 sa-omf/
 ├── cmd/
 │   └── sa-omf-otelcol/             # Main binary entrypoint
+├── configs/
+│   ├── default/                    # Default configuration
+│   ├── development/                # Development configuration
+│   ├── production/                 # Production configuration
+│   ├── testing/                    # Testing configuration
+│   └── examples/                   # Example configurations
 ├── internal/
-│   ├── interfaces/                  # Core interfaces (UpdateableProcessor, etc.)
+│   ├── interfaces/                 # Core interfaces (UpdateableProcessor, etc.)
 │   ├── extension/
-│   │   └── piccontrolext/           # pic_control implementation
+│   │   └── pic_control_ext/        # pic_control implementation
 │   ├── connector/
-│   │   └── picconnector/            # pic_connector implementation
-│   ├── processor/                   # All custom processors
-│   └── control/                     # Control logic helpers
-├── pkg/                             # Reusable packages
+│   │   └── pic_connector/          # pic_connector implementation
+│   ├── processor/                  # All custom processors
+│   │   ├── adaptive_pid/           # PID-based adaptive configuration
+│   │   ├── adaptive_topk/          # Adaptive top-k filtering
+│   │   ├── priority_tagger/        # Priority tagging processor
+│   │   └── base/                   # Base processor implementation
+│   └── control/                    # Control logic helpers
+│       ├── pid/                    # PID controller implementation
+│       ├── configpatch/            # Configuration patch validation
+│       └── safety/                 # Safety monitoring
+├── pkg/                            # Reusable packages
+│   ├── metrics/                    # Metrics utilities
+│   ├── policy/                     # Policy schema and validation
+│   └── util/                       # Utility algorithms
+│       ├── hll/                    # HyperLogLog for cardinality estimation
+│       ├── reservoir/              # Reservoir sampling
+│       └── topk/                   # Top-K frequency tracking
 ├── test/
-│   ├── unit/                        # Unit tests for core algorithms
-│   ├── interfaces/                  # Interface contract tests
-│   ├── processors/                  # Processor-specific tests
-│   ├── integration/                 # End-to-end tests
-│   └── testutils/                   # Testing utilities
+│   ├── unit/                       # Unit tests for core algorithms
+│   ├── interfaces/                 # Interface contract tests
+│   ├── processors/                 # Processor-specific tests
+│   ├── integration/                # End-to-end tests
+│   ├── benchmarks/                 # Performance benchmarks
+│   ├── testutils/                  # Testing utilities
+│   └── generator/                  # Test data generation
 ├── deploy/
-│   ├── kubernetes/                  # K8s deployment manifests
-│   └── docker/                      # Dockerfile
-└── docs/                            # Documentation
+│   ├── kubernetes/                 # K8s deployment manifests
+│   ├── docker/                     # Dockerfile
+│   └── compose/                    # Docker Compose configurations
+└── docs/                           # Documentation
+    ├── architecture/               # Architecture documentation
+    │   └── adr/                    # Architecture Decision Records
+    ├── components/                 # Component documentation
+    ├── concepts/                   # Concept documentation
+    ├── operations/                 # Operational documentation
+    └── tutorials/                  # Tutorials
 ```
 
 ### Adding a New Processor
 
 1. Create factory.go and processor.go in internal/processor/yourprocessor/
 2. Implement the UpdateableProcessor interface
-3. Register your processor in the collector factory
-4. Add processor configuration to policy schema
-5. Update config.yaml and policy.yaml with default configs
-6. Add unit and integration tests in test/processors/yourprocessor/
+3. Extend the BaseProcessor for common functionality
+4. Register your processor in the collector factory
+5. Add processor configuration to policy schema
+6. Update config.yaml and policy.yaml with default configs
+7. Add unit and integration tests in test/processors/yourprocessor/
+8. Add performance benchmarks in test/benchmarks/processors/yourprocessor/
 
 ### Modifying PID Controllers
 
 PID controllers are defined in the policy.yaml file:
 - Adjust kp, ki, kd values to change control behavior
 - Set target_value to define the desired KPI state
+- Configure hysteresis_percent to prevent oscillation
+- Set integral_windup_limit to prevent integral term from growing too large
 - Configure output_config_patches to specify what parameters get adjusted
 
 ### Testing Your Changes
@@ -218,6 +312,26 @@ PID controllers are defined in the policy.yaml file:
 4. Add benchmarks for performance-critical components
 5. For integration testing, use testutils/metrics_generator.go to create synthetic test data
 
+### Configuration Management
+
+The system uses two main types of configuration files:
+
+1. **config.yaml**: Standard OpenTelemetry Collector configuration
+   - Defines receivers, processors, exporters, and pipelines
+   - Sets up component connections
+
+2. **policy.yaml**: Self-adaptive behavior configuration
+   - Defines KPIs and target values
+   - Configures PID controller parameters
+   - Sets safety thresholds and limits
+   - Controls adaptive processor behavior
+
+Different environment configurations are available in configs/[environment]/:
+- **default/**: Standard baseline configuration
+- **development/**: More verbose, faster adaptation for development
+- **production/**: More conservative settings for stability
+- **testing/**: Configuration optimized for tests
+
 ### Safety Mechanism Development
 
 The system includes several safety mechanisms:
@@ -225,6 +339,7 @@ The system includes several safety mechanisms:
 - Configuration patch rate limiting
 - Policy validation against schema
 - Parameter bounds checking in patches
+- Hysteresis to prevent oscillation
 
 ### Prerequisites
 
