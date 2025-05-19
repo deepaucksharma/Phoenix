@@ -186,14 +186,14 @@ func GenerateControlLoopMetrics(kpiValues map[string]float64) pmetric.Metrics {
 // TestHost implements component.Host for testing
 type TestHost struct {
 	processors map[component.ID]component.Component
-	extensions map[component.ID]extension.Extension
+	extensions map[component.ID]component.Component
 }
 
 // NewTestHost creates a new test host for testing
 func NewTestHost() *TestHost {
 	return &TestHost{
 		processors: make(map[component.ID]component.Component),
-		extensions: make(map[component.ID]extension.Extension),
+		extensions: make(map[component.ID]component.Component),
 	}
 }
 
@@ -208,7 +208,7 @@ func (h *TestHost) GetFactory(kind component.Kind, componentType component.Type)
 }
 
 // GetExtensions implements component.Host
-func (h *TestHost) GetExtensions() map[component.ID]extension.Extension {
+func (h *TestHost) GetExtensions() map[component.ID]component.Component {
 	return h.extensions
 }
 
