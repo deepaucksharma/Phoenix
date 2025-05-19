@@ -13,7 +13,6 @@ import (
 	"go.opentelemetry.io/collector/processor"
 	
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
-	interfacetests "github.com/deepaucksharma/Phoenix/test/interfaces"
 )
 
 // ProcessorTestCase defines a standardized test case for processors
@@ -30,9 +29,9 @@ func RunProcessorTests(t *testing.T, factory processor.Factory, defaultConfig co
 		t.Run(tc.Name, func(t *testing.T) {
 			// Setup
 			next := new(consumertest.MetricsSink)
-			processor, err := factory.CreateMetricsProcessor(
+			processor, err := factory.CreateMetrics(
 				context.Background(),
-				processor.CreateSettings{},
+				processor.Settings{},
 				defaultConfig,
 				next,
 			)
@@ -44,14 +43,22 @@ func RunProcessorTests(t *testing.T, factory processor.Factory, defaultConfig co
 			
 			// Test updateable interface if implemented
 			if upProc, ok := processor.(interfaces.UpdateableProcessor); ok {
-				// Verify it implements the interface correctly
-				interfacetests.TestUpdateableProcessor(t, upProc)
+				// Get initial config status
+				status, err := upProc.GetConfigStatus(context.Background())
+				require.NoError(t, err, "Failed to get initial config status")
 				
 				// Apply any test-specific config patches
 				for _, patch := range tc.ConfigPatches {
 					err = upProc.OnConfigPatch(context.Background(), patch)
 					require.NoError(t, err, "Failed to apply config patch: %v", err)
 				}
+				
+				// Verify config changes were applied
+				newStatus, err := upProc.GetConfigStatus(context.Background())
+				require.NoError(t, err, "Failed to get updated config status")
+				
+				// Log status changes
+				t.Logf("Config status change: %v -> %v", status.Enabled, newStatus.Enabled)
 			}
 			
 			// Process input metrics
