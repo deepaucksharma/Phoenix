@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # Development service with source code mounted
+  dev:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.dev
+    volumes:
+      - .:/app
+      - go-cache:/go/pkg
+    ports:
+      - "8888:8888"
+      - "13133:13133"
+    command: sleep infinity
+    environment:
+      - GO111MODULE=on
+    networks:
+      - sa-omf-network
+
+  # Running the collector with different configurations
+  collector-default:
+    image: sa-omf-otelcol:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+    ports:
+      - "8888:8888"
+      - "13133:13133"
+    volumes:
+      - ./configs/default:/etc/sa-omf
+    command: --config=/etc/sa-omf/config.yaml
+    networks:
+      - sa-omf-network
+
+  collector-development:
+    image: sa-omf-otelcol:${TAG:-latest}
+    ports:
+      - "8889:8888"
+      - "13134:13133"
+    volumes:
+      - ./configs/development:/etc/sa-omf
+    command: --config=/etc/sa-omf/config.yaml
+    networks:
+      - sa-omf-network
+
+  # Simple Prometheus for testing
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/compose/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - sa-omf-network
+
+  # Simple Grafana for dashboards
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      - prometheus
+    networks:
+      - sa-omf-network
+
+volumes:
+  go-cache:
+
+networks:
+  sa-omf-network:
+    driver: bridge
