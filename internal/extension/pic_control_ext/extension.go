@@ -133,6 +133,11 @@ func newExtension(config *Config, logger *zap.Logger) (*Extension, error) {
 	}, nil
 }
 
+// NewExtension creates a new pic_control extension - exported for testing
+func NewExtension(config *Config, logger *zap.Logger) (*Extension, error) {
+	return newExtension(config, logger)
+}
+
 // Start starts the extension
 func (e *Extension) Start(ctx context.Context, host component.Host) error {
 	e.host = host

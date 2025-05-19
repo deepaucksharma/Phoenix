@@ -3,12 +3,13 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/extension"
 	"go.opentelemetry.io/collector/processor"
@@ -31,10 +32,10 @@ func TestControlLoopIntegration(t *testing.T) {
 	picCtrlConfig.MaxPatchesPerMinute = 10
 	picCtrlConfig.PatchCooldownSeconds = 1
 
-	// Create the extension using the factory directly
-	picCtrlExt, err := picCtrlFactory.CreateExtension(
+	// Create the extension
+	picCtrlExt, err := createExtension(
 		context.Background(),
-		component.ExtensionCreateSettings{
+		extension.Settings{
 			TelemetrySettings: component.TelemetrySettings{},
 			ID: component.NewID(component.MustNewType("pic_control")),
 		},
@@ -58,10 +59,10 @@ func TestControlLoopIntegration(t *testing.T) {
 	topkConfig.KMax = 100
 
 	topkSink := new(consumertest.MetricsSink)
-	// Create the processor using the factory directly
-	topkProc, err := topkFactory.CreateMetricsProcessor(
+	// Create the processor
+	topkProc, err := createMetricsProcessor(
 		context.Background(),
-		processor.CreateSettings{
+		processor.Settings{
 			TelemetrySettings: component.TelemetrySettings{},
 			ID: component.NewID(component.MustNewType("adaptive_topk")),
 		},
@@ -92,7 +93,7 @@ func TestControlLoopIntegration(t *testing.T) {
 			KD:                0.0,
 			OutputConfigPatches: []adaptive_pid.OutputConfigPatch{
 				{
-					TargetProcessorName: "adaptive_topk",
+					TargetProcessorName: component.NewID(component.MustNewType("adaptive_topk")),
 					ParameterPath:       "k_value",
 					ChangeScaleFactor:   1.0,
 					MinValue:            float64(topkConfig.KMin),
@@ -104,10 +105,10 @@ func TestControlLoopIntegration(t *testing.T) {
 
 	// Create a test sink for PID processor output
 	pidSink := new(consumertest.MetricsSink)
-	// Create the processor using the factory directly
-	pidProc, err := pidFactory.CreateMetricsProcessor(
+	// Create the processor
+	pidProc, err := createMetricsProcessor(
 		context.Background(),
-		processor.CreateSettings{
+		processor.Settings{
 			TelemetrySettings: component.TelemetrySettings{},
 			ID: component.NewID(component.MustNewType("adaptive_pid")),
 		},
@@ -136,18 +137,12 @@ func TestControlLoopIntegration(t *testing.T) {
 		err = pidProc.ConsumeMetrics(context.Background(), coverageMetrics)
 		require.NoError(t, err, "Failed to consume coverage metrics")
 		
-		// Give some time for control loop to act
-		time.Sleep(200 * time.Millisecond)
-		
 		// Test scenario 2: Coverage too high (0.95), should decrease k_value
 		highCoverageMetrics := testutils.GenerateControlMetrics(0.95) // 95% coverage
 		
 		// Send metrics to PID controller
 		err = pidProc.ConsumeMetrics(context.Background(), highCoverageMetrics)
 		require.NoError(t, err, "Failed to consume high coverage metrics")
-		
-		// Give some time for control loop to act
-		time.Sleep(200 * time.Millisecond)
 		
 		// Test scenario 3: Coverage at target (0.9), should maintain k_value
 		targetCoverageMetrics := testutils.GenerateControlMetrics(0.9) // 90% coverage (target)
@@ -166,4 +161,35 @@ func TestControlLoopIntegration(t *testing.T) {
 	
 	err = picCtrlExt.Shutdown(context.Background())
 	assert.NoError(t, err, "Failed to shutdown pic_control extension")
+}
+
+// Helper functions to create components directly from their factories
+
+// createExtension creates an extension using the same approach as the factory does
+func createExtension(
+	ctx context.Context,
+	set extension.Settings,
+	cfg component.Config,
+) (extension.Extension, error) {
+	config := cfg.(*pic_control_ext.Config)
+	// Mimics the createExtension function from pic_control_ext
+	return pic_control_ext.NewExtension(config, set.TelemetrySettings.Logger)
+}
+
+// createMetricsProcessor creates a metrics processor using the same approach as the factory does
+func createMetricsProcessor(
+	ctx context.Context,
+	set processor.Settings,
+	cfg component.Config,
+	nextConsumer consumer.Metrics,
+) (processor.Metrics, error) {
+	// Check which type of processor config we have
+	switch pCfg := cfg.(type) {
+	case *adaptive_topk.Config:
+		return adaptive_topk.NewProcessor(pCfg, set.TelemetrySettings, nextConsumer, set.ID)
+	case *adaptive_pid.Config:
+		return adaptive_pid.NewProcessor(pCfg, set.TelemetrySettings, nextConsumer, set.ID)
+	default:
+		return nil, fmt.Errorf("unsupported processor config type: %T", cfg)
+	}
 }

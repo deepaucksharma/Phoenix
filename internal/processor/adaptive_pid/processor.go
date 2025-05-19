@@ -56,7 +56,7 @@ var _ processor.Metrics = (*pidProcessor)(nil)
 var _ interfaces.UpdateableProcessor = (*pidProcessor)(nil)
 
 // newProcessor creates a new pid_decider processor
-func newProcessor(config *Config, settings component.TelemetrySettings, nextConsumer consumer.Metrics) (*pidProcessor, error) {
+func newProcessor(config *Config, settings component.TelemetrySettings, nextConsumer consumer.Metrics, id component.ID) (*pidProcessor, error) {
 	p := &pidProcessor{
 		logger:       settings.Logger,
 		nextConsumer: nextConsumer,
@@ -105,6 +105,11 @@ func newProcessor(config *Config, settings component.TelemetrySettings, nextCons
 	}
 
 	return p, nil
+}
+
+// NewProcessor creates a new pid_decider processor - exported for testing
+func NewProcessor(config *Config, settings component.TelemetrySettings, nextConsumer consumer.Metrics, id component.ID) (*pidProcessor, error) {
+	return newProcessor(config, settings, nextConsumer, id)
 }
 
 // Start implements the Component interface

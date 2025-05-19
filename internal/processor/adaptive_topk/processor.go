@@ -43,6 +43,11 @@ func newProcessor(cfg *Config, settings component.TelemetrySettings, nextConsume
 	return p, nil
 }
 
+// NewProcessor creates a new adaptive_topk processor - exported for testing
+func NewProcessor(cfg *Config, settings component.TelemetrySettings, nextConsumer consumer.Metrics, id component.ID) (*processorImpl, error) {
+	return newProcessor(cfg, settings, nextConsumer, id)
+}
+
 // Start implements the Component interface.
 func (p *processorImpl) Start(ctx context.Context, host component.Host) error {
 	// Set up metrics if provider available

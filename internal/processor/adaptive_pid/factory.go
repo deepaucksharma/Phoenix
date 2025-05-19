@@ -77,5 +77,5 @@ func createMetricsProcessor(
 	nextConsumer consumer.Metrics,
 ) (processor.Metrics, error) {
 	pCfg := cfg.(*Config)
-	return newProcessor(pCfg, set.TelemetrySettings, nextConsumer)
+	return newProcessor(pCfg, set.TelemetrySettings, nextConsumer, set.ID)
 }
