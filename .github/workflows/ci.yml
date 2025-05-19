@@ -96,7 +96,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: |
-            ghcr.io/yourorg/sa-omf-collector:latest
-            ghcr.io/yourorg/sa-omf-collector:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/sa-omf-collector:latest
+            ghcr.io/${{ github.repository_owner }}/sa-omf-collector:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
