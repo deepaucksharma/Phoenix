@@ -10,7 +10,7 @@ This guide will help you get started as a Planner in the Phoenix project.
    ```
 
 2. **Understand the roadmap**
-   - Review `docs/adr/` for architectural decisions
+   - Review `docs/architecture/adr/` for architectural decisions
    - Check existing tasks in `tasks/` directory
 
 3. **Create a new task**
