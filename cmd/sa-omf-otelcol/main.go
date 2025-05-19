@@ -16,9 +16,10 @@ import (
 	// Import your components here
 	"github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
 	"github.com/deepaucksharma/Phoenix/internal/connector/pic_connector"
-	"github.com/deepaucksharma/Phoenix/internal/processor/priority_tagger"
-	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
-	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_topk"
+       "github.com/deepaucksharma/Phoenix/internal/processor/priority_tagger"
+       "github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
+       "github.com/deepaucksharma/Phoenix/internal/processor/adaptive_topk"
+       "github.com/deepaucksharma/Phoenix/internal/processor/reservoir_sampler"
 	// Add more component imports as they are implemented
 )
 
@@ -70,11 +71,12 @@ func components() (otelcol.Factories, error) {
 	// Processors
 	processors := []processor.Factory{
 		// Add custom processors as they are implemented:
-		priority_tagger.NewFactory(),
-		adaptive_pid.NewFactory(),
-		adaptive_topk.NewFactory(),
-		// etc.
-	}
+               priority_tagger.NewFactory(),
+               adaptive_pid.NewFactory(),
+               adaptive_topk.NewFactory(),
+               reservoir_sampler.NewFactory(),
+               // etc.
+       }
 	factories.Processors, err = processor.MakeFactoryMap(processors...)
 	if err != nil {
 		return otelcol.Factories{}, fmt.Errorf("failed to create processor factories: %w", err)
