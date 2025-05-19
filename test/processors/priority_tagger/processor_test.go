@@ -14,21 +14,20 @@ import (
 	"go.opentelemetry.io/collector/processor"
 	"go.uber.org/zap"
 
-	"github.com/yourorg/sa-omf/internal/interfaces"
-	"github.com/yourorg/sa-omf/internal/processor/priority_tagger"
-	iftest "github.com/yourorg/sa-omf/test/interfaces"
+	"github.com/deepaucksharma/Phoenix/internal/interfaces"
+	"github.com/deepaucksharma/Phoenix/internal/processor/priority_tagger"
 )
 
 func TestPriorityTaggerProcessor(t *testing.T) {
 	// Create a factory
-	factory := prioritytagger.NewFactory()
+	factory := priority_tagger.NewFactory()
 	assert.NotNil(t, factory)
 
 	// Create a default configuration
-	cfg := factory.CreateDefaultConfig().(*prioritytagger.Config)
+	cfg := factory.CreateDefaultConfig().(*priority_tagger.Config)
 	
 	// Add test rules
-	cfg.Rules = []prioritytagger.Rule{
+	cfg.Rules = []priority_tagger.Rule{
 		{
 			Match:    "nginx.*",
 			Priority: "high",
@@ -49,14 +48,14 @@ func TestPriorityTaggerProcessor(t *testing.T) {
 
 	// Create the processor
 	ctx := context.Background()
-	settings := processor.CreateSettings{
+	settings := processor.Settings{
 		TelemetrySettings: component.TelemetrySettings{
 			Logger: zap.NewNop(),
 		},
-		ID: component.NewID("priority_tagger"),
+		ID: component.NewIDWithName(component.MustNewType("priority_tagger"), ""),
 	}
 
-	proc, err := factory.CreateMetricsProcessor(ctx, settings, cfg, sink)
+	proc, err := factory.CreateMetrics(ctx, settings, cfg, sink)
 	require.NoError(t, err)
 	require.NotNil(t, proc)
 
@@ -68,68 +67,89 @@ func TestPriorityTaggerProcessor(t *testing.T) {
 	err = proc.Start(ctx, nil)
 	require.NoError(t, err)
 
-	// Run the standard UpdateableProcessor tests
-	suite := iftest.UpdateableProcessorSuite{
-		Processor: updateableProc,
-		ValidPatches: []iftest.TestPatch{
+	// Test the interface methods directly
+	// Test the OnConfigPatch method
+	
+	// Test enabled flag
+	enablePatch := interfaces.ConfigPatch{
+		PatchID:             "test-enable",
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("priority_tagger"), ""),
+		ParameterPath:       "enabled",
+		NewValue:            false,
+	}
+	err = updateableProc.OnConfigPatch(ctx, enablePatch)
+	require.NoError(t, err, "Failed to apply enable patch")
+	
+	status, err := updateableProc.GetConfigStatus(ctx)
+	require.NoError(t, err, "Failed to get config status")
+	assert.False(t, status.Enabled, "Processor should be disabled")
+	
+	// Test updating rules
+	rulesPatch := interfaces.ConfigPatch{
+		PatchID:             "test-rules",
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("priority_tagger"), ""),
+		ParameterPath:       "rules",
+		NewValue: []priority_tagger.Rule{
 			{
-				Name: "ChangeEnabled",
-				Patch: interfaces.ConfigPatch{
-					PatchID:             "test-enable",
-					TargetProcessorName: component.NewID("priority_tagger"),
-					ParameterPath:       "enabled",
-					NewValue:            false,
-				},
-				ExpectedValue: false,
+				Match:    "apache.*",
+				Priority: "high",
 			},
 			{
-				Name: "UpdateRules",
-				Patch: interfaces.ConfigPatch{
-					PatchID:             "test-rules",
-					TargetProcessorName: component.NewID("priority_tagger"),
-					ParameterPath:       "rules",
-					NewValue: []prioritytagger.Rule{
-						{
-							Match:    "apache.*",
-							Priority: "high",
-						},
-						{
-							Match:    "postgres.*",
-							Priority: "critical",
-						},
-					},
-				},
-				// We don't check ExpectedValue here as the rules are stored as a complex structure
-			},
-		},
-		InvalidPatches: []iftest.TestPatch{
-			{
-				Name: "InvalidRegex",
-				Patch: interfaces.ConfigPatch{
-					PatchID:             "test-invalid-regex",
-					TargetProcessorName: component.NewID("priority_tagger"),
-					ParameterPath:       "rules",
-					NewValue: []prioritytagger.Rule{
-						{
-							Match:    "[invalid regex",
-							Priority: "high",
-						},
-					},
-				},
+				Match:    "postgres.*",
+				Priority: "critical",
 			},
 		},
 	}
-	iftest.RunUpdateableProcessorTests(t, suite)
+	err = updateableProc.OnConfigPatch(ctx, rulesPatch)
+	require.NoError(t, err, "Failed to apply rules patch")
+	
+	// Test invalid regex
+	invalidPatch := interfaces.ConfigPatch{
+		PatchID:             "test-invalid-regex",
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("priority_tagger"), ""),
+		ParameterPath:       "rules",
+		NewValue: []priority_tagger.Rule{
+			{
+				Match:    "[invalid regex",
+				Priority: "high",
+			},
+		},
+	}
+	err = updateableProc.OnConfigPatch(ctx, invalidPatch)
+	assert.Error(t, err, "Should fail with invalid regex")
 
 	// Test actual metric processing functionality
 	t.Run("ProcessMetrics", func(t *testing.T) {
 		// Create test metrics
 		metrics := generateTestMetrics()
 		
+		// First, ensure we have the original test rules (they may have been changed by earlier tests)
+		rulesPatch := interfaces.ConfigPatch{
+			PatchID:             "test-restore-rules",
+			TargetProcessorName: component.NewIDWithName(component.MustNewType("priority_tagger"), ""),
+			ParameterPath:       "rules",
+			NewValue: []priority_tagger.Rule{
+				{
+					Match:    "nginx.*",
+					Priority: "high",
+				},
+				{
+					Match:    ".*mysql.*",
+					Priority: "critical",
+				},
+				{
+					Match:    "background.*",
+					Priority: "low",
+				},
+			},
+		}
+		err = updateableProc.OnConfigPatch(ctx, rulesPatch)
+		require.NoError(t, err)
+		
 		// Re-enable the processor for testing
 		enablePatch := interfaces.ConfigPatch{
 			PatchID:             "test-enable-for-processing",
-			TargetProcessorName: component.NewID("priority_tagger"),
+			TargetProcessorName: component.NewIDWithName(component.MustNewType("priority_tagger"), ""),
 			ParameterPath:       "enabled",
 			NewValue:            true,
 		}

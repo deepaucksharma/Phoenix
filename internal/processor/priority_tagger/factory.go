@@ -12,7 +12,7 @@ import (
 // NewFactory creates a factory for the priority_tagger processor.
 func NewFactory() processor.Factory {
 	return processor.NewFactory(
-		typeStr,
+		component.MustNewType(typeStr),
 		createDefaultConfig,
 		processor.WithMetrics(createMetricsProcessor, component.StabilityLevelDevelopment),
 	)
@@ -34,7 +34,7 @@ func createDefaultConfig() component.Config {
 // createMetricsProcessor creates a metrics processor based on the config.
 func createMetricsProcessor(
 	ctx context.Context,
-	set processor.CreateSettings,
+	set processor.Settings,
 	cfg component.Config,
 	nextConsumer consumer.Metrics,
 ) (processor.Metrics, error) {

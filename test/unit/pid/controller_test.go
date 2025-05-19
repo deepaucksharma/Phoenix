@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/yourorg/sa-omf/internal/control/pid"
+	"github.com/deepaucksharma/Phoenix/internal/control/pid"
 )
 
 // TestPIDControllerBasics tests basic functionality of the PID controller.

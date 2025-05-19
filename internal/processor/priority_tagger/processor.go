@@ -12,8 +12,8 @@ import (
 	"go.opentelemetry.io/collector/processor"
 	"go.uber.org/zap"
 
-	"github.com/yourorg/sa-omf/internal/interfaces"
-	"github.com/yourorg/sa-omf/pkg/metrics"
+	"github.com/deepaucksharma/Phoenix/internal/interfaces"
+	"github.com/deepaucksharma/Phoenix/pkg/metrics"
 )
 
 const (
@@ -60,10 +60,10 @@ var _ processor.Metrics = (*processorImp)(nil)
 var _ interfaces.UpdateableProcessor = (*processorImp)(nil)
 
 // newProcessor creates a new priority_tagger processor.
-func newProcessor(cfg *Config, settings processor.CreateSettings, nextConsumer consumer.Metrics) (*processorImp, error) {
+func newProcessor(cfg *Config, settings processor.Settings, nextConsumer consumer.Metrics) (*processorImp, error) {
 	p := &processorImp{
 		config: *cfg,
-		logger: settings.Logger,
+		logger: settings.TelemetrySettings.Logger,
 		next:   nextConsumer,
 		rules:  make([]*regexp.Regexp, len(cfg.Rules)),
 	}
@@ -82,13 +82,7 @@ func newProcessor(cfg *Config, settings processor.CreateSettings, nextConsumer c
 
 // Start implements the Component interface.
 func (p *processorImp) Start(ctx context.Context, host component.Host) error {
-	// Set up metrics if available
-	metricProvider := host.GetExtensions()[component.MustNewID("prometheus")]
-	if metricProvider != nil {
-		// This would need a concrete implementation of metric.MeterProvider
-		// p.metrics = metrics.NewMetricsEmitter(metricProvider.(metric.MeterProvider).Meter("priority_tagger"), 
-		//                                      "priority_tagger", component.MustNewID(typeStr))
-	}
+	// No initialization required for now
 	return nil
 }
 
@@ -107,8 +101,8 @@ func (p *processorImp) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) e
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	if !p.config.Enabled {
-		// If disabled, pass through without modification
+	if !p.config.Enabled || len(p.rules) == 0 {
+		// If disabled or no rules, pass through without modification
 		return p.next.ConsumeMetrics(ctx, md)
 	}
 
@@ -128,7 +122,7 @@ func (p *processorImp) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) e
 
 		// Apply matching rules
 		for j, re := range p.rules {
-			if re.MatchString(processName) {
+			if re != nil && re.MatchString(processName) {
 				// Add priority attribute
 				resource.Attributes().PutStr("aemf.process.priority", p.config.Rules[j].Priority)
 				break // Stop at first match

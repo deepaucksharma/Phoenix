@@ -13,10 +13,10 @@ import (
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/processor"
 
-	"github.com/yourorg/sa-omf/internal/extension/pic_control_ext"
-	"github.com/yourorg/sa-omf/internal/processor/adaptive_pid"
-	"github.com/yourorg/sa-omf/internal/processor/adaptive_topk"
-	"github.com/yourorg/sa-omf/test/testutils"
+	"github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
+	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
+	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_topk"
+	"github.com/deepaucksharma/Phoenix/test/testutils"
 )
 
 // TestControlLoopIntegration tests the end-to-end control loop.

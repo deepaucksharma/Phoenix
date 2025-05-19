@@ -1,4 +1,4 @@
-module github.com/yourorg/sa-omf
+module github.com/deepaucksharma/Phoenix
 
 go 1.21.0
 

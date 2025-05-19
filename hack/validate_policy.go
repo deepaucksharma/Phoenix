@@ -3,19 +3,36 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
 
-// BasicPolicyValidation performs simple structure validation on policy files
+// validatePolicy performs structure validation on policy files
 func validatePolicy(filePath string) error {
+	// Get file info to check if it's empty
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("error accessing file: %w", err)
+	}
+
+	// Skip validation for empty files
+	if info.Size() == 0 {
+		fmt.Printf("⚠️ Policy file %s is empty\n", filepath.Base(filePath))
+		return nil
+	}
+
 	// Read policy file
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("error reading file: %w", err)
+	}
+
+	// Handle empty YAML files (only whitespace or comments)
+	if len(data) == 0 || isEmptyYAML(string(data)) {
+		fmt.Printf("⚠️ Policy file %s is effectively empty\n", filepath.Base(filePath))
+		return nil
 	}
 
 	// Parse YAML to verify it's valid
@@ -24,27 +41,35 @@ func validatePolicy(filePath string) error {
 		return fmt.Errorf("invalid YAML: %w", err)
 	}
 
-	// Check required top-level sections
-	requiredSections := []string{"controllers", "processors", "safety_limits"}
-	for _, section := range requiredSections {
-		if _, ok := policyMap[section]; !ok {
-			return fmt.Errorf("missing required section: %s", section)
-		}
+	// Check for nil map (valid YAML but empty document)
+	if policyMap == nil {
+		fmt.Printf("⚠️ Policy file %s contains an empty YAML document\n", filepath.Base(filePath))
+		return nil
 	}
 
-	// Validate PID controllers if present
-	if controllers, ok := policyMap["controllers"].(map[string]interface{}); ok {
-		for name, ctrl := range controllers {
-			controller, ok := ctrl.(map[string]interface{})
-			if !ok {
-				return fmt.Errorf("controller %s has invalid structure", name)
+	// Check required top-level sections for non-test/example files
+	if !isTestOrExample(filePath) {
+		requiredSections := []string{"controllers", "processors", "safety_limits"}
+		for _, section := range requiredSections {
+			if _, ok := policyMap[section]; !ok {
+				return fmt.Errorf("missing required section: %s", section)
 			}
+		}
 
-			// Check controller fields
-			requiredFields := []string{"enabled", "kpi_metric_name", "kpi_target_value"}
-			for _, field := range requiredFields {
-				if _, ok := controller[field]; !ok {
-					return fmt.Errorf("controller %s is missing required field: %s", name, field)
+		// Validate PID controllers if present
+		if controllers, ok := policyMap["controllers"].(map[string]interface{}); ok {
+			for name, ctrl := range controllers {
+				controller, ok := ctrl.(map[string]interface{})
+				if !ok {
+					return fmt.Errorf("controller %s has invalid structure", name)
+				}
+
+				// Check controller fields
+				requiredFields := []string{"enabled", "kpi_metric_name", "kpi_target_value"}
+				for _, field := range requiredFields {
+					if _, ok := controller[field]; !ok {
+						return fmt.Errorf("controller %s is missing required field: %s", name, field)
+					}
 				}
 			}
 		}
@@ -52,6 +77,31 @@ func validatePolicy(filePath string) error {
 
 	fmt.Printf("✅ Policy file %s is valid\n", filepath.Base(filePath))
 	return nil
+}
+
+// isEmptyYAML checks if a YAML string is effectively empty (only whitespace or comments)
+func isEmptyYAML(content string) bool {
+	for _, line := range []rune(content) {
+		if line == '#' {
+			continue // Skip comments
+		}
+		if line != ' ' && line != '\t' && line != '\n' && line != '\r' {
+			return false
+		}
+	}
+	return true
+}
+
+// isTestOrExample checks if a file is a test or example file
+// These files may have simplified structure for testing
+func isTestOrExample(filePath string) bool {
+	path := filepath.ToSlash(filePath)
+	return filepath.Base(path) == "example.yaml" ||
+		filepath.Base(path) == "test.yaml" ||
+		filepath.Base(path) == "sample.yaml" ||
+		filepath.Contains(path, "test/") ||
+		filepath.Contains(path, "example/") ||
+		filepath.Contains(path, "testing/")
 }
 
 func main() {

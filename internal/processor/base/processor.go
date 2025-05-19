@@ -14,8 +14,8 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
 
-	"github.com/yourorg/sa-omf/internal/interfaces"
-	"github.com/yourorg/sa-omf/pkg/metrics"
+	"github.com/deepaucksharma/Phoenix/internal/interfaces"
+	"github.com/deepaucksharma/Phoenix/pkg/metrics"
 )
 
 // Config is the interface that all processor configs must implement

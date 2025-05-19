@@ -16,10 +16,10 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
-	"github.com/yourorg/sa-omf/internal/extension/piccontrolext"
-	"github.com/yourorg/sa-omf/internal/interfaces"
-	"github.com/yourorg/sa-omf/internal/processor/adaptive_pid"
-	"github.com/yourorg/sa-omf/pkg/metrics"
+	"github.com/deepaucksharma/Phoenix/internal/extension/piccontrolext"
+	"github.com/deepaucksharma/Phoenix/internal/interfaces"
+	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
+	"github.com/deepaucksharma/Phoenix/pkg/metrics"
 )
 
 // TestControlLoop verifies the basic closed-loop operation of the SA-OMF system.

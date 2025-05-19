@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/yourorg/sa-omf/pkg/util/hll"
+	"github.com/deepaucksharma/Phoenix/pkg/util/hll"
 )
 
 // TestHyperLogLogBasic tests basic functionality of the HyperLogLog algorithm.

@@ -15,9 +15,9 @@ import (
 	"go.opentelemetry.io/collector/processor"
 	"go.uber.org/zap"
 
-	"github.com/yourorg/sa-omf/internal/interfaces"
-	"github.com/yourorg/sa-omf/internal/processor/adaptive_topk"
-	iftest "github.com/yourorg/sa-omf/test/interfaces"
+	"github.com/deepaucksharma/Phoenix/internal/interfaces"
+	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_topk"
+	iftest "github.com/deepaucksharma/Phoenix/test/interfaces"
 )
 
 func TestAdaptiveTopKProcessor(t *testing.T) {

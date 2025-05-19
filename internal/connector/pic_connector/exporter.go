@@ -11,8 +11,8 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
 
-	"github.com/yourorg/sa-omf/internal/extension/piccontrolext"
-	"github.com/yourorg/sa-omf/internal/interfaces"
+	"github.com/deepaucksharma/Phoenix/internal/extension/piccontrolext"
+	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 )
 
 const (

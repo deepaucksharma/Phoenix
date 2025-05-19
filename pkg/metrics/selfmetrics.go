@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/yourorg/sa-omf/internal/interfaces"
+	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 )
 
 // MetricsEmitter provides a standardized way to emit self-metrics

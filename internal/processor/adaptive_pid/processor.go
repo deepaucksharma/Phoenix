@@ -16,9 +16,9 @@ import (
 	"go.opentelemetry.io/collector/processor"
 	"go.uber.org/zap"
 
-	"github.com/yourorg/sa-omf/internal/control/pid"
-	"github.com/yourorg/sa-omf/internal/interfaces"
-	"github.com/yourorg/sa-omf/pkg/metrics"
+	"github.com/deepaucksharma/Phoenix/internal/control/pid"
+	"github.com/deepaucksharma/Phoenix/internal/interfaces"
+	"github.com/deepaucksharma/Phoenix/pkg/metrics"
 )
 
 const (

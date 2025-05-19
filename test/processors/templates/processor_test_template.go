@@ -12,8 +12,8 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/processor"
 	
-	"github.com/yourorg/sa-omf/internal/interfaces"
-	interfacetests "github.com/yourorg/sa-omf/test/interfaces"
+	"github.com/deepaucksharma/Phoenix/internal/interfaces"
+	interfacetests "github.com/deepaucksharma/Phoenix/test/interfaces"
 )
 
 // ProcessorTestCase defines a standardized test case for processors

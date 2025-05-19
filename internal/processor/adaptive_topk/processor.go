@@ -14,9 +14,9 @@ import (
 	"go.opentelemetry.io/collector/processor"
 	"go.uber.org/zap"
 
-	"github.com/yourorg/sa-omf/internal/interfaces"
-	"github.com/yourorg/sa-omf/pkg/metrics"
-	"github.com/yourorg/sa-omf/pkg/util/topk"
+	"github.com/deepaucksharma/Phoenix/internal/interfaces"
+	"github.com/deepaucksharma/Phoenix/pkg/metrics"
+	"github.com/deepaucksharma/Phoenix/pkg/util/topk"
 )
 
 // processorImpl is the implementation of the adaptive_topk processor.

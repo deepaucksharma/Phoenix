@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 
-	"github.com/yourorg/sa-omf/internal/interfaces"
+	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 )
 
 // UpdateableProcessorTestSuite provides a standardized way to test any
@@ -23,9 +23,9 @@ type UpdateableProcessorTestSuite struct {
 	InvalidParameters map[string][]interface{}
 }
 
-// TestUpdateableProcessor runs a standard suite of tests against any
+// RunUpdateableProcessorTests runs a standard suite of tests against any
 // UpdateableProcessor implementation.
-func TestUpdateableProcessor(t *testing.T, p interfaces.UpdateableProcessor, opts ...TestOption) {
+func RunUpdateableProcessorTests(t *testing.T, p interfaces.UpdateableProcessor, opts ...TestOption) {
 	// Create default test suite
 	suite := &UpdateableProcessorTestSuite{
 		Processor:         p,

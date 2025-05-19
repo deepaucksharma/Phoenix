@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 	
-	"github.com/yourorg/sa-omf/pkg/util/reservoir"
+	"github.com/deepaucksharma/Phoenix/pkg/util/reservoir"
 )
 
 func TestReservoirSampler(t *testing.T) {

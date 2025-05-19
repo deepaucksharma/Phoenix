@@ -7,8 +7,8 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 
-	"github.com/yourorg/sa-omf/internal/control/pid"
-	"github.com/yourorg/sa-omf/internal/interfaces"
+	"github.com/deepaucksharma/Phoenix/internal/control/pid"
+	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 )
 
 // PIDControlHelper simplifies testing of PID controllers with the rest of the system

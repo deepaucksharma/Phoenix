@@ -14,11 +14,11 @@ import (
 	"go.opentelemetry.io/collector/receiver"
 
 	// Import your components here
-	"github.com/yourorg/sa-omf/internal/extension/pic_control_ext"
-	"github.com/yourorg/sa-omf/internal/connector/pic_connector"
-	"github.com/yourorg/sa-omf/internal/processor/priority_tagger"
-	"github.com/yourorg/sa-omf/internal/processor/adaptive_pid"
-	"github.com/yourorg/sa-omf/internal/processor/adaptive_topk"
+	"github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
+	"github.com/deepaucksharma/Phoenix/internal/connector/pic_connector"
+	"github.com/deepaucksharma/Phoenix/internal/processor/priority_tagger"
+	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
+	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_topk"
 	// Add more component imports as they are implemented
 )
 

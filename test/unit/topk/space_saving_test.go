@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/yourorg/sa-omf/pkg/util/topk"
+	"github.com/deepaucksharma/Phoenix/pkg/util/topk"
 )
 
 func TestSpaceSavingBasic(t *testing.T) {
