@@ -1,14 +1,39 @@
-.PHONY: build test clean lint
+.PHONY: build test test-all test-unit test-integration test-coverage clean lint benchmark
 
 # Build the collector binary
 build:
 	@echo "Building SA-OMF OpenTelemetry Collector..."
 	@go build -o bin/sa-omf-otelcol ./cmd/sa-omf-otelcol
 
-# Run all tests
+# Run standard tests
 test:
 	@echo "Running tests..."
 	@go test -v ./...
+
+# Run all enhanced tests
+test-all: test-unit test-integration
+
+# Run unit tests only
+test-unit:
+	@echo "Running unit tests..."
+	@go test -v ./test/unit/... ./test/interfaces/... ./test/processors/... ./test/extensions/...
+
+# Run integration tests only
+test-integration:
+	@echo "Running integration tests..."
+	@go test -v ./test/integration/...
+
+# Run tests with coverage
+test-coverage:
+	@echo "Running tests with coverage..."
+	@go test -coverprofile=coverage.out -covermode=atomic ./internal/... ./pkg/... ./test/...
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated at coverage.html"
+	
+# Run benchmarks
+benchmark:
+	@echo "Running benchmarks..."
+	@go test -bench=. -benchmem ./test/unit/...
 
 # Clean build artifacts
 clean:
@@ -55,12 +80,17 @@ release:
 help:
 	@echo "SA-OMF Makefile Help"
 	@echo "===================="
-	@echo "make build    - Build the collector binary"
-	@echo "make test     - Run all tests"
-	@echo "make clean    - Clean build artifacts"
-	@echo "make lint     - Run linter"
-	@echo "make mocks    - Generate mocks for testing"
-	@echo "make docker   - Build Docker image"
-	@echo "make run      - Run collector with default config"
+	@echo "make build          - Build the collector binary"
+	@echo "make test           - Run all standard tests"
+	@echo "make test-all       - Run all enhanced tests"
+	@echo "make test-unit      - Run unit tests only"
+	@echo "make test-integration - Run integration tests only"
+	@echo "make test-coverage  - Run tests with coverage report"
+	@echo "make benchmark      - Run performance benchmarks"
+	@echo "make clean          - Clean build artifacts"
+	@echo "make lint           - Run linter"
+	@echo "make mocks          - Generate mocks for testing"
+	@echo "make docker         - Build Docker image"
+	@echo "make run            - Run collector with default config"
 	@echo "make release VERSION=x.y.z - Create a release tag"
-	@echo "make help     - Show this help"
+	@echo "make help           - Show this help"
