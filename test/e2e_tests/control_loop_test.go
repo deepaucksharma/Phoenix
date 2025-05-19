@@ -16,7 +16,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
-	"github.com/deepaucksharma/Phoenix/internal/extension/piccontrolext"
+	"github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
 	"github.com/deepaucksharma/Phoenix/pkg/metrics"

@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.24 as builder
+FROM golang:1.21 as builder
 
 WORKDIR /app
 COPY . .
@@ -16,7 +16,7 @@ RUN GOVERSION=$(go version) && \
                          -X 'github.com/deepaucksharma/Phoenix/cmd/sa-omf-otelcol/version.GoVersion=${GOVERSION}'"
 
 # Runtime stage
-FROM alpine:3.20  # Aligning with a common recent alpine version
+FROM alpine:3.18  # Aligning with a common recent alpine version
 
 RUN apk --no-cache add ca-certificates tzdata libc6-compat
 

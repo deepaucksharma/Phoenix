@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
 
-	"github.com/deepaucksharma/Phoenix/internal/extension/piccontrolext"
+	"github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 )
 
@@ -35,7 +35,7 @@ func (cfg *Config) Validate() error {
 // exporter implements the pic_connector exporter
 type exporter struct {
 	logger     *zap.Logger
-	picControl piccontrolext.PicControl
+	picControl pic_control_ext.PicControl
 }
 
 // Ensure our exporter implements the required interfaces
@@ -54,7 +54,7 @@ func (e *exporter) Start(ctx context.Context, host component.Host) error {
 	extensions := host.GetExtensions()
 	for id, ext := range extensions {
 		if strings.Contains(id.String(), "pic_control") {
-			if picControl, ok := ext.(piccontrolext.PicControl); ok {
+			if picControl, ok := ext.(pic_control_ext.PicControl); ok {
 				e.picControl = picControl
 				e.logger.Info("Found pic_control extension", zap.String("id", id.String()))
 				return nil
