@@ -1,14 +1,18 @@
 version: 2
 updates:
-  # Enable version updates for Go
+  # Enable version updates for Go modules
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    groups:
+      go-dependencies:
+        patterns:
+          - "*"
     labels:
       - "dependencies"
-      - "automated"
+      - "go"
     commit-message:
       prefix: "deps"
       include: "scope"
@@ -18,10 +22,29 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      github-actions:
+        patterns:
+          - "actions/*"
+          - "docker/*"
+          - "github/*"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+
+  # Enable version updates for Docker
+  - package-ecosystem: "docker"
+    directory: "/deploy/docker"
+    schedule:
+      interval: "weekly"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
-      - "automated"
+      - "docker"
     commit-message:
-      prefix: "ci"
+      prefix: "docker"
       include: "scope"
