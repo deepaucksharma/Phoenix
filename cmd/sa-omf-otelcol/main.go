@@ -116,5 +116,5 @@ func getConfigFile() string {
 	}
 	
 	// Default config file location
-	return "config/config.yaml"
+	return "configs/default/config.yaml"
 }

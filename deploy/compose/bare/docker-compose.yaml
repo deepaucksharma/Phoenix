@@ -1,0 +1,13 @@
+version: '3'
+services:
+  sa-omf-collector:
+    image: yourorg/sa-omf-collector:latest
+    build: ../../
+    volumes:
+      - ./config.yaml:/etc/sa-omf/config.yaml
+      - ./policy.yaml:/etc/sa-omf/policy.yaml
+      - /proc:/proc:ro
+      - /sys:/sys:ro
+    ports:
+      - "8888:8888"
+      - "13133:13133"

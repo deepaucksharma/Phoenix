@@ -26,7 +26,7 @@ The Self-Aware OpenTelemetry Metrics Fabric (SA-OMF) is an advanced metrics coll
 - Docker (for containerized deployment)
 - Kubernetes (optional, for orchestrated deployment)
 
-### Installation
+### Quick Start
 
 1. Clone this repository:
    ```bash
@@ -39,10 +39,57 @@ The Self-Aware OpenTelemetry Metrics Fabric (SA-OMF) is an advanced metrics coll
    make build
    ```
 
-3. Run with a local configuration:
+3. Run with the default configuration:
    ```bash
-   ./bin/sa-omf-otelcol --config=./config/config.yaml
+   make run
    ```
+
+### Running with Docker
+
+```bash
+# Build Docker image
+make docker
+
+# Run with Docker Compose
+cd deploy/compose/bare && docker-compose up -d
+```
+
+## Repository Structure
+
+- **cmd/**: Application entrypoints
+- **configs/**: Configuration files
+  - **default/**: Default configurations
+  - **examples/**: Example configurations
+- **deploy/**: Deployment resources
+  - **docker/**: Dockerfile and related resources
+  - **kubernetes/**: Kubernetes deployment manifests
+  - **compose/**: Docker Compose configurations
+- **docs/**: Documentation
+  - **architecture/**: System architecture documentation
+  - **agents/**: Claude Code agent configurations
+  - **quickstarts/**: Quick start guides
+  - **testing/**: Testing documentation
+- **internal/**: Internal packages (not intended for external use)
+  - **connector/**: Connector implementations
+  - **control/**: Control logic components
+  - **extension/**: Extension implementations
+  - **interfaces/**: Core interfaces
+  - **processor/**: Processor implementations
+- **pkg/**: Public packages (can be imported by external projects)
+  - **metrics/**: Metrics utilities
+  - **policy/**: Policy management
+  - **util/**: Utility packages
+- **scripts/**: Helper scripts
+  - **ci/**: CI scripts
+  - **dev/**: Development scripts
+  - **validation/**: Validation scripts
+- **test/**: Test code
+  - **benchmarks/**: Performance benchmarks
+  - **interfaces/**: Interface tests
+  - **integration/**: Integration tests
+  - **processors/**: Processor tests
+  - **testutils/**: Test utilities
+  - **unit/**: Unit tests
 
 ## Architecture
 
@@ -65,9 +112,41 @@ SA-OMF follows a dual pipeline architecture:
 - **priority_tagger (Processor)**: Assigns priorities to metrics based on process patterns
 - **Policy Management**: policy.yaml defines KPIs, thresholds, and guard-rails
 
+## Documentation
+
+For more detailed documentation:
+
+- [Architecture Documentation](docs/architecture/README.md)
+- [Deployment Guide](deploy/README.md)
+- [Configuration Reference](configs/README.md)
+- [Development Scripts](scripts/README.md)
+- [Testing Framework](docs/testing/validation-framework.md)
+- [PID Integral Controls](docs/pid_integral_controls.md)
+
 ## Development
 
-The implementation is structured into multiple phases:
+The implementation follows these development commands:
+
+```bash
+# Run tests
+make test
+
+# Run linting
+make lint
+
+# Check for code drift
+make drift-check
+
+# Generate test coverage
+make test-coverage
+
+# Show all available commands
+make help
+```
+
+## Implementation Phases
+
+The development is structured into four main phases:
 
 ### Phase 1: Foundation (Months 0-4)
 - Core interfaces & framework
@@ -91,10 +170,6 @@ The implementation is structured into multiple phases:
 - Final performance optimization
 - Security hardening
 - Production deployment tools
-
-## Documentation
-
-- [PID integral controls](docs/pid_integral_controls.md) – how to use `SetIntegralLimit` and `ResetIntegral`.
 
 ## License
 
