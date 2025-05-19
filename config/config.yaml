@@ -1,0 +1,51 @@
+extensions:
+  pic_control:
+    policy_file_path: ./deploy/policy.yaml
+    max_patches_per_minute: 3
+    patch_cooldown_seconds: 10
+    safe_mode_processor_configs:
+      adaptive_topk:
+        k_value: 10
+
+receivers:
+  hostmetrics:
+    collection_interval: 10s
+    scrapers:
+      cpu:
+      memory:
+      load:
+      filesystem:
+      network:
+      paging:
+      process:
+        include:
+          match_type: regexp
+          processes: [".*"]
+
+processors:
+  priority_tagger:
+    enabled: true
+    rules:
+      - match: "process.command_line=~/.*java.*/"
+        priority: high
+      - match: "process.name=~/nginx|httpd/"
+        priority: high
+      - match: "process.name=~/mysql|postgres|mongodb/"
+        priority: critical
+      - match: "process.command_line=~/.*python.*/"
+        priority: medium
+      - match: ".*"
+        priority: low
+
+exporters:
+  logging:
+    verbosity: detailed
+
+service:
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      processors: [priority_tagger]
+      exporters: [logging]
+  
+  extensions: [pic_control]
