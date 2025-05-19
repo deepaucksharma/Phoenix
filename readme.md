@@ -1,6 +1,7 @@
 # SA-OMF: Self-Aware OpenTelemetry Metrics Fabric
 
 [![CI](https://github.com/yourorg/sa-omf/actions/workflows/ci.yml/badge.svg)](https://github.com/yourorg/sa-omf/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/yourorg/sa-omf/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/yourorg/sa-omf/actions/workflows/codeql-analysis.yml)
 
 A self-optimizing OpenTelemetry Collector designed to intelligently adapt its processing behavior based on real-time performance metrics.
 
@@ -143,6 +144,16 @@ make test-coverage
 # Show all available commands
 make help
 ```
+
+## Continuous Integration
+
+This project uses GitHub Actions for continuous integration and automated dependency updates:
+
+- **CI Workflow**: Runs tests and builds for all PRs and main branch commits
+- **CodeQL Analysis**: Security analysis for code vulnerabilities
+- **Dependabot**: Automated dependency updates with automatic PR merging for safe updates
+- **Agent Role Validation**: Ensures changes adhere to defined roles in CI
+- **PR Labeler**: Automatically labels PRs based on files changed
 
 ## Implementation Phases
 
