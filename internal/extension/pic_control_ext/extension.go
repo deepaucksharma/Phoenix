@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+        "strings"
 	"sync"
 	"time"
 
@@ -317,7 +318,7 @@ func (e *Extension) applyPolicyConfig() error {
 	// Apply configurations to each processor
 	for id, processor := range e.processors {
 		// Extract the processor type from the ID
-		parts := filepath.SplitList(id.String())
+		parts := strings.Split(id.String(), "/")
 		if len(parts) == 0 {
 			continue
 		}
@@ -444,7 +445,7 @@ func (e *Extension) enterSafeMode() error {
 	ctx := context.Background()
 	for id, processor := range e.processors {
 		// Extract processor type from ID
-		parts := filepath.SplitList(id.String())
+		parts := strings.Split(id.String(), "/")
 		if len(parts) == 0 {
 			continue
 		}
