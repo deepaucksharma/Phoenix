@@ -1,10 +1,22 @@
 {
-  "name": "Phoenix Development",
-  "image": "mcr.microsoft.com/devcontainers/go:1.21",
-  "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
-    "ghcr.io/devcontainers/features/github-cli:1": {}
-  },
+  "name": "Phoenix SA-OMF Development",
+  // Use Docker Compose for more complex setup
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "devcontainer",
+  "workspaceFolder": "/workspace",
+  
+  // For simpler setup, uncomment this block and comment out the compose block above
+  // "image": "mcr.microsoft.com/devcontainers/go:1.24",
+  // "features": {
+  //   "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+  //   "ghcr.io/devcontainers/features/github-cli:1": {},
+  //   "ghcr.io/devcontainers/features/python:1": {
+  //     "version": "3.11"
+  //   },
+  //   "ghcr.io/devcontainers-contrib/features/hadolint:1": {},
+  //   "ghcr.io/devcontainers-contrib/features/yamllint:2": {},
+  //   "ghcr.io/devcontainers-contrib/features/markdownlint:1": {}
+  // },
   "customizations": {
     "vscode": {
       "extensions": [
@@ -12,16 +24,42 @@
         "davidanson.vscode-markdownlint",
         "redhat.vscode-yaml",
         "ms-azuretools.vscode-docker",
-        "streetsidesoftware.code-spell-checker"
+        "streetsidesoftware.code-spell-checker",
+        "ms-vscode.makefile-tools",
+        "42Crunch.vscode-openapi",
+        "mutantdino.resourcemonitor",
+        "GitHub.copilot",
+        "eamodio.gitlens"
       ],
       "settings": {
         "go.lintTool": "golangci-lint",
         "go.formatTool": "goimports",
         "editor.formatOnSave": true,
-        "go.useLanguageServer": true
+        "go.useLanguageServer": true,
+        "go.buildTags": "",
+        "go.toolsManagement.autoUpdate": true,
+        "go.testFlags": ["-v"],
+        "go.testTimeout": "300s",
+        "files.autoSave": "afterDelay",
+        "files.autoSaveDelay": 1000,
+        "go.coverOnSave": true,
+        "go.coverageDecorator": {
+          "type": "highlight",
+          "coveredHighlightColor": "rgba(64,128,128,0.5)",
+          "uncoveredHighlightColor": "rgba(128,64,64,0.25)"
+        }
       }
     }
   },
-  "postCreateCommand": "go mod download && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest",
-  "remoteUser": "vscode"
+  "postCreateCommand": "go mod download",
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "GOEXPERIMENT": "loopvar"
+  },
+  
+  // Useful VSCode settings specifically for Go development
+  "forwardPorts": [8888, 13133],
+  
+  // Test command to ensure container setup is correct
+  "onCreateCommand": "echo 'Phoenix SA-OMF Development Container successfully started!' > /tmp/container-init.log"
 }
