@@ -63,10 +63,10 @@ jobs:
           ROLE="${{ steps.extract_role.outputs.role }}"
           if [[ "$ROLE" == "dependabot" ]]; then
             # Skip check for dependabot - create the role file if it doesn't exist
-            if [ ! -f "docs/agents/$ROLE.yaml" ]; then
+            if [ ! -f "agents/$ROLE.yaml" ]; then
               echo "Creating dependabot role file"
-              mkdir -p docs/agents
-              cat > docs/agents/dependabot.yaml << EOF
+              mkdir -p agents
+              cat > agents/dependabot.yaml << EOF
 id: dependabot
 description: "Automated dependency updater"
 git_permissions: push
@@ -82,9 +82,9 @@ blocked_files: []
 must_touch: []
 EOF
             fi
-          elif [ ! -f "docs/agents/$ROLE.yaml" ]; then
-            echo "Error: Role '$ROLE' not found in docs/agents/ directory"
-            echo "Available roles: $(ls docs/agents/ | grep '.yaml' | sed 's/\.yaml//')"
+          elif [ ! -f "agents/$ROLE.yaml" ]; then
+            echo "Error: Role '$ROLE' not found in agents/ directory"
+            echo "Available roles: $(ls agents/ | grep '.yaml' | sed 's/\.yaml//')"
             exit 1
           fi
 
@@ -94,9 +94,9 @@ EOF
           ROLE="${{ steps.extract_role.outputs.role }}"
           
           # Get allowed paths from role definition
-          CAN_TOUCH=$(yq -r '.can_touch[]' docs/agents/$ROLE.yaml)
-          BLOCKED_FILES=$(yq -r '.blocked_files[]' docs/agents/$ROLE.yaml 2>/dev/null || echo "")
-          MUST_TOUCH=$(yq -r '.must_touch[]' docs/agents/$ROLE.yaml 2>/dev/null || echo "")
+          CAN_TOUCH=$(yq -r '.can_touch[]' agents/$ROLE.yaml)
+          BLOCKED_FILES=$(yq -r '.blocked_files[]' agents/$ROLE.yaml 2>/dev/null || echo "")
+          MUST_TOUCH=$(yq -r '.must_touch[]' agents/$ROLE.yaml 2>/dev/null || echo "")
           
           # Get files changed in this PR
           CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})

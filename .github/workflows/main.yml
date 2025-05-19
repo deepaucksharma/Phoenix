@@ -144,12 +144,12 @@ jobs:
         if: steps.role_info.outputs.is_agent == 'true' && steps.role_info.outputs.role != 'dependabot'
         run: |
           ROLE="${{ steps.role_info.outputs.role }}"
-          ROLE_FILE="docs/agents/$ROLE.yaml"
+          ROLE_FILE="agents/$ROLE.yaml"
           
           # Check if role exists
           if [ ! -f "$ROLE_FILE" ]; then
-            echo "Error: Role '$ROLE' not found in docs/agents/ directory"
-            echo "Available roles: $(ls docs/agents/ | grep '.yaml' | sed 's/\.yaml//')"
+            echo "Error: Role '$ROLE' not found in agents/ directory"
+            echo "Available roles: $(ls agents/ | grep '.yaml' | sed 's/\.yaml//')"
             exit 1
           fi
           
