@@ -1,6 +1,11 @@
 # SA-OMF: Self-Aware OpenTelemetry Metrics Fabric
 
 [![CI](https://github.com/yourorg/sa-omf/actions/workflows/ci.yml/badge.svg)](https://github.com/yourorg/sa-omf/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/yourorg/sa-omf/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/yourorg/sa-omf/actions/workflows/codeql-analysis.yml)
+[![Cross-Platform Tests](https://github.com/yourorg/sa-omf/actions/workflows/cross-platform-tests.yml/badge.svg)](https://github.com/yourorg/sa-omf/actions/workflows/cross-platform-tests.yml)
+[![Release](https://github.com/yourorg/sa-omf/actions/workflows/release.yml/badge.svg)](https://github.com/yourorg/sa-omf/actions/workflows/release.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/yourorg/sa-omf)](https://goreportcard.com/report/github.com/yourorg/sa-omf)
+[![Go Reference](https://pkg.go.dev/badge/github.com/yourorg/sa-omf.svg)](https://pkg.go.dev/github.com/yourorg/sa-omf)
 
 A self-optimizing OpenTelemetry Collector designed to intelligently adapt its processing behavior based on real-time performance metrics.
 
