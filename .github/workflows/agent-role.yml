@@ -60,6 +60,13 @@ jobs:
       - name: Check role exists
         if: steps.extract_role.outputs.role != 'skip'
         run: |
+          # Install yq if it's not available
+          if ! command -v yq &> /dev/null; then
+            echo "Installing yq..."
+            wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            chmod +x /usr/local/bin/yq
+          fi
+
           ROLE="${{ steps.extract_role.outputs.role }}"
           if [[ "$ROLE" == "dependabot" ]]; then
             # Skip check for dependabot - create the role file if it doesn't exist
@@ -91,6 +98,13 @@ EOF
       - name: Check file permissions
         if: steps.extract_role.outputs.role != 'skip' && steps.extract_role.outputs.role != 'dependabot'
         run: |
+          # Make sure yq is installed
+          if ! command -v yq &> /dev/null; then
+            echo "Installing yq..."
+            sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+          fi
+          
           ROLE="${{ steps.extract_role.outputs.role }}"
           
           # Get allowed paths from role definition
@@ -150,6 +164,13 @@ EOF
       - name: Validate task references
         if: steps.extract_role.outputs.tasks != 'N/A' && steps.extract_role.outputs.role != 'dependabot' && steps.extract_role.outputs.role != 'skip'
         run: |
+          # Make sure yq is installed
+          if ! command -v yq &> /dev/null; then
+            echo "Installing yq..."
+            sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+          fi
+
           TASKS="${{ steps.extract_role.outputs.tasks }}"
           if [ -z "$TASKS" ]; then
             echo "No tasks specified, skipping validation"
