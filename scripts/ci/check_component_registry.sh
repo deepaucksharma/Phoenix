@@ -6,7 +6,8 @@ set -e
 MAIN_FILE="cmd/sa-omf-otelcol/main.go"
 
 # Find all component directories
-PROCESSORS=$(find internal/processor -mindepth 1 -maxdepth 1 -type d -printf "%f\n")
+# Exclude common utility packages that are not actual processors
+PROCESSORS=$(find internal/processor -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | grep -v '^base$')
 EXTENSIONS=$(find internal/extension -mindepth 1 -maxdepth 1 -type d -printf "%f\n")
 CONNECTORS=$(find internal/connector -mindepth 1 -maxdepth 1 -type d -printf "%f\n")
 
