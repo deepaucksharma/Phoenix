@@ -30,6 +30,11 @@ This guide will help you get started as an Implementer in the Phoenix project.
    make implementer-check
    ```
 
+6. **Package your changes for Codex**
+   ```bash
+   hack/codex-chunker.sh
+   ```
+
 ## PR Submission Checklist
 
 - [ ] Code follows style guidelines

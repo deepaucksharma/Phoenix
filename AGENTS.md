@@ -66,3 +66,4 @@ Use provided scripts in the `hack` directory:
 - `new-component.sh` - Create a new component with proper boilerplate
 - `new-adr.sh` - Create a new ADR
 - `validate-task.sh` - Validate a task specification
+- `codex-chunker.sh` - Package changed files for Codex review
