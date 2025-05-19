@@ -2,10 +2,12 @@
 
 ## 1. Declared Agent Role
 <!-- One of: architect | planner | implementer | reviewer | security-auditor | doc-writer | devops | integrator -->
+<!-- IMPORTANT: This must be in the format `ROLE: role_name` (include the backticks) -->
 `ROLE: `
 
 ## 2. Linked Task(s)
 <!-- List task IDs from tasks/*.yaml or put N/A -->
+<!-- IMPORTANT: This must be in the format `TASKS: id1, id2` or `TASKS: N/A` (include the backticks) -->
 `TASKS: `
 
 ## 3. Changes Summary
@@ -14,15 +16,10 @@
 ## 4. Checklist
 <!-- Mark completed items with an [x] -->
 
-- [ ] Code follows the style guidelines
-- [ ] Changes have appropriate tests
-- [ ] Documentation has been updated
-- [ ] CI checks pass locally
+- [ ] Code follows project style guidelines
+- [ ] All CI checks pass locally 
 - [ ] Changes respect role boundaries
-- [ ] All new dependencies are approved
+- [ ] Documentation has been updated (if required)
 
 ## 5. Additional Notes
 <!-- Any additional information that reviewers should know -->
-
-## 6. Screenshots (if applicable)
-<!-- Add screenshots to help explain your changes -->
