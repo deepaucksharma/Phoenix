@@ -34,6 +34,8 @@ func createDefaultConfig() component.Config {
 				KI:                5,
 				KD:                0,
 				HysteresisPercent: 3,
+				UseBayesian:       true,
+				StallThreshold:    3,
 				OutputConfigPatches: []OutputConfigPatch{
 					{
 						TargetProcessorName: "adaptive_topk",

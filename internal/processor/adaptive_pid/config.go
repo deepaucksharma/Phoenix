@@ -13,16 +13,18 @@ type Config struct {
 
 // ControllerConfig defines the configuration for a single PID controller.
 type ControllerConfig struct {
-	Name                string               `mapstructure:"name"`
-	Enabled             bool                 `mapstructure:"enabled"`
-	KPIMetricName       string               `mapstructure:"kpi_metric_name"`
-	KPITargetValue      float64              `mapstructure:"kpi_target_value"`
-	KP                  float64              `mapstructure:"kp"`
-	KI                  float64              `mapstructure:"ki"`
-	KD                  float64              `mapstructure:"kd"`
-	IntegralWindupLimit float64              `mapstructure:"integral_windup_limit"`
-	HysteresisPercent   float64              `mapstructure:"hysteresis_percent"`
-	OutputConfigPatches []OutputConfigPatch  `mapstructure:"output_config_patches"`
+	Name                string              `mapstructure:"name"`
+	Enabled             bool                `mapstructure:"enabled"`
+	KPIMetricName       string              `mapstructure:"kpi_metric_name"`
+	KPITargetValue      float64             `mapstructure:"kpi_target_value"`
+	KP                  float64             `mapstructure:"kp"`
+	KI                  float64             `mapstructure:"ki"`
+	KD                  float64             `mapstructure:"kd"`
+	IntegralWindupLimit float64             `mapstructure:"integral_windup_limit"`
+	HysteresisPercent   float64             `mapstructure:"hysteresis_percent"`
+	OutputConfigPatches []OutputConfigPatch `mapstructure:"output_config_patches"`
+	UseBayesian         bool                `mapstructure:"use_bayesian"`
+	StallThreshold      int                 `mapstructure:"stall_threshold"`
 }
 
 // OutputConfigPatch defines how a PID controller affects a processor parameter.
@@ -62,6 +64,10 @@ func (cfg *Config) Validate() error {
 					i, j, patch.MinValue, patch.MaxValue,
 				)
 			}
+		}
+
+		if controller.UseBayesian && controller.StallThreshold <= 0 {
+			return fmt.Errorf("controllers[%d]: stall_threshold must be >0 when use_bayesian enabled", i)
 		}
 	}
 

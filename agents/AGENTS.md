@@ -36,7 +36,7 @@ This document defines the roles, responsibilities, and boundaries for agents and
 - Each PR must have a declared role and reference to task(s)
 - All changes must pass automated checks appropriate for the role
 - Respect the boundaries defined for each role
-- Use the template scripts in `/hack` for generating new components
+- Use the template scripts in `/scripts` for generating new components
 - Follow the code structure and style guidelines
 
 ## Technical Standards
@@ -62,7 +62,7 @@ All major design decisions must be documented in Architecture Decision Records (
 
 ## Tooling
 
-Use provided scripts in the `hack` directory:
-- `new-component.sh` - Create a new component with proper boilerplate
-- `new-adr.sh` - Create a new ADR
-- `validate-task.sh` - Validate a task specification
+Use provided scripts in the `scripts` directory:
+- `scripts/dev/new-component.sh` - Create a new component with proper boilerplate
+- `scripts/dev/new-adr.sh` - Create a new ADR
+- `scripts/dev/validate-task.sh` - Validate a task specification

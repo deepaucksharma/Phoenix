@@ -96,14 +96,14 @@ go test -v ./test/benchmarks/algorithms/... -bench=.
 ### Running in Containers
 
 ```bash
-# Run with Docker Compose (bare environment)
-cd deploy/compose/bare && docker-compose up -d
+# Run with Docker Compose (bare environment - from project root)
+docker-compose -f deploy/compose/bare/docker-compose.yaml up -d
 
-# Run with Docker Compose (Prometheus included)
-cd deploy/compose/prometheus && docker-compose up -d 
+# Run with Docker Compose (Prometheus included - from project root)
+docker-compose -f deploy/compose/prometheus/docker-compose.yaml up -d
 
-# Run with Docker Compose (full stack with Grafana)
-cd deploy/compose/full && docker-compose up -d
+# Run with Docker Compose (full stack with Grafana - from project root)
+docker-compose -f deploy/compose/full/docker-compose.yaml up -d
 
 # Build and run using Docker directly
 docker build -t sa-omf-otelcol:latest -f deploy/docker/Dockerfile .
@@ -343,7 +343,7 @@ The system includes several safety mechanisms:
 
 ### Prerequisites
 
-- Go 1.21 or higher
+- Go 1.24 or higher
 - OpenTelemetry Collector Contrib
 - Docker (for containerized testing)
 - Kubernetes (optional, for orchestrated deployment)

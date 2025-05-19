@@ -4,21 +4,20 @@
 # Architect checks
 architect-check:
 	@echo "Running checks for architect role..."
-	@hack/validate-adr.sh
+	@scripts/dev/validate-adr.sh
 
 # Planner checks
 planner-check:
 	@echo "Running checks for planner role..."
-	@find tasks -name "*.yaml" -exec hack/validate-task.sh {} \;
+	@find tasks -name "*.yaml" -exec scripts/dev/validate-task.sh {} \;
 
 # Implementer checks
 implementer-check: lint test drift-check
 	@echo "Running checks for implementer role..."
 
 # Reviewer checks
-reviewer-check:
-	@echo "Running checks for reviewer role..."
-	@echo "Review complete" # Placeholder - no specific checks needed
+reviewer-check: lint # Example: ensure code being reviewed is linted
+	@echo "Running checks for reviewer role (manual review still required)..."
 
 # Security Auditor checks
 security-auditor-check:
