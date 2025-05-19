@@ -20,6 +20,14 @@ jobs:
       - name: Extract role from PR body
         id: extract_role
         run: |
+          # Check if we're in a pull request
+          if [ -z "${{ github.event.pull_request.number }}" ]; then
+            echo "This workflow should only run on pull requests"
+            echo "role=skip" >> $GITHUB_OUTPUT
+            echo "tasks=skip" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
           PR_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" \
             | jq -r '.body // ""')
@@ -45,6 +53,7 @@ jobs:
           echo "Referenced tasks: $TASKS"
       
       - name: Check role exists
+        if: steps.extract_role.outputs.role != 'skip'
         run: |
           ROLE="${{ steps.extract_role.outputs.role }}"
           if [[ "$ROLE" == "dependabot" ]]; then
@@ -75,14 +84,9 @@ EOF
           fi
 
       - name: Check file permissions
+        if: steps.extract_role.outputs.role != 'skip' && steps.extract_role.outputs.role != 'dependabot'
         run: |
           ROLE="${{ steps.extract_role.outputs.role }}"
-          
-          # Skip permission checks for dependabot
-          if [[ "$ROLE" == "dependabot" ]]; then
-            echo "Skipping permission checks for dependabot"
-            exit 0
-          fi
           
           # Get allowed paths from role definition
           CAN_TOUCH=$(yq -r '.can_touch[]' docs/agents/$ROLE.yaml)
@@ -139,7 +143,7 @@ EOF
           echo "All file changes comply with role '$ROLE' permissions"
 
       - name: Validate task references
-        if: steps.extract_role.outputs.tasks != 'N/A' && steps.extract_role.outputs.role != 'dependabot'
+        if: steps.extract_role.outputs.tasks != 'N/A' && steps.extract_role.outputs.role != 'dependabot' && steps.extract_role.outputs.role != 'skip'
         run: |
           TASKS="${{ steps.extract_role.outputs.tasks }}"
           if [ -z "$TASKS" ]; then
