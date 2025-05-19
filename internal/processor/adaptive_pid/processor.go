@@ -25,33 +25,8 @@ const (
 	typeStr = "pid_decider"
 )
 
-// Config defines configuration for the pid_decider processor
-type Config struct {
-	Controllers []ControllerConfig `mapstructure:"controllers"`
-}
-
-// ControllerConfig holds configuration for a PID controller
-type ControllerConfig struct {
-	Name              string              `mapstructure:"name"`
-	Enabled           bool                `mapstructure:"enabled"`
-	KPIMetricName     string              `mapstructure:"kpi_metric_name"`
-	KPITargetValue    float64             `mapstructure:"kpi_target_value"`
-	KP                float64             `mapstructure:"kp"`
-	KI                float64             `mapstructure:"ki"`
-	KD                float64             `mapstructure:"kd"`
-	IntegralWindupLimit float64           `mapstructure:"integral_windup_limit"`
-	HysteresisPercent float64             `mapstructure:"hysteresis_percent"`
-	OutputConfigPatches []OutputConfigPatch `mapstructure:"output_config_patches"`
-}
-
-// OutputConfigPatch defines how a PID controller affects a processor parameter
-type OutputConfigPatch struct {
-	TargetProcessorName string  `mapstructure:"target_processor_name"`
-	ParameterPath       string  `mapstructure:"parameter_path"`
-	ChangeScaleFactor   float64 `mapstructure:"change_scale_factor"`
-	MinValue            float64 `mapstructure:"min_value"`
-	MaxValue            float64 `mapstructure:"max_value"`
-}
+// We're using the Config, ControllerConfig, and OutputConfigPatch from the config.go file
+// No need to redeclare them here
 
 var _ component.Config = (*Config)(nil)
 

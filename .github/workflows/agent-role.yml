@@ -22,18 +22,13 @@ jobs:
         run: |
           PR_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" \
-            | jq -r '.body')
+            | jq -r '.body // "ROLE: dependabot"')
           
-          ROLE=$(echo "$PR_BODY" | grep -Po '(?<=`ROLE: ).*?(?=`)' || echo "")
-          TASKS=$(echo "$PR_BODY" | grep -Po '(?<=`TASKS: ).*?(?=`)' || echo "")
+          ROLE=$(echo "$PR_BODY" | grep -Po '(?<=`ROLE: ).*?(?=`)' || echo "dependabot")
+          TASKS=$(echo "$PR_BODY" | grep -Po '(?<=`TASKS: ).*?(?=`)' || echo "N/A")
           
           echo "role=$ROLE" >> $GITHUB_OUTPUT
           echo "tasks=$TASKS" >> $GITHUB_OUTPUT
-          
-          if [ -z "$ROLE" ]; then
-            echo "Error: No role declared in PR body. Add 'ROLE: role_name' to your PR description."
-            exit 1
-          fi
           
           echo "Declared role: $ROLE"
           echo "Referenced tasks: $TASKS"

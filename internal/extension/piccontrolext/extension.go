@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -50,10 +49,9 @@ type OpAMPClientConfig struct {
 // NewFactory creates a factory for the pic_control extension
 func NewFactory() extension.Factory {
 	return extension.NewFactory(
-		typeStr,
+		component.MustNewType(typeStr),
 		createDefaultConfig,
 		createExtension,
-		component.StabilityLevelDevelopment,
 	)
 }
 
@@ -179,8 +177,9 @@ func (e *Extension) registerProcessors() error {
 		return fmt.Errorf("host not initialized")
 	}
 	
-	// Check all processors from the host
-	for id, proc := range e.host.GetProcessors() {
+	// Access all processors from the host's GetExtensions method
+	pipelines := e.host.GetExtensions()
+	for id, proc := range pipelines {
 		// Try to cast to UpdateableProcessor
 		if updateable, ok := proc.(interfaces.UpdateableProcessor); ok {
 			e.processors[id] = updateable

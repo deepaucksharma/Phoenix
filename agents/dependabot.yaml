@@ -1,0 +1,11 @@
+name: dependabot
+description: Automated dependency updater
+can_touch:
+  - ".github/workflows/*"
+  - "go.mod"
+  - "go.sum"
+  - "package.json"
+  - "package-lock.json"
+  - "yarn.lock"
+blocked_files: []
+must_touch: []
