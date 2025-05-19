@@ -34,9 +34,9 @@ func TestControlLoopIntegration(t *testing.T) {
 	// Create the extension using the factory directly
 	picCtrlExt, err := picCtrlFactory.CreateExtension(
 		context.Background(),
-		component.ExtensionCreateSettings{
+		extension.Settings{
 			TelemetrySettings: component.TelemetrySettings{},
-			ID: component.NewID(component.MustNewType("pic_control")),
+			ID: component.NewID("pic_control"),
 		},
 		picCtrlConfig,
 	)
@@ -44,7 +44,7 @@ func TestControlLoopIntegration(t *testing.T) {
 	require.NotNil(t, picCtrlExt)
 
 	// Add extension to host
-	host.AddExtension(component.MustNewID("pic_control"), picCtrlExt)
+	host.AddExtension(component.NewID("pic_control"), picCtrlExt)
 
 	// Start extension
 	err = picCtrlExt.Start(context.Background(), host)
@@ -59,11 +59,11 @@ func TestControlLoopIntegration(t *testing.T) {
 
 	topkSink := new(consumertest.MetricsSink)
 	// Create the processor using the factory directly
-	topkProc, err := topkFactory.CreateMetricsProcessor(
+	topkProc, err := topkFactory.CreateDefaultMetricsProcessor(
 		context.Background(),
-		processor.CreateSettings{
+		processor.Settings{
 			TelemetrySettings: component.TelemetrySettings{},
-			ID: component.NewID(component.MustNewType("adaptive_topk")),
+			ID: component.NewID("adaptive_topk"),
 		},
 		topkConfig,
 		topkSink,
@@ -72,7 +72,7 @@ func TestControlLoopIntegration(t *testing.T) {
 	require.NotNil(t, topkProc)
 
 	// Add processor to host
-	host.AddProcessor(component.MustNewID("adaptive_topk"), topkProc)
+	host.AddProcessor(component.NewID("adaptive_topk"), topkProc)
 
 	// Start processor
 	err = topkProc.Start(context.Background(), host)
@@ -105,11 +105,11 @@ func TestControlLoopIntegration(t *testing.T) {
 	// Create a test sink for PID processor output
 	pidSink := new(consumertest.MetricsSink)
 	// Create the processor using the factory directly
-	pidProc, err := pidFactory.CreateMetricsProcessor(
+	pidProc, err := pidFactory.CreateDefaultMetricsProcessor(
 		context.Background(),
-		processor.CreateSettings{
+		processor.Settings{
 			TelemetrySettings: component.TelemetrySettings{},
-			ID: component.NewID(component.MustNewType("adaptive_pid")),
+			ID: component.NewID("adaptive_pid"),
 		},
 		pidConfig,
 		pidSink,

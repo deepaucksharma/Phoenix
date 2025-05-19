@@ -68,17 +68,15 @@ func BenchmarkPriorityTaggerEndToEnd(b *testing.B) {
 	cfg := factory.CreateDefaultConfig()
 
 	// Create processor with updated API
-	processorType := component.MustNewType("priority_tagger")
 	processorSettings := processor.Settings{
 		TelemetrySettings: component.TelemetrySettings{
 			Logger: zap.NewNop(),
 		},
-		ID: component.NewID(processorType),
+		ID: component.NewID("priority_tagger"),
 	}
 	
-	// Use the WithMetrics method directly since the factory method was updated
-	procCreator := factory.(processor.Factory).WithMetrics()
-	proc, err := procCreator(context.Background(), processorSettings, cfg, sink)
+	// Create the processor directly without using WithMetrics
+	proc, err := factory.CreateDefaultMetricsProcessor(context.Background(), processorSettings, cfg, sink)
 	if err != nil {
 		b.Fatalf("failed to create processor: %v", err)
 	}
