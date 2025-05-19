@@ -1,0 +1,21 @@
+id: implementer
+description: "Writes and tests code for defined tasks"
+git_permissions: push
+required_checks:
+  - lint
+  - unit-test
+  - coverage
+  - drift-check
+can_touch:
+  - cmd/**
+  - internal/**
+  - pkg/**
+  - test/**
+  - config/**
+must_touch:
+  - test/**
+blocked_files:
+  - agents/**
+  - AGENTS.md
+  - .github/workflows/**
+  - docs/adr/**

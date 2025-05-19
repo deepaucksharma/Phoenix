@@ -1,0 +1,17 @@
+id: doc-writer
+description: "Creates and updates documentation"
+git_permissions: push
+required_checks:
+  - docs-lint
+can_touch:
+  - docs/**
+  - README.md
+  - *.md
+must_touch:
+  - docs/**
+blocked_files:
+  - cmd/**
+  - internal/**
+  - pkg/**
+  - test/**
+  - .github/workflows/**
