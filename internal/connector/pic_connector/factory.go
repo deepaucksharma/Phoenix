@@ -1,5 +1,5 @@
-// Package picconnector implements an exporter that connects the pid_decider processor to the pic_control extension.
-package picconnector
+// Package pic_connector implements an exporter that connects the pid_decider processor to the pic_control extension.
+package pic_connector
 
 import (
 	"context"

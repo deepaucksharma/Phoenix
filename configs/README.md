@@ -1,15 +1,41 @@
-# SA-OMF Configuration
+# SA-OMF Configuration Files
 
 This directory contains all configuration files for the Self-Aware OpenTelemetry Metrics Fabric.
 
 ## Directory Structure
 
-- **default/**: Default configuration files used for standard deployments
-  - **config.yaml**: Main collector configuration
-  - **policy.yaml**: Control policy configuration
-- **examples/**: Example configurations for different scenarios
-  - **config.yaml**: Example collector configuration
-  - **policy.yaml**: Example policy configuration
+- **default/**: Default configuration files used as a baseline
+- **development/**: Configuration optimized for development environments
+- **production/**: Configuration for production deployment
+- **testing/**: Configuration for testing environments
+- **examples/**: Example configurations demonstrating specific scenarios
+
+## Environment-Specific Configuration
+
+Each environment directory contains:
+
+- **config.yaml**: Main OpenTelemetry Collector configuration
+- **policy.yaml**: Control policy for self-adapting components
+
+## Configuration Differences by Environment
+
+### Development
+- More verbose logging
+- Lower processing intervals
+- Lower metric retention
+- Faster control loop adaptation
+
+### Testing
+- Configuration optimized for integration tests
+- In-memory exporters
+- Test-friendly component parameters
+- Predictable adaptation values
+
+### Production
+- Production-ready component settings
+- Optimized for stability and resource efficiency
+- More conservative control parameters
+- Safety limits for resource consumption
 
 ## Configuration File Types
 
@@ -37,14 +63,14 @@ To run the collector with a specific configuration:
 # Default configuration
 make run
 
-# Custom configuration
-./bin/sa-omf-otelcol --config=path/to/your/config.yaml
+# Environment-specific configuration
+./bin/sa-omf-otelcol --config=configs/production/config.yaml
 ```
 
-## Creating Custom Configurations
+## Configuration Best Practices
 
-We recommend starting with the provided examples and modifying them to fit your specific needs. Ensure that all required components are properly defined and that the policy configuration is valid by running validation:
-
-```bash
-./hack/validate_policy_schema.sh
-```
+1. **Never modify default configurations directly** - Use them as reference only
+2. **Keep environment-specific settings separate** - Use environment directories
+3. **Document all custom settings** - Add comments to explain changes
+4. **Validate before deployment** - Run policy validation with `scripts/validation/validate_policy_schema.sh`
+5. **Version control changes** - Always commit configuration changes with descriptive messages

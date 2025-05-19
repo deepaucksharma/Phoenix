@@ -14,11 +14,11 @@ import (
 	"go.opentelemetry.io/collector/receiver"
 
 	// Import your components here
-	"github.com/yourorg/sa-omf/internal/connector/picconnector"
-	"github.com/yourorg/sa-omf/internal/extension/piccontrolext"
+	"github.com/yourorg/sa-omf/internal/extension/pic_control_ext"
+	"github.com/yourorg/sa-omf/internal/connector/pic_connector"
+	"github.com/yourorg/sa-omf/internal/processor/priority_tagger"
 	"github.com/yourorg/sa-omf/internal/processor/adaptive_pid"
 	"github.com/yourorg/sa-omf/internal/processor/adaptive_topk"
-	"github.com/yourorg/sa-omf/internal/processor/prioritytagger"
 	// Add more component imports as they are implemented
 )
 
@@ -50,7 +50,7 @@ func components() (otelcol.Factories, error) {
 
 	// Extensions
 	extensions := []extension.Factory{
-		piccontrolext.NewFactory(),
+		pic_control_ext.NewFactory(),
 		// Add more extensions as needed
 	}
 	factories.Extensions, err = extension.MakeFactoryMap(extensions...)
@@ -70,7 +70,7 @@ func components() (otelcol.Factories, error) {
 	// Processors
 	processors := []processor.Factory{
 		// Add custom processors as they are implemented:
-		prioritytagger.NewFactory(),
+		priority_tagger.NewFactory(),
 		adaptive_pid.NewFactory(),
 		adaptive_topk.NewFactory(),
 		// etc.
@@ -83,7 +83,7 @@ func components() (otelcol.Factories, error) {
 	// Exporters
 	exporters := []exporter.Factory{
 		// Add custom exporters as they are implemented:
-		picconnector.NewFactory(),
+		pic_connector.NewFactory(),
 		// etc.
 	}
 	factories.Exporters, err = exporter.MakeFactoryMap(exporters...)
@@ -116,5 +116,5 @@ func getConfigFile() string {
 	}
 
 	// Default config file location
-	return "config/config.yaml"
+	return "configs/default/config.yaml"
 }

@@ -1,6 +1,6 @@
-// Package picconnector implements an exporter that forwards configuration 
+// Package pic_connector implements an exporter that forwards configuration 
 // patches from pid_decider to pic_control.
-package picconnector
+package pic_connector
 
 // Config defines the configuration for the pic_connector exporter.
 // Currently, the connector doesn't require any specific configuration,

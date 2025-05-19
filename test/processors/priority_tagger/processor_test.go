@@ -1,4 +1,4 @@
-package prioritytagger
+package priority_tagger
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/yourorg/sa-omf/internal/interfaces"
-	"github.com/yourorg/sa-omf/internal/processor/prioritytagger"
+	"github.com/yourorg/sa-omf/internal/processor/priority_tagger"
 	iftest "github.com/yourorg/sa-omf/test/interfaces"
 )
 

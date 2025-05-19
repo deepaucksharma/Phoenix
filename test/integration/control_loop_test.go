@@ -13,7 +13,7 @@ import (
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/processor"
 
-	"github.com/yourorg/sa-omf/internal/extension/piccontrolext"
+	"github.com/yourorg/sa-omf/internal/extension/pic_control_ext"
 	"github.com/yourorg/sa-omf/internal/processor/adaptive_pid"
 	"github.com/yourorg/sa-omf/internal/processor/adaptive_topk"
 	"github.com/yourorg/sa-omf/test/testutils"
@@ -25,8 +25,8 @@ func TestControlLoopIntegration(t *testing.T) {
 	host := &componenttest.TestHost{}
 
 	// Create pic_control extension
-	picCtrlFactory := piccontrolext.NewFactory()
-	picCtrlConfig := picCtrlFactory.CreateDefaultConfig().(*piccontrolext.Config)
+	picCtrlFactory := pic_control_ext.NewFactory()
+	picCtrlConfig := picCtrlFactory.CreateDefaultConfig().(*pic_control_ext.Config)
 	picCtrlConfig.PolicyFilePath = "" // No file for testing
 	picCtrlConfig.MaxPatchesPerMinute = 10
 	picCtrlConfig.PatchCooldownSeconds = 1

@@ -14,9 +14,17 @@ This directory contains a comprehensive testing framework for the SA-OMF (Phoeni
   - `adaptive_pid/` - Tests for the PID decision processor
   - `adaptive_topk/` - Tests for the adaptive TopK processor
   - `prioritytagger/` - Tests for the priority tagging processor
-- `integration/` - End-to-end and integration tests
-- `testutils/` - Shared testing utilities
+  - `templates/` - Shared test templates for processors
+- `extensions/` - Tests for custom extensions
+  - `piccontrolext/` - Tests for the PIC control extension
+- `integration/` - Component interaction tests
+- `e2e_tests/` - End-to-end system tests
 - `benchmarks/` - Performance and benchmarking tests
+  - `processors/` - Processor performance tests
+  - `algorithms/` - Algorithm performance tests
+  - `performance/` - End-to-end performance tests
+- `testutils/` - Shared testing utilities
+- `generator/` - Test data generation utilities
 
 ## Running Tests
 
@@ -28,46 +36,46 @@ To run all tests:
 make test
 ```
 
-### Unit Tests Only
-
-To run only unit tests:
+### Specific Test Types
 
 ```bash
-go test -v ./test/unit/...
+# Unit tests only
+make test-unit
+
+# Integration tests only
+make test-integration
+
+# Performance benchmarks
+make benchmark
 ```
 
-### Processor Tests
-
-To run tests for specific processors:
+### Targeted Testing
 
 ```bash
-go test -v ./test/processors/...
+# Test specific components
+go test -v ./test/processors/adaptive_pid/...
+go test -v ./test/unit/hll/...
+
+# Run benchmarks for specific algorithms
+go test -v ./test/benchmarks/algorithms/... -bench=.
 ```
 
-### Integration Tests
+## Test Coverage
 
-To run integration tests (requires Docker):
-
-```bash
-go test -v ./test/integration/...
-```
-
-### Benchmarks
-
-To run performance benchmarks:
+Generate test coverage reports:
 
 ```bash
-go test -v ./test/benchmark/... -bench=.
+make test-coverage
 ```
 
 ## Writing New Tests
 
-### Adding a New Unit Test
+### Test Design Principles
 
-1. Create a new test file in the appropriate directory.
-2. Import necessary testing packages.
-3. Write test functions following the Go testing conventions.
-4. Use testutils for common functionality.
+1. **Isolation**: Each test should be independent and not rely on other tests
+2. **Determinism**: Tests should produce the same results on every run
+3. **Comprehensive**: Cover normal, edge, and error cases
+4. **Performance-Aware**: Include benchmarks for performance-critical components
 
 ### Testing UpdateableProcessor Components
 
@@ -82,24 +90,16 @@ func TestMyProcessor(t *testing.T) {
 }
 ```
 
-### Writing Integration Tests
+### Test Data Generation
 
-Integration tests should:
+Use the utilities in the `generator` and `testutils` packages to create consistent test data:
 
-1. Set up a complete mini-environment.
-2. Generate synthetic workload metrics.
-3. Verify that the system adapts correctly.
-4. Check metrics and configuration changes.
+```go
+import "github.com/yourorg/sa-omf/test/testutils"
 
-## Test Coverage
-
-Generate test coverage reports:
-
-```bash
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out
+metrics := testutils.GenerateTestMetrics(10, 5) // 10 resources, 5 metrics each
 ```
 
-## Test Data
+## Test Templates
 
-Test data generators and sample metrics are available in the `testutils` package.
+Processor tests should follow the templates in `processors/templates/` to ensure consistency across all processor implementations.

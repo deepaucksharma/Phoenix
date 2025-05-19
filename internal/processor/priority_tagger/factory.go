@@ -1,5 +1,5 @@
-// Package prioritytagger provides a processor that tags resources with priority levels.
-package prioritytagger
+// Package priority_tagger provides a processor that tags resources with priority levels.
+package priority_tagger
 
 import (
 	"context"

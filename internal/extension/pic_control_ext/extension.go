@@ -1,5 +1,5 @@
-// Package piccontrolext implements the pic_control extension for the SA-OMF.
-package piccontrolext
+// Package pic_control_ext implements the pic_control extension for the SA-OMF.
+package pic_control_ext
 
 import (
 	"context"
