@@ -25,6 +25,18 @@ make run
 # Run all tests
 make test
 
+# Run only unit tests
+make test-unit
+
+# Run only integration tests
+make test-integration
+
+# Run tests with coverage
+make test-coverage
+
+# Run benchmarks
+make benchmark
+
 # Run linting
 make lint
 
@@ -36,6 +48,41 @@ make docker
 
 # Create a release tag
 make release VERSION=x.y.z
+
+# Show all available commands
+make help
+```
+
+### Test-specific Commands
+
+```bash
+# Run tests in the test directory
+cd test && make test
+
+# Run unit tests only in test directory
+cd test && make unit
+
+# Run integration tests only in test directory
+cd test && make integration
+
+# Generate test coverage report
+cd test && make coverage
+
+# Run benchmarks in test directory
+cd test && make benchmark
+```
+
+### Running in Containers
+
+```bash
+# Run with Docker Compose (bare environment)
+cd test-environments/bare && docker-compose up -d
+
+# Run with Docker Compose (Prometheus included)
+cd test-environments/prometheus && docker-compose up -d 
+
+# Run with Docker Compose (full stack with Grafana)
+cd test-environments/full && docker-compose up -d
 ```
 
 ### Typical Development Workflow
@@ -120,6 +167,33 @@ The system is configured through a policy.yaml file which defines:
 
 ## Working with the Codebase
 
+### Project Structure
+
+```
+sa-omf/
+├── cmd/
+│   └── sa-omf-otelcol/             # Main binary entrypoint
+├── internal/
+│   ├── interfaces/                  # Core interfaces (UpdateableProcessor, etc.)
+│   ├── extension/
+│   │   └── piccontrolext/           # pic_control implementation
+│   ├── connector/
+│   │   └── picconnector/            # pic_connector implementation
+│   ├── processor/                   # All custom processors
+│   └── control/                     # Control logic helpers
+├── pkg/                             # Reusable packages
+├── test/
+│   ├── unit/                        # Unit tests for core algorithms
+│   ├── interfaces/                  # Interface contract tests
+│   ├── processors/                  # Processor-specific tests
+│   ├── integration/                 # End-to-end tests
+│   └── testutils/                   # Testing utilities
+├── deploy/
+│   ├── kubernetes/                  # K8s deployment manifests
+│   └── docker/                      # Dockerfile
+└── docs/                            # Documentation
+```
+
 ### Adding a New Processor
 
 1. Create factory.go and processor.go in internal/processor/yourprocessor/
@@ -127,6 +201,7 @@ The system is configured through a policy.yaml file which defines:
 3. Register your processor in the collector factory
 4. Add processor configuration to policy schema
 5. Update config.yaml and policy.yaml with default configs
+6. Add unit and integration tests in test/processors/yourprocessor/
 
 ### Modifying PID Controllers
 
@@ -135,6 +210,14 @@ PID controllers are defined in the policy.yaml file:
 - Set target_value to define the desired KPI state
 - Configure output_config_patches to specify what parameters get adjusted
 
+### Testing Your Changes
+
+1. Use processor_test_template.go for standard processor test structure
+2. Test UpdateableProcessor compliance with interfaces/updateable_processor_test.go
+3. For control components, use testutils/pid_helper.go to test PID behavior
+4. Add benchmarks for performance-critical components
+5. For integration testing, use testutils/metrics_generator.go to create synthetic test data
+
 ### Safety Mechanism Development
 
 The system includes several safety mechanisms:
@@ -142,3 +225,10 @@ The system includes several safety mechanisms:
 - Configuration patch rate limiting
 - Policy validation against schema
 - Parameter bounds checking in patches
+
+### Prerequisites
+
+- Go 1.21 or higher
+- OpenTelemetry Collector Contrib
+- Docker (for containerized testing)
+- Kubernetes (optional, for orchestrated deployment)
