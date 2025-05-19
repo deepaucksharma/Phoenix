@@ -70,8 +70,8 @@ func (h *HyperLogLog) Add(data []byte) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	
-	// Compute 64-bit hash
-	hash := computeHash(data)
+       // Compute 32-bit hash
+       hash := computeHash(data)
 	
 	// Determine register index using first 'precision' bits
 	idx := hash & (h.m - 1)
@@ -154,7 +154,7 @@ func (h *HyperLogLog) Reset() {
 	}
 }
 
-// computeHash generates a 64-bit hash for the input data.
+// computeHash generates a 32-bit hash for the input data.
 func computeHash(data []byte) uint32 {
 	h := fnv.New32a()
 	h.Write(data)
