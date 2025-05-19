@@ -1,5 +1,7 @@
 .PHONY: build test test-all test-unit test-integration test-coverage clean lint benchmark
 
+include tools.mk
+
 # Build the collector binary
 build:
 	@echo "Building SA-OMF OpenTelemetry Collector..."
