@@ -12,19 +12,20 @@ import (
 	"github.com/deepaucksharma/Phoenix/pkg/util/timeseries"
 )
 
-type processor struct {
+type engineProcessor struct {
 	*base.BaseProcessor
 	cfg *Config
 }
 
-func newProcessor(set processor.CreateSettings, cfg *Config, next consumer.Metrics) (*processor, error) {
-	return &processor{
-		BaseProcessor: base.NewBaseProcessor(set.Logger, next, typeStr, component.NewID(typeStr)),
+func newProcessor(set processor.Settings, cfg *Config, next consumer.Metrics) (*engineProcessor, error) {
+	processorType := component.MustNewType(typeStr)
+	return &engineProcessor{
+		BaseProcessor: base.NewBaseProcessor(set.TelemetrySettings.Logger, next, typeStr, component.NewID(processorType)),
 		cfg:           cfg,
 	}, nil
 }
 
-func (p *processor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
+func (p *engineProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
 	if !p.cfg.Enabled {
 		return p.GetNext().ConsumeMetrics(ctx, md)
 	}
@@ -34,5 +35,5 @@ func (p *processor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) erro
 	return p.GetNext().ConsumeMetrics(ctx, md)
 }
 
-var _ processor.Metrics = (*processor)(nil)
-var _ component.Component = (*processor)(nil)
+var _ processor.Metrics = (*engineProcessor)(nil)
+var _ component.Component = (*engineProcessor)(nil)

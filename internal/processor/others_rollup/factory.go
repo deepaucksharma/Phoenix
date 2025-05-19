@@ -30,7 +30,7 @@ func createDefaultConfig() component.Config {
 // createMetricsProcessor creates the processor instance.
 func createMetricsProcessor(
 	ctx context.Context,
-	set processor.CreateSettings,
+	set processor.Settings,
 	cfg component.Config,
 	next consumer.Metrics,
 ) (processor.Metrics, error) {

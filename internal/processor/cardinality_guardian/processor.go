@@ -33,10 +33,10 @@ type processorImpl struct {
 var _ processor.Metrics = (*processorImpl)(nil)
 var _ interfaces.UpdateableProcessor = (*processorImpl)(nil)
 
-func newProcessor(cfg *Config, settings processor.CreateSettings, next consumer.Metrics) (*processorImpl, error) {
+func newProcessor(cfg *Config, settings processor.Settings, next consumer.Metrics) (*processorImpl, error) {
 	return &processorImpl{
 		config: cfg,
-		logger: settings.Logger,
+		logger: settings.TelemetrySettings.Logger,
 		next:   next,
 		hlls:   make(map[string]*hll.HyperLogLog),
 	}, nil

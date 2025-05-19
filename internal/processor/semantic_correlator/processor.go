@@ -13,25 +13,26 @@ import (
 	"github.com/deepaucksharma/Phoenix/pkg/util/causality"
 )
 
-// processor implements metrics correlation using causality algorithms.
-type processor struct {
+// processorImpl implements metrics correlation using causality algorithms.
+type processorImpl struct {
 	*base.BaseProcessor
 	cfg    *Config
 	logger *zap.Logger
 }
 
-func newProcessor(set processor.CreateSettings, cfg *Config, next consumer.Metrics) (*processor, error) {
-	p := &processor{
-		BaseProcessor: base.NewBaseProcessor(set.Logger, next, typeStr, component.NewID(typeStr)),
+func newProcessor(set processor.Settings, cfg *Config, next consumer.Metrics) (*processorImpl, error) {
+	processorType := component.MustNewType(typeStr)
+	p := &processorImpl{
+		BaseProcessor: base.NewBaseProcessor(set.TelemetrySettings.Logger, next, typeStr, component.NewID(processorType)),
 		cfg:           cfg,
-		logger:        set.Logger,
+		logger:        set.TelemetrySettings.Logger,
 	}
 	return p, nil
 }
 
 // ConsumeMetrics processes incoming metrics. For now it simply passes data
 // through after running a dummy causality computation on synthetic data.
-func (p *processor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
+func (p *processorImpl) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
 	if !p.cfg.Enabled {
 		return p.GetNext().ConsumeMetrics(ctx, md)
 	}
@@ -48,5 +49,5 @@ func (p *processor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) erro
 	return p.GetNext().ConsumeMetrics(ctx, md)
 }
 
-var _ processor.Metrics = (*processor)(nil)
-var _ component.Component = (*processor)(nil)
+var _ processor.Metrics = (*processorImpl)(nil)
+var _ component.Component = (*processorImpl)(nil)

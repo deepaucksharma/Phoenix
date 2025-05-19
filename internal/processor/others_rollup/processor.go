@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	typeStr          = "others_rollup"
+	// Type constant is defined in factory.go
 	lowPriorityValue = "low"
 	priorityAttr     = "aemf.process.priority"
 )
@@ -34,13 +34,13 @@ var _ processor.Metrics = (*processorImpl)(nil)
 var _ interfaces.UpdateableProcessor = (*processorImpl)(nil)
 
 // newProcessor creates a new others_rollup processor.
-func newProcessor(cfg *Config, settings processor.CreateSettings, next consumer.Metrics) (*processorImpl, error) {
+func newProcessor(cfg *Config, settings processor.Settings, next consumer.Metrics) (*processorImpl, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 	return &processorImpl{
 		config: cfg,
-		logger: settings.Logger,
+		logger: settings.TelemetrySettings.Logger,
 		next:   next,
 	}, nil
 }

@@ -29,10 +29,10 @@ type processorImpl struct {
 var _ processor.Metrics = (*processorImpl)(nil)
 var _ interfaces.UpdateableProcessor = (*processorImpl)(nil)
 
-func newProcessor(cfg *Config, settings processor.CreateSettings, nextConsumer consumer.Metrics) (*processorImpl, error) {
+func newProcessor(cfg *Config, settings processor.Settings, nextConsumer consumer.Metrics) (*processorImpl, error) {
 	p := &processorImpl{
 		config: cfg,
-		logger: settings.Logger,
+		logger: settings.TelemetrySettings.Logger,
 		next:   nextConsumer,
 		edges:  make(map[int][]int),
 		scores: make(map[int]float64),
