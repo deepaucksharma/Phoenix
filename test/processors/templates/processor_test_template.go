@@ -3,6 +3,7 @@ package processors
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	
 	"github.com/stretchr/testify/assert"
@@ -85,7 +86,7 @@ func GenerateTestMetrics(processNames []string) pmetric.Metrics {
 		// Add resource metrics
 		rm := md.ResourceMetrics().AppendEmpty()
 		rm.Resource().Attributes().PutStr("process.name", procName)
-		rm.Resource().Attributes().PutStr("process.pid", string(1000+i))
+		rm.Resource().Attributes().PutStr("process.pid", fmt.Sprintf("%d", 1000+i))
 		
 		// Add scope metrics
 		sm := rm.ScopeMetrics().AppendEmpty()

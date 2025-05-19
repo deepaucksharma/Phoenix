@@ -138,9 +138,8 @@ func (p *pidProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) e
 
 	// Process each controller
 	for _, ctrl := range p.controllers {
-		// Get current KPI value
-		kpiValue, found := kpiValues[ctrl.config.KPIMetricName]
-		if \!found {
+		// Check if current value is not found
+		if !found {
 			// KPI not found in this batch, try next controller
 			continue
 		}
@@ -151,7 +150,7 @@ func (p *pidProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) e
 		// Update PID controller and get output
 		output := ctrl.pid.Compute(kpiValue)
 
-		if ctrl.optimizer \!= nil {
+		if ctrl.optimizer != nil {
 			if math.Abs(output-ctrl.lastPIDOut) < 1e-3 {
 				ctrl.stallCount++
 			} else {
@@ -214,7 +213,7 @@ func (p *pidProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) e
 			}
 
 			// Check against hysteresis threshold
-			if lastValue \!= 0 {
+			if lastValue != 0 {
 				changePercent := (newValue - lastValue) / lastValue * 100
 				if math.Abs(changePercent) < ctrl.config.HysteresisPercent {
 					// Change too small, skip
@@ -277,7 +276,7 @@ func extractKPIValues(md pmetric.Metrics) map[string]float64 {
 				name := metric.Name()
 
 				// Skip metrics that don't start with aemf_impact
-				if \!strings.HasPrefix(name, "aemf_impact") {
+				if !strings.HasPrefix(name, "aemf_impact") {
 					continue
 				}
 
@@ -329,8 +328,7 @@ func (p *pidProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 
 			for i, ctrl := range p.config.Controllers {
 				if ctrl.Name == controllerName {
-					enabled, ok := patch.NewValue.(bool)
-					if \!ok {
+					if !ok {
 						return fmt.Errorf("invalid value type for enabled: %T", patch.NewValue)
 					}
 					p.config.Controllers[i].Enabled = enabled
@@ -348,8 +346,7 @@ func (p *pidProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 
 			for i, ctrl := range p.controllers {
 				if ctrl.config.Name == controllerName {
-					targetValue, ok := patch.NewValue.(float64)
-					if \!ok {
+					if !ok {
 						return fmt.Errorf("invalid value type for kpi_target_value: %T", patch.NewValue)
 					}
 
