@@ -23,7 +23,10 @@ test-unit:
 # Run integration tests only
 test-integration:
 	@echo "Running integration tests..."
-	@go test -mod=vendor -v ./test/integration/...
+	@if [ -d test/integration ]; then \
+	go test -mod=vendor -v ./test/integration/...; \
+	fi
+	@go test -mod=vendor -v ./test/e2e_tests/... ./test/extensions/...
 
 # Verify drift - Code consistency check for interdependent files
 drift-check:
