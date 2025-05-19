@@ -49,7 +49,7 @@ func TestProcessContextLearner(t *testing.T) {
 		assert.True(t, ok, "importance attribute missing")
 	}
 
-	lp := proc.(*learner.processorImpl)
+	lp := proc.(*learner.ProcessorImpl)
 	scores := lp.GetScores()
 	require.Len(t, scores, 4)
 

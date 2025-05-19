@@ -15,8 +15,8 @@ import (
 
 const typeStr = "process_context_learner"
 
-// processorImpl implements the process_context_learner processor.
-type processorImpl struct {
+// ProcessorImpl implements the process_context_learner processor.
+type ProcessorImpl struct {
 	config *Config
 	logger *zap.Logger
 	next   consumer.Metrics
@@ -26,11 +26,11 @@ type processorImpl struct {
 	scores map[int]float64 // pid -> importance score
 }
 
-var _ processor.Metrics = (*processorImpl)(nil)
-var _ interfaces.UpdateableProcessor = (*processorImpl)(nil)
+var _ processor.Metrics = (*ProcessorImpl)(nil)
+var _ interfaces.UpdateableProcessor = (*ProcessorImpl)(nil)
 
-func newProcessor(cfg *Config, settings processor.Settings, nextConsumer consumer.Metrics) (*processorImpl, error) {
-	p := &processorImpl{
+func newProcessor(cfg *Config, settings processor.Settings, nextConsumer consumer.Metrics) (*ProcessorImpl, error) {
+	p := &ProcessorImpl{
 		config: cfg,
 		logger: settings.TelemetrySettings.Logger,
 		next:   nextConsumer,
@@ -40,20 +40,20 @@ func newProcessor(cfg *Config, settings processor.Settings, nextConsumer consume
 	return p, nil
 }
 
-func (p *processorImpl) Start(ctx context.Context, host component.Host) error {
+func (p *ProcessorImpl) Start(ctx context.Context, host component.Host) error {
 	return nil
 }
 
-func (p *processorImpl) Shutdown(ctx context.Context) error {
+func (p *ProcessorImpl) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (p *processorImpl) Capabilities() consumer.Capabilities {
+func (p *ProcessorImpl) Capabilities() consumer.Capabilities {
 	return consumer.Capabilities{MutatesData: true}
 }
 
 // ConsumeMetrics processes incoming metrics and updates process importance scores.
-func (p *processorImpl) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
+func (p *ProcessorImpl) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -99,7 +99,7 @@ func (p *processorImpl) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) 
 	return p.next.ConsumeMetrics(ctx, md)
 }
 
-func (p *processorImpl) computeScores() {
+func (p *ProcessorImpl) computeScores() {
 	nodes := make(map[int]struct{})
 	for pid, parents := range p.edges {
 		nodes[pid] = struct{}{}
@@ -156,7 +156,7 @@ func (p *processorImpl) computeScores() {
 }
 
 // GetConfigStatus implements the UpdateableProcessor interface.
-func (p *processorImpl) GetConfigStatus(ctx context.Context) (interfaces.ConfigStatus, error) {
+func (p *ProcessorImpl) GetConfigStatus(ctx context.Context) (interfaces.ConfigStatus, error) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
@@ -170,7 +170,7 @@ func (p *processorImpl) GetConfigStatus(ctx context.Context) (interfaces.ConfigS
 }
 
 // OnConfigPatch implements the UpdateableProcessor interface.
-func (p *processorImpl) OnConfigPatch(ctx context.Context, patch interfaces.ConfigPatch) error {
+func (p *ProcessorImpl) OnConfigPatch(ctx context.Context, patch interfaces.ConfigPatch) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -201,7 +201,7 @@ func (p *processorImpl) OnConfigPatch(ctx context.Context, patch interfaces.Conf
 }
 
 // GetScores returns the current importance scores.
-func (p *processorImpl) GetScores() map[int]float64 {
+func (p *ProcessorImpl) GetScores() map[int]float64 {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 	out := make(map[int]float64, len(p.scores))

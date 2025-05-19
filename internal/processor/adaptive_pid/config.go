@@ -4,8 +4,6 @@ package adaptive_pid
 
 import (
 	"fmt"
-	
-	"go.opentelemetry.io/collector/component"
 )
 
 // Config defines the configuration for the pid_decider processor.
