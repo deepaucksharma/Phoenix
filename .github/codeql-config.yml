@@ -1,0 +1,34 @@
+# CodeQL Configuration
+# See https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning
+
+paths:
+  - 'cmd'
+  - 'internal'
+  - 'pkg'
+
+paths-ignore:
+  - '**/testdata/**'
+  - '**/*_test.go'
+  - 'test/**'
+  - 'examples/**'
+  - 'deploy/**'
+  - 'docs/**'
+
+# Focus on security queries only for faster analysis
+query-filters:
+  - exclude:
+      tags contain: 'maintainability'
+  - exclude:
+      tags contain: 'correctness'
+  - exclude:
+      tags contain: 'complexity'
+  - exclude:
+      tags contain: 'readability'
+  - exclude:
+      tags contain: 'best-practices'
+      
+# Disable non-essential query suites
+disable-default-queries: true
+
+queries:
+  - uses: security
