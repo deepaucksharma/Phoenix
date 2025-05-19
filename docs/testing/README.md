@@ -30,10 +30,19 @@ Chaos scenarios and security review scripts live in `test/chaos/`.
 - `security_review.sh` runs `gosec` and `govulncheck` to highlight potential
   vulnerabilities.
 
-Execute the suite:
+The chaos suite includes several scenarios:
+
+- Configuration oscillation
+- Process explosion
+- Cardinality bomb
+- Resource starvation
+- Network partition
+- Out-of-memory stress
+
+Execute the suite with optional environment and duration flags (defaults shown):
 
 ```bash
-go run test/chaos/chaos_suite.go
+go run test/chaos/chaos_suite.go --env docker --duration 30m
 ```
 
 Run a security review:
