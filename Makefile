@@ -41,6 +41,7 @@ test-coverage:
 # Run benchmarks
 benchmark:
 	@echo "Running benchmarks..."
+	@go test -bench=. -benchmem ./test/benchmark/...
 	@go test -bench=. -benchmem ./test/benchmarks/...
 
 # Clean build artifacts
