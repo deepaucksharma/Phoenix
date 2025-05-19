@@ -20,14 +20,14 @@ import (
 
 // mockHost implements a minimal component.Host for testing
 type mockHost struct {
-	processors map[component.ID]component.Component
-	extensions map[component.ID]component.Component
+	processors map[component.ID]interface{} // Using interface{} instead of component.Component
+	extensions map[component.ID]extension.Extension
 }
 
 func newMockHost() *mockHost {
 	return &mockHost{
-		processors: make(map[component.ID]component.Component),
-		extensions: make(map[component.ID]component.Component),
+		processors: make(map[component.ID]interface{}),
+		extensions: make(map[component.ID]extension.Extension),
 	}
 }
 
@@ -35,41 +35,33 @@ func (h *mockHost) ReportFatalError(err error) {
 	// Do nothing in tests
 }
 
-func (h *mockHost) GetFactory(kind component.Kind, id component.ID) component.Factory {
+func (h *mockHost) GetFactory(kind component.Kind, id component.Type) component.Factory {
 	return nil
 }
 
-func (h *mockHost) GetExtensions() map[component.ID]component.Extension {
-	extensions := make(map[component.ID]component.Extension)
-	for id, ext := range h.extensions {
-		extensions[id] = ext.(component.Extension)
-	}
-	return extensions
+func (h *mockHost) GetExtensions() map[component.ID]extension.Extension {
+	return h.extensions
 }
 
-func (h *mockHost) GetExporters() map[component.DataType]map[component.ID]component.Component {
+func (h *mockHost) GetExporters() map[component.Type]map[component.ID]component.Component {
 	return nil
 }
 
-func (h *mockHost) GetProcessors() map[component.ID]component.Processor {
-	processors := make(map[component.ID]component.Processor)
-	for id, proc := range h.processors {
-		processors[id] = proc.(component.Processor)
-	}
-	return processors
+// We'll return the inner components as a map of interfaces since component.Processor is no longer accessible
+func (h *mockHost) GetProcessors() map[component.ID]interface{} {
+	return h.processors
 }
 
-func (h *mockHost) AddProcessor(id component.ID, processor component.Component) {
+func (h *mockHost) AddProcessor(id component.ID, processor interface{}) {
 	h.processors[id] = processor
 }
 
-func (h *mockHost) AddExtension(id component.ID, extension component.Component) {
-	h.extensions[id] = extension
+func (h *mockHost) AddExtension(id component.ID, ext extension.Extension) {
+	h.extensions[id] = ext
 }
 
 // mockProcessor implements a minimal UpdateableProcessor for testing
 type mockProcessor struct {
-	component.Component
 	interfaces.UpdateableProcessor
 	
 	enabled       bool
@@ -163,14 +155,16 @@ pic_control_config:
 	
 	// Create the extension
 	ctx := context.Background()
-	settings := extension.CreateSettings{
+	settings := extension.Settings{
 		TelemetrySettings: component.TelemetrySettings{
 			Logger: zap.NewNop(),
 		},
-		ID: component.NewID("pic_control"),
+		ID: component.NewID(component.MustNewType("pic_control")),
 	}
 	
-	ext, err := factory.CreateExtension(ctx, settings, cfg)
+	// Use the factory's method to create the extension
+	createExtension := factory.(extension.Factory).WithExtensions()
+	ext, err := createExtension(ctx, settings, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, ext)
 	
@@ -182,7 +176,7 @@ pic_control_config:
 	host := newMockHost()
 	
 	// Add a mock processor
-	procID := component.NewID("priority_tagger")
+	procID := component.NewID(component.MustNewType("priority_tagger"))
 	mockProc := newMockProcessor()
 	host.AddProcessor(procID, mockProc)
 	
