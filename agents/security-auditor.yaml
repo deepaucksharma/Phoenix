@@ -11,3 +11,4 @@ blocked_files:
   - cmd/**
   - internal/**
   - pkg/**
+

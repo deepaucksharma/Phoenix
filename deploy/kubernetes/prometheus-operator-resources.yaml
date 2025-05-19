@@ -49,7 +49,7 @@ spec:
             "datasource": "Prometheus",
             "enable": true,
             "expr": "changes(aemf_decision_patch_applied_total[1m]) > 0",
-            "iconColor": "#73BF69",
+            "iconColor": "# 73BF69",
             "name": "Configuration Changes",
             "showIn": 0,
             "tagKeys": "target_processor,parameter_path",
@@ -247,3 +247,4 @@ spec:
       annotations:
         summary: "SA-OMF high configuration change rate"
         description: "SA-OMF collector is making configuration changes at a high rate. Check for oscillations."
+

@@ -1,0 +1,67 @@
+id: HLL-003
+title: "Add serialization support to HyperLogLog"
+state: open
+priority: low
+created_at: "2025-05-20"
+assigned_to: "implementer"
+area: pkg/util/hll
+depends_on: []
+acceptance:
+  - "Methods for marshaling/unmarshaling HyperLogLog state"
+  - "Support for binary and JSON formats"
+  - "Cross-version compatibility considerations"
+  - "Error handling for malformed data"
+  - "Tests verify serialization correctness"
+description: |
+  The current HyperLogLog implementation doesn't provide serialization support,
+  making it impossible to persist or transmit HLL state between processes.
+  This task requires adding marshaling/unmarshaling capabilities to the HyperLogLog
+  implementation.
+  
+  The implementation should:
+  
+  1. Add binary serialization:
+     - Method to marshal HLL state to binary format
+     - Method to unmarshal HLL state from binary format
+     - Efficient encoding to minimize size
+     - Version information for future compatibility
+  
+  2. Add JSON serialization:
+     - Method to marshal HLL state to JSON format
+     - Method to unmarshal HLL state from JSON format
+     - Human-readable format for debugging
+  
+  3. Handle error cases:
+     - Malformed input data
+     - Version incompatibilities
+     - Precision mismatches
+  
+  4. Ensure cross-version compatibility:
+     - Include format version in serialized data
+     - Document compatibility guarantees
+     - Handle upgrading from older formats
+  
+  Example API additions:
+  ```go
+  // MarshalBinary implements encoding.BinaryMarshaler
+  func (h *HyperLogLog) MarshalBinary() ([]byte, error)
+  
+  // UnmarshalBinary implements encoding.BinaryUnmarshaler
+  func (h *HyperLogLog) UnmarshalBinary(data []byte) error
+  
+  // MarshalJSON implements json.Marshaler
+  func (h *HyperLogLog) MarshalJSON() ([]byte, error)
+  
+  // UnmarshalJSON implements json.Unmarshaler
+  func (h *HyperLogLog) UnmarshalJSON(data []byte) error
+  ```
+  
+  Binary format specification:
+  1. 1 byte: Format version (start with 1)
+  2. 1 byte: Precision
+  3. 4 bytes: Number of registers (m)
+  4. m bytes: Register values
+  
+  The implementation should be thoroughly tested with various precision values,
+  register states, and error conditions. It should also include documentation
+  on the serialization formats and compatibility guarantees.

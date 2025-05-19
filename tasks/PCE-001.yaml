@@ -1,0 +1,51 @@
+id: PCE-001
+title: "Implement comprehensive tests for PIC Control Extension"
+state: open
+priority: critical
+created_at: "2025-05-20"
+assigned_to: "tester"
+area: test/extensions/pic_control_ext
+depends_on: []
+acceptance:
+  - "Test coverage is at least 80% for all core functionality"
+  - "Tests verify policy loading, watching, and application"
+  - "Tests verify proper patch management including validation, rate limiting, and application"
+  - "Tests verify safe mode activation and recovery"
+  - "Tests verify OpAMP client integration"
+  - "Mock processors are implemented for testing interactions"
+description: |
+  The PIC Control Extension is a critical component of the SA-OMF system, providing
+  centralized configuration management and policy enforcement. However, the current
+  tests are disabled with no implementation (extension_test.go), leaving critical
+  functionality unverified.
+  
+  This task requires implementing comprehensive tests for all aspects of the 
+  PIC Control Extension, including:
+  
+  1. Policy management
+     - Loading policy files from disk
+     - Watching for policy file changes
+     - Applying initial policy configurations to processors
+     - Validating policy content
+  
+  2. Configuration patch management
+     - Validating patches
+     - Applying rate limiting
+     - Managing patch cooldown periods
+     - Applying patches to target processors
+     - Handling error conditions
+  
+  3. Safe mode operations
+     - Activating safe mode
+     - Applying safe mode configurations
+     - Exiting safe mode
+     - Rejecting patches during safe mode
+  
+  4. OpAMP integration
+     - Secure client communication
+     - Policy and patch fetching
+     - Status reporting
+  
+  The tests should be implemented in test/extensions/pic_control_ext/extension_test.go 
+  and should follow the testing patterns used elsewhere in the project. Mock processors
+  should be created to test the interaction between the extension and processors.

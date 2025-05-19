@@ -1,0 +1,50 @@
+id: PCE-004
+title: "Implement bounded patch history in PIC Control Extension"
+state: open
+priority: medium
+created_at: "2025-05-20"
+assigned_to: "implementer"
+area: internal/extension/pic_control_ext
+depends_on: []
+acceptance:
+  - "Patch history is properly bounded with a configurable limit"
+  - "Memory usage remains constant regardless of operation time"
+  - "Oldest patches are properly evicted when the limit is reached"
+  - "Performance impact of patch history management is minimal"
+  - "Patch history operations are thread-safe"
+description: |
+  The PIC Control Extension currently keeps a history of applied patches with
+  a simple limit of 100 entries (extension.go:297-302). While there is a limit
+  in place, the implementation is not optimal and could be improved to use a
+  proper circular buffer or more efficient data structure.
+  
+  This task requires improving the patch history implementation to:
+  
+  1. Use a more efficient data structure (e.g., circular buffer)
+  2. Make the history size configurable in the extension configuration
+  3. Ensure thread safety for all history operations
+  4. Optimize memory usage and avoid unnecessary allocations
+  5. Add proper documentation for the history feature
+  
+  Current implementation:
+  ```go
+  // Record patch in history
+  e.patchHistory = append(e.patchHistory, patch)
+  if len(e.patchHistory) > 100 {
+      // Keep last 100 patches
+      e.patchHistory = e.patchHistory[len(e.patchHistory)-100:]
+  }
+  ```
+  
+  The new implementation should:
+  1. Create a dedicated type for patch history with proper encapsulation
+  2. Use an efficient data structure that doesn't require slice reallocation
+  3. Add configuration options for history size
+  4. Consider adding time-based cleanup in addition to count-based
+  5. Ensure all operations are O(1) where possible
+  
+  The implementation should also consider adding methods to query the patch
+  history for auditing and debugging purposes, such as:
+  - GetPatchHistory() to retrieve the entire history
+  - GetPatchByID(id string) to retrieve a specific patch
+  - GetPatchesByProcessor(id component.ID) to retrieve patches for a specific processor

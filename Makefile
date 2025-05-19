@@ -87,9 +87,13 @@ lint:
 	@echo "Running linter..."
 	@if ! command -v golangci-lint &> /dev/null; then \
 		echo "golangci-lint not found, installing..."; \
-		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
+		go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.55.2; \
 	fi
-	@golangci-lint run ./...
+	@echo "Running golangci-lint..."
+	@golangci-lint run \
+		--timeout=5m \
+		--config=.golangci.yml \
+		./...
 
 # Generate mocks for testing
 mocks:
@@ -166,13 +170,13 @@ dev-setup:
 		echo "golangci-lint already installed."; \
 	else \
 		echo "Installing golangci-lint..."; \
-		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
+		go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.55.2; \
 	fi
 	@if command -v mockgen &> /dev/null; then \
 		echo "mockgen already installed."; \
 	else \
 		echo "Installing mockgen..."; \
-		go install github.com/golang/mock/mockgen@latest; \
+		go install github.com/golang/mock/mockgen@v1.6.0; \
 	fi
 	@echo "Development environment set up."
 

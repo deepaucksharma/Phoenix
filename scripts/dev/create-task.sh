@@ -17,6 +17,7 @@ function show_usage() {
 }
 
 # Default values
+
 ROLE=""
 PRIORITY="medium"
 AREA=""
@@ -24,6 +25,7 @@ PREFIX="PID"
 SEQUENTIAL=false
 
 # Parse command line arguments
+
 if [ $# -lt 1 ]; then
   show_usage
 fi
@@ -32,6 +34,7 @@ TITLE="$1"
 shift
 
 # Process options
+
 for arg in "$@"; do
   case $arg in
     --role=*)
@@ -77,6 +80,7 @@ for arg in "$@"; do
 done
 
 # Generate task ID
+
 if [ "$SEQUENTIAL" = true ]; then
   # Find the highest task number for the given prefix
   HIGHEST_NUM=0
@@ -99,9 +103,11 @@ else
 fi
 
 # Ensure tasks directory exists
+
 mkdir -p tasks
 
 # Create the task file
+
 cat > "tasks/$ID.yaml" << EOL
 id: $ID
 title: "$TITLE"
@@ -122,6 +128,7 @@ EOL
 echo "Created tasks/$ID.yaml"
 
 # If any important fields are missing, remind the user
+
 MISSING=""
 if [ -z "$ROLE" ]; then MISSING="$MISSING\n- Set the assigned_to field"; fi
 if [ -z "$AREA" ]; then MISSING="$MISSING\n- Set the area field"; fi
@@ -133,6 +140,7 @@ if [ -n "$MISSING" ]; then
 fi
 
 # Open the file in an editor if available
+
 if [ -n "$EDITOR" ]; then
   $EDITOR "tasks/$ID.yaml"
 elif command -v nano >/dev/null 2>&1; then

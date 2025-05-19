@@ -1,0 +1,78 @@
+id: HLL-001
+title: "Add performance documentation for HyperLogLog implementation"
+state: open
+priority: low
+created_at: "2025-05-20"
+assigned_to: "doc-writer"
+area: pkg/util/hll
+depends_on: []
+acceptance:
+  - "Documentation explains memory-precision tradeoffs"
+  - "Performance characteristics are documented"
+  - "Precision selection guidance is provided"
+  - "Memory usage estimates are included"
+  - "Examples for different use cases are provided"
+description: |
+  The HyperLogLog implementation is missing performance documentation, which
+  makes it difficult for users to choose optimal precision for their use case.
+  This task requires adding detailed performance documentation to help users
+  understand the tradeoffs.
+  
+  The documentation should include:
+  
+  1. Memory-precision tradeoffs:
+     - Explain how precision affects memory usage (2^precision registers)
+     - Provide memory usage estimates for different precision values
+     - Explain how precision affects estimation accuracy
+  
+  2. Performance characteristics:
+     - Time complexity for Add operations
+     - Time complexity for Count operations
+     - Time complexity for Merge operations
+     - Performance considerations for high cardinality sets
+  
+  3. Precision selection guidance:
+     - Guidelines for selecting precision based on expected cardinality
+     - Guidelines for selecting precision based on memory constraints
+     - Guidelines for selecting precision based on accuracy requirements
+     - Recommended precision for common use cases
+  
+  4. Example scenarios:
+     - Low-memory, moderate-accuracy scenario
+     - High-accuracy, high-memory scenario
+     - Balanced approach for typical use cases
+  
+  The documentation should be added to:
+  1. Package documentation at the top of hyperloglog.go
+  2. README.md file in the pkg/util/hll directory
+  3. Function documentation for New, NewDefault, and other key functions
+  
+  Example package documentation to add:
+  ```go
+  // Package hll implements the HyperLogLog algorithm for cardinality estimation.
+  // HyperLogLog is a probabilistic data structure used to estimate the number of
+  // unique elements in a multiset with minimal memory usage.
+  //
+  // Memory Usage:
+  // The memory usage of HyperLogLog is determined by the precision parameter:
+  // - Memory = 2^precision bytes (each register is 1 byte)
+  // - For precision=10: ~1KB memory usage
+  // - For precision=14: ~16KB memory usage
+  // - For precision=16: ~64KB memory usage
+  //
+  // Accuracy:
+  // The standard error of HyperLogLog is approximately 1.04/sqrt(2^precision):
+  // - For precision=10: ~3.25% error
+  // - For precision=14: ~0.81% error
+  // - For precision=16: ~0.4% error
+  //
+  // Performance:
+  // - Add: O(1) time complexity
+  // - Count: O(2^precision) time complexity
+  // - Merge: O(2^precision) time complexity
+  //
+  // Precision Selection:
+  // - For most use cases, precision=10 to precision=14 provides a good balance
+  // - For memory-constrained environments, use lower precision (4-8)
+  // - For high-accuracy requirements, use higher precision (14-16)
+  ```

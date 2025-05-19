@@ -1,0 +1,68 @@
+id: PCE-005
+title: "Implement metrics collection in PIC Control Extension"
+state: open
+priority: medium
+created_at: "2025-05-20"
+assigned_to: "implementer"
+area: internal/extension/pic_control_ext
+depends_on: []
+acceptance:
+  - "Metrics are emitted for all key operations (patches, safe mode, policy updates)"
+  - "Metrics use standard OpenTelemetry format"
+  - "Metrics are properly documented"
+  - "Metric collection has minimal performance impact"
+  - "Tests verify metric emission"
+description: |
+  The PIC Control Extension has a commented-out metrics implementation
+  (extension.go:146-154) that needs to be completed. This limits observability
+  of the extension's behavior, making it difficult to monitor and troubleshoot
+  in production environments.
+  
+  This task requires implementing comprehensive metrics collection for the
+  extension, including:
+  
+  1. Patch management metrics:
+     - Total patches processed
+     - Patches rejected (by reason)
+     - Patches applied successfully
+     - Patch rate (patches per minute)
+     - Patch latency (time to apply)
+  
+  2. Policy management metrics:
+     - Policy load count
+     - Policy validation errors
+     - Policy application errors
+     - Policy load latency
+  
+  3. Safe mode metrics:
+     - Safe mode activation count
+     - Time spent in safe mode
+     - Reason for safe mode activation
+  
+  4. Resource usage metrics:
+     - Memory usage for patch history
+     - Memory usage for policy
+  
+  Current commented-out implementation:
+  ```go
+  // Set up metrics
+  // This needs a concrete implementation of metric.MeterProvider
+  // We'll leave this commented for now
+  /*
+      metricProvider := host.GetExtensions()[component.MustNewID("prometheus")]
+      if metricProvider != nil {
+          e.metrics = metrics.NewMetricsEmitter(metricProvider.(metric.MeterProvider).Meter("pic_control"),
+                                             "pic_control", component.MustNewID(typeStr))
+      }
+  */
+  ```
+  
+  The implementation should:
+  1. Use the OpenTelemetry metrics API
+  2. Follow the project's metric naming conventions
+  3. Include appropriate attributes for filtering/grouping
+  4. Support proper aggregation for monitoring
+  5. Be documented for users who want to set up alerts or dashboards
+  
+  The metrics should be implemented in a way that minimizes performance impact,
+  particularly for high-throughput scenarios.

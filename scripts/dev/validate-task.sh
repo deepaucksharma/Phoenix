@@ -4,6 +4,7 @@
 set -e
 
 # Check if a file is provided
+
 if [ -z "$1" ]; then
   echo "Error: No task file provided"
   echo "Usage: $0 <task_file.yaml>"
@@ -13,12 +14,14 @@ fi
 TASK_FILE="$1"
 
 # Check if file exists
+
 if [ ! -f "$TASK_FILE" ]; then
   echo "Error: File $TASK_FILE does not exist"
   exit 1
 fi
 
 # Check if yq is installed
+
 if ! command -v yq &> /dev/null; then
   echo "Warning: yq is not installed, falling back to basic validation"
   

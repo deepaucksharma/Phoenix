@@ -1,0 +1,83 @@
+id: PID-003
+title: "Improve error handling in PID controller methods"
+state: open
+priority: low
+created_at: "2025-05-20"
+assigned_to: "implementer"
+area: internal/control/pid
+depends_on: []
+acceptance:
+  - "Methods return errors for invalid inputs"
+  - "Error messages are clear and actionable"
+  - "Backward compatibility is maintained where possible"
+  - "Tests verify error handling behavior"
+  - "Documentation updated to reflect error handling"
+description: |
+  The current PID controller implementation silently fails for invalid inputs
+  in methods like SetOutputLimits and SetAntiWindupGain. This makes it difficult
+  to debug issues and can lead to unexpected behavior. This task requires improving
+  error handling to return meaningful errors when invalid inputs are provided.
+  
+  Methods to update:
+  
+  1. SetOutputLimits:
+  ```go
+  // SetOutputLimits sets the minimum and maximum output values
+  func (c *Controller) SetOutputLimits(min, max float64) {
+      c.lock.Lock()
+      defer c.lock.Unlock()
+      
+      if min >= max {
+          return // Invalid limits - silently fails
+      }
+      
+      c.outputMin = min
+      c.outputMax = max
+  }
+  ```
+  
+  2. SetAntiWindupGain:
+  ```go
+  // SetAntiWindupGain sets the gain for anti-windup back-calculation
+  // Higher values lead to faster integral recovery when output is saturated
+  func (c *Controller) SetAntiWindupGain(gain float64) {
+      c.lock.Lock()
+      defer c.lock.Unlock()
+      
+      if gain < 0 {
+          return // Invalid gain - silently fails
+      }
+      
+      c.antiWindupGain = gain
+  }
+  ```
+  
+  The implementation should:
+  
+  1. Update method signatures to return error:
+  ```go
+  func (c *Controller) SetOutputLimits(min, max float64) error
+  func (c *Controller) SetAntiWindupGain(gain float64) error
+  ```
+  
+  2. Return clear error messages:
+  ```go
+  if min >= max {
+      return fmt.Errorf("invalid output limits: min (%f) must be less than max (%f)", min, max)
+  }
+  ```
+  
+  3. Consider backward compatibility:
+     - Add new methods with error returns
+     - Keep old methods for compatibility
+     - Mark old methods as deprecated
+  
+  4. Update tests to verify error handling:
+     - Test with valid inputs
+     - Test with invalid inputs
+     - Test with edge cases
+  
+  5. Update documentation to reflect error handling:
+     - Update function comments
+     - Update the PID controller documentation
+     - Update examples to show error handling

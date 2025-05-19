@@ -19,3 +19,4 @@ blocked_files:
   - AGENTS.md
   - .github/workflows/**
   - docs/adr/**
+

@@ -1,0 +1,71 @@
+id: AUDIT-004
+title: "Conduct comprehensive audit of Priority Tagger processor"
+state: open
+priority: medium
+created_at: "2025-05-20"
+assigned_to: "performance-engineer"
+area: internal/processor/priority_tagger
+depends_on: []
+acceptance:
+  - "Code quality assessment completed and documented"
+  - "Security vulnerabilities identified and documented"
+  - "Performance characteristics assessed"
+  - "Interface compliance verified"
+  - "Test coverage and quality evaluated"
+  - "Documentation completeness assessed"
+  - "Detailed audit report generated"
+  - "Tasks created for all identified issues"
+description: |
+  The Priority Tagger processor tags resources with priority levels based on
+  configurable rules, implementing regexp matching for process prioritization.
+  This processor is critical for effective resource filtering. This audit task
+  requires a comprehensive review of the component.
+  
+  The audit should include:
+  
+  1. Code Quality Assessment
+     - Review rule matching implementation
+     - Evaluate regexp usage and efficiency
+     - Assess priority assignment logic
+     - Check for proper resource management
+     - Verify thread safety and synchronization
+  
+  2. Security Review
+     - Identify potential security vulnerabilities
+     - Check for regexp injection vulnerabilities
+     - Verify input validation
+     - Assess performance DoS vulnerabilities
+     - Evaluate logging practices
+  
+  3. Performance Assessment
+     - Evaluate computational efficiency
+     - Assess memory usage
+     - Check for regexp optimization
+     - Verify scaling with number of rules
+     - Measure performance with complex regexps
+  
+  4. Interface Compliance
+     - Verify UpdateableProcessor implementation
+     - Check metric processing compliance
+     - Assess error propagation
+     - Verify thread safety and concurrency
+  
+  5. Test Evaluation
+     - Assess test coverage of rule matching
+     - Check for regexp edge cases
+     - Verify priority assignment testing
+     - Evaluate performance tests
+  
+  6. Documentation Review
+     - Evaluate rule configuration documentation
+     - Check for regexp guidelines
+     - Verify API documentation
+     - Assess operational documentation
+  
+  The audit should follow the process defined in /audit/AUDIT_AGENDA.md and result in:
+  1. A detailed audit report at /audit/components/processors/priority_tagger.md
+  2. Tasks created for each identified issue
+  3. Updates to the audit summary and dashboard
+  
+  This audit is important as the Priority Tagger processor determines which
+  resources receive priority treatment throughout the processing pipeline.

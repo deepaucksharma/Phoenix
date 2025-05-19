@@ -40,12 +40,90 @@ phoenix/
 │   └── policy/          # Policy schema
 ├── test/                # Test framework
 ├── docs/                # Documentation
-│   └── adr/             # Architecture Decision Records
+│   └── architecture/    # Architecture documentation
+│     └── adr/           # Architecture Decision Records
 ├── scripts/             # Development scripts
 ├── deploy/              # Deployment files
 ├── tasks/               # Task definitions
 └── agents/              # Agent role definitions
-```## Adding New Components
+```
+
+## Core Technical Concepts
+
+### UpdateableProcessor Interface
+
+The UpdateableProcessor interface is the foundation of Phoenix's adaptive capabilities:
+
+```go
+// UpdateableProcessor defines the interface for processors that can be dynamically reconfigured
+type UpdateableProcessor interface {
+    component.Component // Embed standard component interface
+
+    // OnConfigPatch applies a configuration change.
+    // Returns error if patch cannot be applied.
+    OnConfigPatch(ctx context.Context, patch ConfigPatch) error
+
+    // GetConfigStatus returns the current effective configuration.
+    GetConfigStatus(ctx context.Context) (ConfigStatus, error)
+}
+```
+
+Key implementation requirements:
+- Validate incoming parameter values
+- Apply changes safely, using appropriate locks
+- Update internal state correctly
+- Return appropriate errors for invalid patches
+- Report status accurately
+- Maintain thread safety
+
+### ConfigPatch Mechanism
+
+The ConfigPatch mechanism enables dynamic reconfiguration:
+
+```go
+// ConfigPatch defines a proposed change to a processor's configuration
+type ConfigPatch struct {
+    PatchID             string       // Unique ID for this patch attempt
+    TargetProcessorName component.ID  // Name of the processor to update
+    ParameterPath       string       // Dot-separated path to the parameter
+    NewValue            any          // The new value for the parameter
+    PrevValue           any          // Previous value (for rollback)
+    Reason              string       // Why this patch is proposed
+    Severity            string       // normal|urgent|safety
+    Source              string       // pid_decider|opamp|manual
+    Timestamp           int64        // When this patch was created
+    TTLSeconds          int          // Time-to-live for this patch
+}
+```
+
+The patch lifecycle includes:
+1. Patch Creation (by adaptive_pid processor or manually)
+2. Patch Validation (by pic_control extension)
+3. Patch Application (via target processor's OnConfigPatch method)
+4. Patch Monitoring (success/failure metrics and logging)
+
+### PID Controller Guidelines
+
+PID controllers should be tuned with care:
+
+- **Proportional Term (P)**:
+  - Determines immediate response strength to error
+  - Higher Kp values give stronger response
+  - Too high: causes oscillation; Too low: sluggish response
+   
+- **Integral Term (I)**:
+  - Eliminates steady-state error over time
+  - Higher Ki values correct steady-state error faster
+  - Too high: overshoot and oscillation; Too low: slow correction
+   
+- **Derivative Term (D)**:
+  - Dampens oscillations and improves stability
+  - Higher Kd values give stronger response to error changes
+  - Too high: noise sensitivity; Too low: inadequate dampening
+
+All PID controllers should include anti-windup protection to prevent integral term accumulation when output is saturated.
+
+## Adding New Components
 
 To add a new processor, extension, or connector:
 
@@ -61,6 +139,30 @@ To add a new processor, extension, or connector:
 
 3. Implement the required functionality in the generated files.
 
+## Component Implementation Standards
+
+When implementing new components:
+
+1. **Processors Must**:
+   - Implement the UpdateableProcessor interface for adaptive processors
+   - Extend BaseProcessor for common functionality
+   - Include proper telemetry with metrics and traces
+   - Implement thread-safe configuration changes
+   - Handle edge cases and failure modes gracefully
+
+2. **Processors Should Be**:
+   - Stateless where possible (or handle state carefully)
+   - Designed for performance and minimal resource usage
+   - Well-documented with clear configuration options
+   - Thoroughly tested with unit and benchmark tests
+
+3. **Control Components Must**:
+   - Validate inputs thoroughly
+   - Implement safety boundaries
+   - Log actions and decisions
+   - Support monitoring and observability
+   - Handle failure modes gracefully
+
 ## Naming Conventions
 
 - Use snake_case for package names and file names
@@ -75,12 +177,39 @@ To add a new processor, extension, or connector:
 - Processors must have benchmarks
 - Integration tests must be added for new features
 - Coverage should be maintained above 60%
+- Use the processor_test_template.go for consistent testing structure
+- Test UpdateableProcessor compliance with interfaces/updateable_processor_test.go
+- For control components, use testutils/pid_helper.go to test PID behavior
+
+## Configuration Standards
+
+Follow these standards for configuration:
+
+- Define configuration in a struct with yaml/json tags
+- Validate configuration values during component creation
+- Provide sensible defaults for all configuration parameters
+- Include documentation for each configuration field
+- Follow the same naming style as existing configurations
+
+Example:
+```go
+// Config defines the configuration for the adaptive_topk processor
+type Config struct {
+    KValue         int     `mapstructure:"k_value"`
+    KMin           int     `mapstructure:"k_min"`
+    KMax           int     `mapstructure:"k_max"`
+    CoverageTarget float64 `mapstructure:"coverage_target"`
+    Enabled        bool    `mapstructure:"enabled"`
+}
+```
 
 ## Documentation Requirements
 
 - All public APIs must be documented
 - Major design decisions must be recorded in ADRs
 - Configuration options must be documented
+- Update component documentation in /docs/components/ for new features
+- Include examples of configuration in documentation
 
 ## Reviewing Code
 
@@ -108,7 +237,9 @@ Use consistent branch naming:
 - `feature/description` for new features
 - `fix/description` for bug fixes
 - `refactor/description` for refactoring
-- `docs/description` for documentation changes## Commit Messages
+- `docs/description` for documentation changes
+
+## Commit Messages
 
 Follow the Conventional Commits specification:
 
@@ -131,4 +262,9 @@ Where `type` is one of:
 
 ## Getting Help
 
-If you're unsure about something, refer to existing code as examples, check the ADRs, or ask for clarification in the PR description.
+If you're unsure about something:
+- Refer to existing code as examples
+- Check the ADRs
+- Read the CONSOLIDATED_AGENTS.md file
+- Look at implementation notes in component READMEs
+- Ask for clarification in the PR description

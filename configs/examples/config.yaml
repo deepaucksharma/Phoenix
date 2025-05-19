@@ -72,3 +72,4 @@ service:
       exporters: [pic_connector, logging]
   
   extensions: [pic_control]
+

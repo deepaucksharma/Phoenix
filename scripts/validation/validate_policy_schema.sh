@@ -4,6 +4,7 @@
 set -e
 
 # Find all policy.yaml files in the repository
+
 POLICY_FILES=$(find . -name "policy.yaml" -o -name "*policy*.yaml")
 
 if [ -z "$POLICY_FILES" ]; then
@@ -12,6 +13,7 @@ if [ -z "$POLICY_FILES" ]; then
 fi
 
 # Check if the validation tool exists
+
 VALIDATOR="hack/validate_policy.go"
 if [ ! -f "$VALIDATOR" ]; then
   echo "Policy validator not found at $VALIDATOR."

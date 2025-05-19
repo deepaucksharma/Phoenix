@@ -1,0 +1,61 @@
+id: PCE-003
+title: "Implement policy file permission checking in PIC Control Extension"
+state: open
+priority: medium
+created_at: "2025-05-20"
+assigned_to: "security-auditor"
+area: internal/extension/pic_control_ext
+depends_on: []
+acceptance:
+  - "Policy files are checked for appropriate permissions before loading"
+  - "Error messages clearly indicate permission issues"
+  - "Documentation explains required permissions"
+  - "Tests verify permission checking behavior"
+  - "System fails securely when permissions are incorrect"
+description: |
+  The PIC Control Extension currently loads policy files without checking file
+  permissions, which could allow reading policies from insecure locations. This
+  task requires implementing proper permission checking for policy files.
+  
+  The implementation should:
+  
+  1. Check file permissions before loading policy files:
+     - Verify the file is owned by an appropriate user
+     - Verify the file does not have overly permissive mode settings
+     - Verify the file is in an approved directory
+  
+  2. Return clear error messages when permission checks fail:
+     - Indicate the specific permission issue
+     - Suggest remediation steps
+     - Use appropriate logging level (error)
+  
+  3. Document the required permissions:
+     - In code comments
+     - In the extension documentation
+     - In operational guides
+  
+  4. Implement tests for permission checking:
+     - Test with correct permissions
+     - Test with incorrect permissions
+     - Test with edge cases
+  
+  Current code in loadPolicy method that needs modification:
+  ```go
+  // loadPolicy loads the policy from a file
+  func (e *Extension) loadPolicy(filename string) error {
+      newPolicy, err := policy.LoadPolicy(filename)
+      if err != nil {
+          return err
+      }
+
+      e.policy = newPolicy
+
+      // Apply initial processor configurations from policy
+      return e.applyPolicyConfig()
+  }
+  ```
+  
+  The updated code should check permissions before calling policy.LoadPolicy()
+  and handle permission errors appropriately. It should fail securely when
+  permissions are incorrect, preventing the loading of potentially compromised
+  policy files.

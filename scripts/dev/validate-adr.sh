@@ -4,9 +4,11 @@
 set -e
 
 # Find all ADR files
+
 ADR_FILES=$(find docs/adr -name "*.md")
 
 # Check each ADR
+
 for adr in $ADR_FILES; do
   echo "Checking $adr..."
   

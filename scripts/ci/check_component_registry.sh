@@ -23,11 +23,13 @@ find_dirs() {
 }
 
 # Get components
+
 PROCESSORS=($(find_dirs "internal/processor"))
 EXTENSIONS=($(find_dirs "internal/extension"))
 CONNECTORS=($(find_dirs "internal/connector"))
 
 # Get the module name from go.mod
+
 MODULE_NAME=$(grep "^module " go.mod | awk '{print $2}')
 if [ -z "$MODULE_NAME" ]; then
   MODULE_NAME="github.com/deepaucksharma/Phoenix" # Default fallback if not found
@@ -36,12 +38,14 @@ fi
 echo "Using module name: $MODULE_NAME"
 
 # Check if main file exists
+
 if [ ! -f "$MAIN_FILE" ]; then
   echo "Warning: Main file $MAIN_FILE does not exist or is not accessible. Skipping component checks."
   exit 0
 fi
 
 # Check each processor
+
 echo "Checking processor registration..."
 for proc in "${PROCESSORS[@]}"; do
   if [ -z "$proc" ]; then
@@ -58,6 +62,7 @@ for proc in "${PROCESSORS[@]}"; do
 done
 
 # Check each extension
+
 echo "Checking extension registration..."
 for ext in "${EXTENSIONS[@]}"; do
   if [ -z "$ext" ]; then
@@ -74,6 +79,7 @@ for ext in "${EXTENSIONS[@]}"; do
 done
 
 # Check each connector
+
 echo "Checking connector registration..."
 for conn in "${CONNECTORS[@]}"; do
   if [ -z "$conn" ]; then

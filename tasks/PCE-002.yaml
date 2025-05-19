@@ -1,0 +1,59 @@
+id: PCE-002
+title: "Implement proper processor discovery in PIC Control Extension"
+state: open
+priority: high
+created_at: "2025-05-20"
+assigned_to: "implementer"
+area: internal/extension/pic_control_ext
+depends_on: []
+acceptance:
+  - "Extension can discover and register all UpdateableProcessor instances"
+  - "Discovery works reliably across OTel component instantiation order"
+  - "Discovery mechanism is documented"
+  - "Discovery is tested with various processor configurations"
+  - "Edge cases (no processors, invalid processors) are handled gracefully"
+description: |
+  The PIC Control Extension currently has a placeholder implementation for processor
+  discovery (extension.go:204-213). This placeholder cannot find actual processors
+  in a real environment, which means the extension cannot function properly in production.
+  
+  This task requires implementing proper processor discovery to locate all components
+  that implement the UpdateableProcessor interface. The implementation should:
+  
+  1. Replace the placeholder implementation in registerProcessors()
+  2. Integrate with the OpenTelemetry Collector component system to discover processors
+  3. Handle processors that are added dynamically
+  4. Avoid dependency cycles or tight coupling with processor implementations
+  5. Document the discovery mechanism for future maintainers
+  
+  The discovery mechanism should be able to handle the following cases:
+  - All processor types that implement UpdateableProcessor
+  - Processors with different component IDs
+  - Processors that are added after the extension starts
+  - Edge cases such as no processors or invalid processors
+  
+  Related code snippet:
+  ```go
+  // registerProcessors finds and registers all UpdateableProcessor instances
+  func (e *Extension) registerProcessors() error {
+      if e.host == nil {
+          return fmt.Errorf("host not initialized")
+      }
+
+      // Note: The current implementation doesn't provide direct access to processors
+      // We'll use a placeholder method to simulate processor discovery
+      // This would be replaced with actual processor discovery in a production environment
+      
+      // Find processors from the host - this simulated code must be updated when a real solution
+      // for processor discovery is implemented
+      testProcessors := map[component.ID]interfaces.UpdateableProcessor{}
+      
+      // Simulated processors for testing
+      for id, proc := range testProcessors {
+          e.processors[id] = proc
+          e.GetLogger().Info("Registered updateable processor", zap.String("id", id.String()))
+      }
+
+      return nil
+  }
+  ```

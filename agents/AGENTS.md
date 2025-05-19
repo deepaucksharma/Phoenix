@@ -14,6 +14,8 @@ This document defines the roles, responsibilities, and boundaries for agents and
 | **Doc-Writer** | Create/update documentation | Technical writing, API documentation | Markdown files, diagrams, examples | Restricted to documentation areas |
 | **DevOps** | CI/CD, deployment | Pipeline maintenance, deployment scripts | Workflow files, scripts, Dockerfile updates | Focused on operational aspects |
 | **Integrator** | Merge PRs, resolve conflicts | Conflict resolution, release management | Merged PRs, release notes | Only merges approved PRs |
+| **Tester** | Create and maintain tests | Test development, validation framework | Test files, quality reports | Limited to test files, cannot modify core implementation |
+| **Dependabot** | Dependency management | Update dependencies | PR for dependency updates | Limited to package files, automated dependency updates only |
 
 ## Workflow
 
@@ -23,6 +25,7 @@ This document defines the roles, responsibilities, and boundaries for agents and
 
 2. **Implementation Phase**:
    - **Implementer** works on assigned tasks
+   - **Tester** creates or updates related tests
    - **Reviewer** validates the implementation
    - **Security-Auditor** checks for vulnerabilities
 
@@ -30,6 +33,7 @@ This document defines the roles, responsibilities, and boundaries for agents and
    - **Doc-Writer** updates documentation
    - **DevOps** ensures CI/CD works correctly
    - **Integrator** merges approved PRs
+   - **Dependabot** keeps dependencies up to date
 
 ## Collaboration Guidelines
 
@@ -41,7 +45,7 @@ This document defines the roles, responsibilities, and boundaries for agents and
 
 ## Technical Standards
 
-- Go version: 1.21+
+- Go version: 1.24+
 - Code style: Follow `golangci-lint` rules
 - Commit style: [Conventional Commits](https://www.conventionalcommits.org/)
 - PR process: Create branch → Implement → CI checks → Review → Merge
@@ -65,4 +69,14 @@ All major design decisions must be documented in Architecture Decision Records (
 Use provided scripts in the `scripts` directory:
 - `scripts/dev/new-component.sh` - Create a new component with proper boilerplate
 - `scripts/dev/new-adr.sh` - Create a new ADR
+- `scripts/dev/create-branch.sh` - Create a new branch with proper naming
+- `scripts/dev/create-task.sh` - Create a new task
 - `scripts/dev/validate-task.sh` - Validate a task specification
+
+## Further Information
+
+For more detailed information about agent roles, workflows, and decision frameworks, please refer to:
+
+- [CONSOLIDATED_AGENTS.md](./CONSOLIDATED_AGENTS.md) - Comprehensive guide with all roles, workflows, and decision frameworks
+- [AGENT_RAILS.md](./AGENT_RAILS.md) - Technical guidelines for agent implementation
+- [AGENT_METRICS.md](./AGENT_METRICS.md) - Metrics emitted by agents and monitoring guidelines

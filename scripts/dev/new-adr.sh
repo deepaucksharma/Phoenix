@@ -15,12 +15,14 @@ FILENAME="${DATE}-$(echo $TITLE | tr '[:upper:]' '[:lower:]' | tr ' ' '-').md"
 FULLPATH="docs/adr/$FILENAME"
 
 # Check if file already exists
+
 if [ -f "$FULLPATH" ]; then
   echo "Error: ADR already exists at $FULLPATH"
   exit 1
 fi
 
 # Create ADR file
+
 cat > "$FULLPATH" << EOL
 # $(echo $TITLE)
 

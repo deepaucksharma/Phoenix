@@ -4,13 +4,16 @@
 set -e
 
 # Create temporary directory for generated schemas
+
 mkdir -p .tmp/config-schemas
 
 # Generate JSON schemas from Config structs
+
 echo "Generating JSON schemas from Config structs..."
 go run hack/generate_config_schemas.go .tmp/config-schemas/
 
 # Validate config files against schemas
+
 echo "Validating config files against schemas..."
 for config_file in $(find ./config -name "*.yaml"); do
   component_name=$(basename "$config_file" .yaml)

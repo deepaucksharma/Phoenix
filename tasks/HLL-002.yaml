@@ -1,0 +1,71 @@
+id: HLL-002
+title: "Add configurable hash function support to HyperLogLog"
+state: open
+priority: low
+created_at: "2025-05-20"
+assigned_to: "implementer"
+area: pkg/util/hll
+depends_on: []
+acceptance:
+  - "Hash function is configurable via constructor option"
+  - "Multiple hash algorithm options are provided"
+  - "Default hash remains backward compatible"
+  - "Performance impact is minimal"
+  - "Documentation explains hash function choice"
+description: |
+  The current HyperLogLog implementation uses a fixed FNV hash function
+  (hyperloglog.go:158-162), which may not be optimal for all use cases.
+  This task requires making the hash function configurable to allow users
+  to choose the hash algorithm that best fits their needs.
+  
+  The implementation should:
+  
+  1. Define a hash function interface:
+     - Method to compute a hash from []byte input
+     - Method to compute a hash from string input
+  
+  2. Provide multiple hash algorithm implementations:
+     - FNV (current implementation, for backward compatibility)
+     - MurmurHash3 (good general-purpose hash)
+     - xxHash (fast hash with good distribution)
+  
+  3. Update constructor to accept hash function option:
+     - Default to FNV for backward compatibility
+     - Allow specifying custom hash function
+  
+  4. Update documentation to explain hash function choice:
+     - When to use each hash algorithm
+     - Performance characteristics
+     - Distribution quality
+  
+  Current code to modify:
+  ```go
+  // computeHash generates a 32-bit hash for the input data.
+  func computeHash(data []byte) uint32 {
+      h := fnv.New32a()
+      h.Write(data)
+      return h.Sum32()
+  }
+  ```
+  
+  Example new interface:
+  ```go
+  // HashFunc is the interface for hash functions used by HyperLogLog
+  type HashFunc interface {
+      // Hash computes a 32-bit hash for the input data
+      Hash(data []byte) uint32
+  }
+  
+  // FNVHash implements HashFunc using FNV-1a
+  type FNVHash struct{}
+  
+  // Hash implements HashFunc.Hash using FNV-1a
+  func (h FNVHash) Hash(data []byte) uint32 {
+      hasher := fnv.New32a()
+      hasher.Write(data)
+      return hasher.Sum32()
+  }
+  ```
+  
+  The constructor would be updated to accept a HashFunc, with a nil value
+  defaulting to FNVHash for backward compatibility.

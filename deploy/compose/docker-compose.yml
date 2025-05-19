@@ -20,4 +20,3 @@ services:
       - ../../configs/${CONFIG_ENV:-default}:/etc/sa-omf
     command: --config=/etc/sa-omf/config.yaml
     restart: unless-stopped
-EOF < /dev/null

@@ -16,30 +16,35 @@ TYPE=$1
 NAME=$2
 
 # Check for valid type
+
 if [[ "$TYPE" != "processor" && "$TYPE" != "extension" && "$TYPE" != "connector" ]]; then
   echo "Error: Type must be one of: processor, extension, connector"
   exit 1
 fi
 
 # Check for valid name format (snake_case)
+
 if ! [[ $NAME =~ ^[a-z]+(_[a-z]+)*$ ]]; then
   echo "Error: Name must be in snake_case format (e.g., adaptive_sampler)"
   exit 1
 fi
 
 # Convert snake_case to CamelCase
+
 CAMEL_NAME=""
 for part in ${NAME//_/ }; do
   CAMEL_NAME+="$(tr '[:lower:]' '[:upper:]' <<< ${part:0:1})${part:1}"
 done
 
 # Create directory structure
+
 DIR="internal/$TYPE/$NAME"
 mkdir -p "$DIR"
 
 echo "Creating component in $DIR"
 
 # Create factory.go
+
 cat > "$DIR/factory.go" << EOL
 // Package $NAME implements a $TYPE for the SA-OMF system.
 package $NAME
@@ -83,6 +88,7 @@ func create${CAMEL_NAME}(
 EOL
 
 # Create config.go
+
 cat > "$DIR/config.go" << EOL
 package $NAME
 
@@ -108,6 +114,7 @@ func (cfg *Config) Validate() error {
 EOL
 
 # Create implementation file based on type
+
 if [ "$TYPE" == "processor" ]; then
   cat > "$DIR/processor.go" << EOL
 package $NAME
@@ -300,6 +307,7 @@ EOL
 fi
 
 # Create test file
+
 cat > "$DIR/${NAME}_test.go" << EOL
 package $NAME
 
@@ -334,14 +342,17 @@ func Test${CAMEL_NAME}(t *testing.T) {
 EOL
 
 # Update main.go to register the new component
+
 MAIN_FILE="cmd/sa-omf-otelcol/main.go"
 
 # Add import if needed
+
 if ! grep -q "\"github.com/yourorg/sa-omf/internal/$TYPE/$NAME\"" $MAIN_FILE; then
   sed -i "/Add more component imports/i \\\t\"github.com/yourorg/sa-omf/internal/$TYPE/$NAME\"," $MAIN_FILE
 fi
 
 # Add factory to the appropriate section
+
 case $TYPE in
   processor)
     if ! grep -q "$NAME.NewFactory()" $MAIN_FILE; then

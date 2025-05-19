@@ -24,22 +24,28 @@ type Controller struct {
 	outputMin     float64     // Minimum output value
 	outputMax     float64     // Maximum output value
 	
+	// Anti-windup
+	antiWindupEnabled bool    // Whether anti-windup protection is enabled
+	antiWindupGain    float64 // Gain for anti-windup back-calculation
+	
 	lock          sync.Mutex  // For thread safety
 }
 
 // NewController creates a new PID controller with the specified gains
 func NewController(kp, ki, kd, setpoint float64) *Controller {
 	return &Controller{
-		kp:            kp,
-		ki:            ki,
-		kd:            kd,
-		setpoint:      setpoint,
-		lastError:     0,
-		integral:      0,
-		lastTime:      time.Now(),
-		integralLimit: 1000, // Default, can be changed with SetIntegralLimit
-		outputMin:     -1000,
-		outputMax:     1000,
+		kp:                kp,
+		ki:                ki,
+		kd:                kd,
+		setpoint:          setpoint,
+		lastError:         0,
+		integral:          0,
+		lastTime:          time.Now(),
+		integralLimit:     1000, // Default, can be changed with SetIntegralLimit
+		outputMin:         -1000,
+		outputMax:         1000,
+		antiWindupEnabled: true,  // Enable anti-windup by default
+		antiWindupGain:    1.0,   // Default gain for anti-windup
 	}
 }
 
@@ -110,10 +116,22 @@ func (c *Controller) Compute(currentValue float64) float64 {
 	// Calculate output
 	output := pTerm + iTerm + dTerm
 	
-	// Apply output limits
+	// Apply output limits and anti-windup if enabled
 	if output > c.outputMax {
+		// Anti-windup back-calculation when output is saturated at max
+		if c.antiWindupEnabled && c.ki != 0 {
+			// Reduce integral term based on saturation amount
+			saturationError := c.outputMax - output
+			c.integral += (saturationError * c.antiWindupGain) / c.ki
+		}
 		output = c.outputMax
 	} else if output < c.outputMin {
+		// Anti-windup back-calculation when output is saturated at min
+		if c.antiWindupEnabled && c.ki != 0 {
+			// Reduce integral term based on saturation amount
+			saturationError := c.outputMin - output
+			c.integral += (saturationError * c.antiWindupGain) / c.ki
+		}
 		output = c.outputMin
 	}
 	
@@ -156,4 +174,33 @@ func (c *Controller) GetState() (float64, float64, float64) {
 	defer c.lock.Unlock()
 	
 	return c.lastError, c.integral, c.setpoint
+}
+
+// SetAntiWindupEnabled enables or disables anti-windup protection
+func (c *Controller) SetAntiWindupEnabled(enabled bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	
+	c.antiWindupEnabled = enabled
+}
+
+// SetAntiWindupGain sets the gain for anti-windup back-calculation
+// Higher values lead to faster integral recovery when output is saturated
+func (c *Controller) SetAntiWindupGain(gain float64) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	
+	if gain < 0 {
+		return // Invalid gain
+	}
+	
+	c.antiWindupGain = gain
+}
+
+// GetAntiWindupSettings returns the current anti-windup settings
+func (c *Controller) GetAntiWindupSettings() (bool, float64) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	
+	return c.antiWindupEnabled, c.antiWindupGain
 }

@@ -159,7 +159,7 @@ func TestPIDOutputLimits(t *testing.T) {
 	assert.Equal(t, -5.0, output)
 }
 
-// TestPIDIntegralWindup tests integral windup prevention.
+// TestPIDIntegralWindup tests integral windup prevention using integral limits.
 func TestPIDIntegralWindup(t *testing.T) {
 	controller := pid.NewController(0.0, 1.0, 0.0, 100.0)
 	
@@ -186,6 +186,92 @@ func TestPIDIntegralWindup(t *testing.T) {
 	// Get internal state again
 	_, integral, _ = controller.GetState()
 	assert.GreaterOrEqual(t, integral, -10.0, "Integral should be limited on negative side too")
+}
+
+// TestPIDAntiWindupBackCalculation tests the anti-windup back-calculation mechanism.
+func TestPIDAntiWindupBackCalculation(t *testing.T) {
+	// Create two controllers with same parameters but different anti-windup settings
+	controllerWithAntiWindup := pid.NewController(1.0, 0.5, 0.0, 100.0)
+	controllerWithAntiWindup.SetOutputLimits(-5.0, 5.0)
+	
+	controllerNoAntiWindup := pid.NewController(1.0, 0.5, 0.0, 100.0)
+	controllerNoAntiWindup.SetOutputLimits(-5.0, 5.0)
+	controllerNoAntiWindup.SetAntiWindupEnabled(false)
+	
+	// Apply large error to both controllers to cause saturation
+	for i := 0; i < 10; i++ {
+		controllerWithAntiWindup.Compute(80.0)    // Error = 20, should saturate
+		controllerNoAntiWindup.Compute(80.0)      // Error = 20, should saturate
+		time.Sleep(10 * time.Millisecond)
+	}
+	
+	// Get integral terms
+	_, integralWithAntiWindup, _ := controllerWithAntiWindup.GetState()
+	_, integralNoAntiWindup, _ := controllerNoAntiWindup.GetState()
+	
+	// The anti-windup controller should have a smaller integral term due to back-calculation
+	assert.Less(t, integralWithAntiWindup, integralNoAntiWindup, 
+		"Controller with anti-windup should have smaller integral buildup")
+	
+	// Now, simulate the setpoint being reached and see how quickly output returns to normal range
+	// Both controllers will output their max initially
+	outputWithAntiWindup := controllerWithAntiWindup.Compute(100.0)    // Error = 0
+	outputNoAntiWindup := controllerNoAntiWindup.Compute(100.0)        // Error = 0
+	
+	// Both should still be saturated from the accumulated integral term
+	assert.Equal(t, 5.0, outputWithAntiWindup, "Controller with anti-windup should still be saturated")
+	assert.Equal(t, 5.0, outputNoAntiWindup, "Controller without anti-windup should still be saturated")
+	
+	// Now let's see how many iterations it takes for the controller with anti-windup to recover
+	iterationsToRecoverWithAntiWindup := 0
+	for i := 0; i < 100; i++ { // Set a reasonable upper limit
+		outputWithAntiWindup = controllerWithAntiWindup.Compute(100.0)
+		if outputWithAntiWindup < 5.0 { // No longer saturated
+			iterationsToRecoverWithAntiWindup = i + 1
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	
+	// Now check how many iterations for controller without anti-windup to recover
+	iterationsToRecoverNoAntiWindup := 0
+	for i := 0; i < 100; i++ { // Set a reasonable upper limit
+		outputNoAntiWindup = controllerNoAntiWindup.Compute(100.0)
+		if outputNoAntiWindup < 5.0 { // No longer saturated
+			iterationsToRecoverNoAntiWindup = i + 1
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	
+	// The controller with anti-windup should recover more quickly
+	t.Logf("Recovery iterations - With anti-windup: %d, Without: %d", 
+		iterationsToRecoverWithAntiWindup, iterationsToRecoverNoAntiWindup)
+	assert.Less(t, iterationsToRecoverWithAntiWindup, iterationsToRecoverNoAntiWindup, 
+		"Controller with anti-windup should recover from saturation more quickly")
+}
+
+// TestPIDAntiWindupGainConfiguration tests the configuration of anti-windup gain.
+func TestPIDAntiWindupGainConfiguration(t *testing.T) {
+	controller := pid.NewController(1.0, 0.5, 0.0, 100.0)
+	
+	// Default settings check
+	enabled, gain := controller.GetAntiWindupSettings()
+	assert.True(t, enabled, "Anti-windup should be enabled by default")
+	assert.Equal(t, 1.0, gain, "Default anti-windup gain should be 1.0")
+	
+	// Test changing settings
+	controller.SetAntiWindupEnabled(false)
+	controller.SetAntiWindupGain(2.5)
+	
+	enabled, gain = controller.GetAntiWindupSettings()
+	assert.False(t, enabled, "Anti-windup should be disabled after SetAntiWindupEnabled(false)")
+	assert.Equal(t, 2.5, gain, "Anti-windup gain should be 2.5 after SetAntiWindupGain(2.5)")
+	
+	// Test invalid gain (negative)
+	controller.SetAntiWindupGain(-1.0)
+	_, gain = controller.GetAntiWindupSettings()
+	assert.Equal(t, 2.5, gain, "Anti-windup gain should still be 2.5 after setting invalid value")
 }
 
 // TestPIDTimeIndependence tests behavior with different time intervals.

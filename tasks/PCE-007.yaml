@@ -1,0 +1,67 @@
+id: PCE-007
+title: "Implement policy schema validation in PIC Control Extension"
+state: open
+priority: medium
+created_at: "2025-05-20"
+assigned_to: "implementer"
+area: internal/extension/pic_control_ext
+depends_on: []
+acceptance:
+  - "Policy files are validated against a schema before loading"
+  - "Error messages clearly indicate validation failures"
+  - "Schema is documented and accessible to users"
+  - "Tests verify schema validation behavior"
+  - "Performance impact of validation is minimal"
+description: |
+  The PIC Control Extension currently lacks comprehensive validation of policy
+  content against a schema. This could allow invalid configurations to be applied,
+  potentially leading to system instability or security issues.
+  
+  This task requires implementing policy schema validation to ensure that policy
+  files conform to expected structure and constraints. The implementation should:
+  
+  1. Define a comprehensive JSON Schema for policy files:
+     - Define required fields and types
+     - Define constraints on values (min, max, pattern)
+     - Define allowed values for enumerated fields
+     - Include detailed descriptions for documentation
+  
+  2. Implement validation against the schema:
+     - Validate policy files before loading
+     - Return clear error messages for validation failures
+     - Include line and column information for errors
+     - Handle nested structures correctly
+  
+  3. Document the schema:
+     - Include the schema in the documentation
+     - Provide examples of valid and invalid policies
+     - Explain the purpose and constraints of each field
+  
+  4. Implement tests:
+     - Test with valid policies
+     - Test with invalid policies
+     - Test with edge cases
+     - Test with malformed JSON/YAML
+  
+  The validation should occur before policy.LoadPolicy() is called in the
+  loadPolicy method:
+  
+  ```go
+  // loadPolicy loads the policy from a file
+  func (e *Extension) loadPolicy(filename string) error {
+      // Add validation here
+      newPolicy, err := policy.LoadPolicy(filename)
+      if err != nil {
+          return err
+      }
+
+      e.policy = newPolicy
+
+      // Apply initial processor configurations from policy
+      return e.applyPolicyConfig()
+  }
+  ```
+  
+  The validation should also be added to the loadPolicyBytes method for
+  remote policies loaded via OpAMP. The validation should be designed to
+  be extensible as new policy fields and features are added in the future.

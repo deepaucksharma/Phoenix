@@ -16,3 +16,4 @@ blocked_files:
   - pkg/**
   - test/**
   - .github/workflows/**
+
