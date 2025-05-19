@@ -27,6 +27,9 @@ When adding new dependencies:
    ```
 2. Commit the updated vendor directory
 
+Always rerun `go mod vendor` and commit the `vendor/` folder any time
+`go.mod` or `go.sum` changes so that offline builds stay reproducible.
+
 ## CI/CD Integration
 
 All CI workflows are configured to use the vendored dependencies, ensuring consistent builds in all environments.
