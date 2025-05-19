@@ -4,7 +4,7 @@ package policy
 import (
 	"fmt"
 	"os"
-	
+
 	"github.com/xeipuuv/gojsonschema"
 	"gopkg.in/yaml.v3"
 )
@@ -144,16 +144,16 @@ const Schema = `{
 
 // Policy represents the structure of the policy.yaml file
 type Policy struct {
-	GlobalSettings    GlobalSettings               `yaml:"global_settings"`
-	ProcessorsConfig  map[string]map[string]any    `yaml:"processors_config"`
-	PIDDeciderConfig  PIDDeciderConfig             `yaml:"pid_decider_config"`
-	PICControlConfig  PICControlConfig             `yaml:"pic_control_config"`
-	Service           map[string]any               `yaml:"service"`
+	GlobalSettings   GlobalSettings            `yaml:"global_settings"`
+	ProcessorsConfig map[string]map[string]any `yaml:"processors_config"`
+	PIDDeciderConfig PIDDeciderConfig          `yaml:"pid_decider_config"`
+	PICControlConfig PICControlConfig          `yaml:"pic_control_config"`
+	Service          map[string]any            `yaml:"service"`
 }
 
 // GlobalSettings contains top-level settings for the collector
 type GlobalSettings struct {
-	AutonomyLevel              string `yaml:"autonomy_level"`
+	AutonomyLevel                 string `yaml:"autonomy_level"`
 	CollectorCPUSafetyLimitMCores int    `yaml:"collector_cpu_safety_limit_mcores"`
 	CollectorRSSSafetyLimitMiB    int    `yaml:"collector_rss_safety_limit_mib"`
 }
@@ -165,14 +165,14 @@ type PIDDeciderConfig struct {
 
 // PIDController represents a single PID control loop
 type PIDController struct {
-	Name               string              `yaml:"name"`
-	Enabled            bool                `yaml:"enabled"`
-	KPIMetricName      string              `yaml:"kpi_metric_name"`
-	KPITargetValue     float64             `yaml:"kpi_target_value"`
-	KP                 float64             `yaml:"kp"`
-	KI                 float64             `yaml:"ki"`
-	KD                 float64             `yaml:"kd"`
-	HysteresisPercent  float64             `yaml:"hysteresis_percent"`
+	Name                string              `yaml:"name"`
+	Enabled             bool                `yaml:"enabled"`
+	KPIMetricName       string              `yaml:"kpi_metric_name"`
+	KPITargetValue      float64             `yaml:"kpi_target_value"`
+	KP                  float64             `yaml:"kp"`
+	KI                  float64             `yaml:"ki"`
+	KD                  float64             `yaml:"kd"`
+	HysteresisPercent   float64             `yaml:"hysteresis_percent"`
 	OutputConfigPatches []OutputConfigPatch `yaml:"output_config_patches"`
 }
 
@@ -187,9 +187,9 @@ type OutputConfigPatch struct {
 
 // PICControlConfig contains configuration for the pic_control extension
 type PICControlConfig struct {
-	PolicyFilePath          string                 `yaml:"policy_file_path"`
-	MaxPatchesPerMinute     int                    `yaml:"max_patches_per_minute"`
-	PatchCooldownSeconds    int                    `yaml:"patch_cooldown_seconds"`
+	PolicyFilePath           string                    `yaml:"policy_file_path"`
+	MaxPatchesPerMinute      int                       `yaml:"max_patches_per_minute"`
+	PatchCooldownSeconds     int                       `yaml:"patch_cooldown_seconds"`
 	SafeModeProcessorConfigs map[string]map[string]any `yaml:"safe_mode_processor_configs"`
 }
 
@@ -214,23 +214,36 @@ func LoadPolicy(filename string) (*Policy, error) {
 	return &policy, nil
 }
 
+// ParsePolicy parses and validates policy YAML from memory.
+func ParsePolicy(data []byte) (*Policy, error) {
+	if err := ValidatePolicy(data); err != nil {
+		return nil, err
+	}
+
+	var policy Policy
+	if err := yaml.Unmarshal(data, &policy); err != nil {
+		return nil, fmt.Errorf("parsing policy YAML: %w", err)
+	}
+	return &policy, nil
+}
+
 // ValidatePolicy validates policy YAML against the JSONSchema
 func ValidatePolicy(data []byte) error {
 	schemaLoader := gojsonschema.NewStringLoader(Schema)
-	
+
 	// Convert YAML to JSON for validation
 	var jsonData interface{}
 	if err := yaml.Unmarshal(data, &jsonData); err != nil {
 		return fmt.Errorf("converting YAML to JSON: %w", err)
 	}
-	
+
 	documentLoader := gojsonschema.NewGoLoader(jsonData)
-	
+
 	result, err := gojsonschema.Validate(schemaLoader, documentLoader)
 	if err != nil {
 		return fmt.Errorf("schema validation error: %w", err)
 	}
-	
+
 	if !result.Valid() {
 		var errMsg string
 		for i, err := range result.Errors() {
@@ -241,6 +254,6 @@ func ValidatePolicy(data []byte) error {
 		}
 		return fmt.Errorf("invalid policy: %s", errMsg)
 	}
-	
+
 	return nil
 }

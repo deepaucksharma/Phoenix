@@ -9,10 +9,13 @@ import (
 	"go.opentelemetry.io/collector/processor"
 )
 
+// typeStr is the unique identifier for the pid_decider processor.
+var typeStr = "pid_decider"
+
 // NewFactory creates a factory for the pid_decider processor
 func NewFactory() processor.Factory {
 	return processor.NewFactory(
-		typeStr,
+		component.MustNewType(typeStr),
 		createDefaultConfig,
 		processor.WithMetrics(createMetricsProcessor, component.StabilityLevelDevelopment),
 	)
@@ -43,6 +46,25 @@ func createDefaultConfig() component.Config {
 					},
 				},
 			},
+			{
+				Name:              "cardinality_controller",
+				Enabled:           true,
+				KPIMetricName:     "aemf_impact_cardinality_reduction_ratio",
+				KPITargetValue:    0.80,
+				KP:                10,
+				KI:                2,
+				KD:                0,
+				HysteresisPercent: 2,
+				OutputConfigPatches: []OutputConfigPatch{
+					{
+						TargetProcessorName: "cardinality_guardian",
+						ParameterPath:       "max_unique",
+						ChangeScaleFactor:   -100,
+						MinValue:            100,
+						MaxValue:            10000,
+					},
+				},
+			},
 		},
 	}
 }
@@ -50,10 +72,10 @@ func createDefaultConfig() component.Config {
 // createMetricsProcessor creates a processor based on the config
 func createMetricsProcessor(
 	ctx context.Context,
-	set processor.CreateSettings,
+	set processor.Settings,
 	cfg component.Config,
 	nextConsumer consumer.Metrics,
 ) (processor.Metrics, error) {
 	pCfg := cfg.(*Config)
-	return newProcessor(pCfg, set, nextConsumer)
+	return newProcessor(pCfg, set.TelemetrySettings, nextConsumer)
 }

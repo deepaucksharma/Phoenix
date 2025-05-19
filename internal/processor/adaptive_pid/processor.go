@@ -22,9 +22,8 @@ import (
 	"github.com/deepaucksharma/Phoenix/pkg/util/bayesian"
 )
 
-const (
-	typeStr = "pid_decider"
-)
+// This const is defined in factory.go
+// var typeStr = "pid_decider"
 
 // Config defines configuration for the pid_decider processor
 type Config struct {
@@ -42,6 +41,8 @@ type ControllerConfig struct {
 	KD                  float64             `mapstructure:"kd"`
 	IntegralWindupLimit float64             `mapstructure:"integral_windup_limit"`
 	HysteresisPercent   float64             `mapstructure:"hysteresis_percent"`
+	UseBayesian         bool                `mapstructure:"use_bayesian"`
+	StallThreshold      int                 `mapstructure:"stall_threshold"`
 	OutputConfigPatches []OutputConfigPatch `mapstructure:"output_config_patches"`
 }
 
@@ -55,29 +56,6 @@ type OutputConfigPatch struct {
 }
 
 var _ component.Config = (*Config)(nil)
-
-// Validate checks if the processor configuration is valid
-func (cfg *Config) Validate() error {
-	for i, controller := range cfg.Controllers {
-		if controller.KPITargetValue <= 0 {
-			return fmt.Errorf("controller %s: target value must be greater than 0", controller.Name)
-		}
-
-		if len(controller.OutputConfigPatches) == 0 {
-			return fmt.Errorf("controller %s: at least one output config patch is required", controller.Name)
-		}
-
-		for j, patch := range controller.OutputConfigPatches {
-			if patch.TargetProcessorName == "" {
-				return fmt.Errorf("controller %s, patch %d: target processor name is required", controller.Name, j)
-			}
-			if patch.ParameterPath == "" {
-				return fmt.Errorf("controller %s, patch %d: parameter path is required", controller.Name, j)
-			}
-		}
-	}
-	return nil
-}
 
 // pidProcessor implements the pid_decider processor
 type pidProcessor struct {
@@ -105,7 +83,7 @@ var _ processor.Metrics = (*pidProcessor)(nil)
 var _ interfaces.UpdateableProcessor = (*pidProcessor)(nil)
 
 // newProcessor creates a new pid_decider processor
-func newProcessor(config *Config, settings processor.CreateSettings, nextConsumer consumer.Metrics) (*pidProcessor, error) {
+func newProcessor(config *Config, settings component.TelemetrySettings, nextConsumer consumer.Metrics) (*pidProcessor, error) {
 	p := &pidProcessor{
 		logger:       settings.Logger,
 		nextConsumer: nextConsumer,
@@ -158,14 +136,8 @@ func newProcessor(config *Config, settings processor.CreateSettings, nextConsume
 
 // Start implements the Component interface
 func (p *pidProcessor) Start(ctx context.Context, host component.Host) error {
-	// Set up metrics if possible
-	metricProvider := host.GetExtensions()[component.MustNewID("prometheus")]
-	if metricProvider != nil {
-		// This would need a concrete implementation of metric.MeterProvider
-		// p.metrics = metrics.NewMetricsEmitter(metricProvider.(metric.MeterProvider).Meter("pid_decider"),
-		//                                     "pid_decider", component.MustNewID(typeStr))
-	}
-
+	// No initialization required for now
+	return nil
 	return nil
 }
 
@@ -278,7 +250,7 @@ func (p *pidProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) e
 			// Generate patch
 			patch := interfaces.ConfigPatch{
 				PatchID:             uuid.New().String(),
-				TargetProcessorName: component.MustNewIDFromString(outConfig.TargetProcessorName),
+				TargetProcessorName: component.NewIDWithName(component.MustNewType(outConfig.TargetProcessorName), ""),
 				ParameterPath:       outConfig.ParameterPath,
 				NewValue:            newValue,
 				Reason:              generateReason(ctrl.config.Name, ctrl.config.KPITargetValue-kpiValue, output),
