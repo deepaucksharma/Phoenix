@@ -1,28 +1,47 @@
-# Pull Request
+## Description
 
-## 1. Declared Agent Role
-<!-- One of: architect | planner | implementer | reviewer | security-auditor | doc-writer | devops | integrator -->
-`ROLE: `
+<!-- Describe the changes in this PR -->
 
-## 2. Linked Task(s)
-<!-- List task IDs from tasks/*.yaml or put N/A -->
-`TASKS: `
+## Related Issue
 
-## 3. Changes Summary
-<!-- Provide a clear and concise description of the changes -->
+<!-- Link to the related issue(s) -->
 
-## 4. Checklist
-<!-- Mark completed items with an [x] -->
+## Motivation and Context
 
-- [ ] Code follows the style guidelines
-- [ ] Changes have appropriate tests
-- [ ] Documentation has been updated
-- [ ] CI checks pass locally
-- [ ] Changes respect role boundaries
-- [ ] All new dependencies are approved
+<!-- Why is this change required? What problem does it solve? -->
 
-## 5. Additional Notes
-<!-- Any additional information that reviewers should know -->
+## How Has This Been Tested?
 
-## 6. Screenshots (if applicable)
-<!-- Add screenshots to help explain your changes -->
+<!-- Please describe how you tested your changes -->
+
+- [ ] Unit tests
+- [ ] Integration tests
+- [ ] Manual testing
+- [ ] Other: <!-- Specify -->
+
+## Type of Change
+
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Performance improvement
+- [ ] Documentation update
+- [ ] Code refactoring
+- [ ] CI/CD improvement
+- [ ] Other: <!-- Specify -->
+
+## Checklist
+
+- [ ] My code follows the project's style guidelines
+- [ ] I have added tests that prove my fix or feature works
+- [ ] I have updated the documentation accordingly
+- [ ] The code builds without any errors or warnings
+- [ ] All tests pass locally and in CI
+- [ ] I have rebased my branch on the latest main
+
+## Additional Context
+
+<!-- Add any other context about the PR here -->
+
+<!-- For Claude Code contributors only -->
+`ROLE: <!-- Insert your agent role here or N/A -->`
+`TASKS: <!-- Insert task IDs separated by comma or N/A -->`

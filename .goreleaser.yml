@@ -1,0 +1,86 @@
+project_name: sa-omf-otelcol
+
+builds:
+  - main: ./cmd/sa-omf-otelcol
+    binary: sa-omf-otelcol
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+
+dockers:
+  - image_templates:
+      - ghcr.io/yourorg/sa-omf-collector:{{ .Version }}
+      - ghcr.io/yourorg/sa-omf-collector:latest
+    dockerfile: deploy/docker/Dockerfile
+    use: buildx
+    build_flag_templates:
+      - --platform=linux/amd64
+    extra_files:
+      - configs/default/config.yaml
+      - configs/default/policy.yaml
+
+  - image_templates:
+      - ghcr.io/yourorg/sa-omf-collector:{{ .Version }}-arm64
+      - ghcr.io/yourorg/sa-omf-collector:latest-arm64
+    dockerfile: deploy/docker/Dockerfile
+    use: buildx
+    build_flag_templates:
+      - --platform=linux/arm64
+    extra_files:
+      - configs/default/config.yaml
+      - configs/default/policy.yaml
+    goarch: arm64
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+release:
+  prerelease: auto
+  draft: false
+  name_template: "v{{.Version}}"
+  footer: |
+    ## Installation
+    
+    ```bash
+    # Linux/macOS (amd64)
+    curl -L https://github.com/yourorg/sa-omf/releases/download/v{{.Version}}/sa-omf-otelcol_Linux_x86_64.tar.gz | tar xz
+    
+    # Docker
+    docker pull ghcr.io/yourorg/sa-omf-collector:{{.Version}}
+    ```
