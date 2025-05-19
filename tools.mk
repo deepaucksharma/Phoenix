@@ -42,5 +42,5 @@ devops-check:
 # Integrator checks
 integrator-check: lint test drift-check
 	@echo "Running checks for integrator role..."
-	@hack/validate_policy_schema.sh
-	@hack/check_component_registry.sh
+	@scripts/validation/validate_policy_schema.sh
+	@scripts/ci/check_component_registry.sh
