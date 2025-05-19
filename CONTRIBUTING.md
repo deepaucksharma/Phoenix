@@ -64,6 +64,20 @@ Phoenix uses a structured agent-based workflow where contributors take on specif
 - Document public APIs
 - Add appropriate logging and metrics
 
+## Vendoring Dependencies
+
+When adding or updating Go dependencies, the project relies on a vendored
+`vendor/` directory to ensure offline builds work consistently. After you modify
+`go.mod` or run `go get`, execute:
+
+```bash
+go mod tidy
+go mod vendor
+```
+
+Commit the resulting `vendor/` folder along with your `go.mod` and `go.sum`
+changes so that CI and other developers use the same dependency set.
+
 ## Commit Messages
 
 Follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
