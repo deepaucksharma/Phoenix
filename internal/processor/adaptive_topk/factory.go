@@ -8,17 +8,17 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/processor"
+	
+	"github.com/deepaucksharma/Phoenix/internal/processor/base"
 )
 
-const (
-	// typeStr is the unique identifier for the adaptive_topk processor.
-	typeStr = "adaptive_topk"
-)
+// typeStr is the unique identifier for the adaptive_topk processor.
+const typeStr = "adaptive_topk"
 
 // NewFactory creates a factory for the adaptive_topk processor.
 func NewFactory() processor.Factory {
 	return processor.NewFactory(
-		typeStr,
+		component.MustNewType(typeStr),
 		createDefaultConfig,
 		processor.WithMetrics(createMetricsProcessor, component.StabilityLevelDevelopment),
 	)
@@ -27,22 +27,22 @@ func NewFactory() processor.Factory {
 // createDefaultConfig creates the default configuration for the processor.
 func createDefaultConfig() component.Config {
 	return &Config{
+		BaseConfig:     base.WithEnabled(true),
 		KValue:         30,
 		KMin:           10,
 		KMax:           60,
 		ResourceField:  "process.name",
 		CounterField:   "process.cpu_seconds_total",
-		Enabled:        true,
 	}
 }
 
 // createMetricsProcessor creates a metrics processor based on the config.
 func createMetricsProcessor(
 	ctx context.Context,
-	set processor.CreateSettings,
+	set processor.Settings,
 	cfg component.Config,
 	nextConsumer consumer.Metrics,
 ) (processor.Metrics, error) {
 	pCfg := cfg.(*Config)
-	return newProcessor(pCfg, set, nextConsumer)
+	return newProcessor(pCfg, set.TelemetrySettings, nextConsumer, set.ID)
 }

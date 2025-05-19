@@ -1,4 +1,4 @@
-package piccontrolext
+package pic_control_ext_test
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"go.opentelemetry.io/collector/extension"
 	"go.uber.org/zap"
 
-	"github.com/deepaucksharma/Phoenix/internal/extension/piccontrolext"
+	"github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 )
 
@@ -152,11 +152,11 @@ pic_control_config:
 	require.NoError(t, err)
 	
 	// Create the extension factory
-	factory := piccontrolext.NewFactory()
+	factory := pic_control_ext.NewFactory()
 	require.NotNil(t, factory)
 	
 	// Create a default configuration
-	cfg := factory.CreateDefaultConfig().(*piccontrolext.Config)
+	cfg := factory.CreateDefaultConfig().(*pic_control_ext.Config)
 	cfg.PolicyFilePath = policyPath
 	cfg.MaxPatchesPerMinute = 5
 	cfg.PatchCooldownSeconds = 1
@@ -175,7 +175,7 @@ pic_control_config:
 	require.NotNil(t, ext)
 	
 	// Ensure it implements the PicControl interface
-	picControl, ok := ext.(piccontrolext.PicControl)
+	picControl, ok := ext.(pic_control_ext.PicControl)
 	require.True(t, ok, "Extension does not implement PicControl")
 	
 	// Create a mock host

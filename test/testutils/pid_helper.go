@@ -67,7 +67,7 @@ func (h *PIDControlHelper) GenerateConfigPatches(ctx context.Context, controller
 		// Create the patch
 		patch := interfaces.ConfigPatch{
 			PatchID:             fmt.Sprintf("%s-patch-%d", name, time.Now().UnixNano()),
-			TargetProcessorName: component.NewIDFromString(mapping.TargetProcessor),
+			TargetProcessorName: component.NewIDWithName(component.MustNewType(mapping.TargetProcessor), ""),
 			ParameterPath:       mapping.ParameterPath,
 			NewValue:            scaledOutput,
 			Reason:              fmt.Sprintf("PID adjustment from %s controller", name),

@@ -2,12 +2,15 @@
 package testutils
 
 import (
+	"fmt"
 	"math/rand"
 	"strconv"
 	"time"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+
+	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 )
 
 var processNames = []string{
@@ -48,7 +51,7 @@ func GenerateTestMetrics(processCount int) pmetric.Metrics {
 		cpuSum.SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
 		
 		cpuPoint := cpuSum.DataPoints().AppendEmpty()
-		cpuPoint.SetTimestamp(pmetric.NewTimestampFromTime(time.Now()))
+		cpuPoint.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 		cpuPoint.SetDoubleValue(float64(i) * 0.5)
 		
 		// Memory metric
@@ -59,7 +62,7 @@ func GenerateTestMetrics(processCount int) pmetric.Metrics {
 		
 		memGauge := memMetric.SetEmptyGauge()
 		memPoint := memGauge.DataPoints().AppendEmpty()
-		memPoint.SetTimestamp(pmetric.NewTimestampFromTime(time.Now()))
+		memPoint.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 		memPoint.SetDoubleValue(float64(1024*1024*(rand.Intn(100)+10))) // Random MB value
 		
 		// Counter metric
@@ -72,7 +75,7 @@ func GenerateTestMetrics(processCount int) pmetric.Metrics {
 		countSum.SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
 		
 		countPoint := countSum.DataPoints().AppendEmpty()
-		countPoint.SetTimestamp(pmetric.NewTimestampFromTime(time.Now()))
+		countPoint.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 		countPoint.SetDoubleValue(float64(rand.Intn(10000)))
 	}
 	
@@ -119,7 +122,7 @@ func GenerateHighCardinalityMetrics(cardinalityCount int) pmetric.Metrics {
 		
 		gauge := metric.SetEmptyGauge()
 		point := gauge.DataPoints().AppendEmpty()
-		point.SetTimestamp(pmetric.NewTimestampFromTime(time.Now()))
+		point.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 		point.SetDoubleValue(float64(rand.Intn(100)))
 		
 		// Add high-cardinality dimensions to datapoint
@@ -148,7 +151,7 @@ func GenerateControlMetrics(coverageScore float64) pmetric.Metrics {
 	
 	coverageGauge := coverageMetric.SetEmptyGauge()
 	coveragePoint := coverageGauge.DataPoints().AppendEmpty()
-	coveragePoint.SetTimestamp(pmetric.NewTimestampFromTime(time.Now()))
+	coveragePoint.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 	coveragePoint.SetDoubleValue(coverageScore)
 	
 	// Add some standard controller metrics
@@ -158,7 +161,7 @@ func GenerateControlMetrics(coverageScore float64) pmetric.Metrics {
 	
 	cardinalityGauge := cardinalityMetric.SetEmptyGauge()
 	cardinalityPoint := cardinalityGauge.DataPoints().AppendEmpty()
-	cardinalityPoint.SetTimestamp(pmetric.NewTimestampFromTime(time.Now()))
+	cardinalityPoint.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 	cardinalityPoint.SetDoubleValue(0.85) // 85% cardinality reduction
 	
 	return metrics
@@ -182,7 +185,7 @@ func GeneratePatchMetric(patch interfaces.ConfigPatch) pmetric.Metrics {
 	
 	patchGauge := patchMetric.SetEmptyGauge()
 	patchPoint := patchGauge.DataPoints().AppendEmpty()
-	patchPoint.SetTimestamp(pmetric.NewTimestampFromTime(time.Now()))
+	patchPoint.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 	patchPoint.SetDoubleValue(1.0) // Always 1.0 to indicate a patch
 	
 	// Add attributes from the patch

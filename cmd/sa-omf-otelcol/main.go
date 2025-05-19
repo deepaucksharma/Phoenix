@@ -2,9 +2,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"os"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/exporter"
@@ -46,7 +46,6 @@ func main() {
 }
 
 func components() (otelcol.Factories, error) {
-	var err error
 	factories := otelcol.Factories{}
 
 	// Extensions
@@ -54,32 +53,28 @@ func components() (otelcol.Factories, error) {
 		pic_control_ext.NewFactory(),
 		// Add more extensions as needed
 	}
-	factories.Extensions, err = extension.MakeFactoryMap(extensions...)
-	if err != nil {
-		return otelcol.Factories{}, fmt.Errorf("failed to create extension factories: %w", err)
+	factories.Extensions = make(map[component.Type]extension.Factory)
+	for _, ext := range extensions {
+		factories.Extensions[ext.Type()] = ext
 	}
 
 	// Receivers
 	// Use standard receivers from contrib packages
-	factories.Receivers, err = receiver.MakeFactoryMap(
+	factories.Receivers = make(map[component.Type]receiver.Factory)
 	// Add receivers as needed
-	)
-	if err != nil {
-		return otelcol.Factories{}, fmt.Errorf("failed to create receiver factories: %w", err)
-	}
 
 	// Processors
 	processors := []processor.Factory{
 		// Add custom processors as they are implemented:
-               priority_tagger.NewFactory(),
-               adaptive_pid.NewFactory(),
-               adaptive_topk.NewFactory(),
-               reservoir_sampler.NewFactory(),
-               // etc.
-       }
-	factories.Processors, err = processor.MakeFactoryMap(processors...)
-	if err != nil {
-		return otelcol.Factories{}, fmt.Errorf("failed to create processor factories: %w", err)
+		priority_tagger.NewFactory(),
+		adaptive_pid.NewFactory(),
+		adaptive_topk.NewFactory(),
+		reservoir_sampler.NewFactory(),
+		// etc.
+	}
+	factories.Processors = make(map[component.Type]processor.Factory)
+	for _, proc := range processors {
+		factories.Processors[proc.Type()] = proc
 	}
 
 	// Exporters
@@ -88,9 +83,9 @@ func components() (otelcol.Factories, error) {
 		pic_connector.NewFactory(),
 		// etc.
 	}
-	factories.Exporters, err = exporter.MakeFactoryMap(exporters...)
-	if err != nil {
-		return otelcol.Factories{}, fmt.Errorf("failed to create exporter factories: %w", err)
+	factories.Exporters = make(map[component.Type]exporter.Factory)
+	for _, exp := range exporters {
+		factories.Exporters[exp.Type()] = exp
 	}
 
 	return factories, nil
@@ -98,9 +93,11 @@ func components() (otelcol.Factories, error) {
 
 func run(factories otelcol.Factories, info component.BuildInfo) error {
 	params := otelcol.CollectorSettings{
-		BuildInfo:  info,
-		Factories:  factories,
-		ConfigFile: getConfigFile(),
+		BuildInfo: info,
+		Factories: func() (otelcol.Factories, error) {
+			return factories, nil
+		},
+		// Config provider settings will use defaults and command-line flags
 	}
 
 	col, err := otelcol.NewCollector(params)
@@ -108,15 +105,8 @@ func run(factories otelcol.Factories, info component.BuildInfo) error {
 		return fmt.Errorf("failed to create collector: %w", err)
 	}
 
-	return col.Run()
+	return col.Run(context.Background())
 }
 
-func getConfigFile() string {
-	// Check if config file is provided as a command-line argument
-	if len(os.Args) > 1 && os.Args[1] == "--config" && len(os.Args) > 2 {
-		return os.Args[2]
-	}
-
-	// Default config file location
-	return "configs/default/config.yaml"
-}
+// Note: Config file is now handled by Collector flags
+// The default config location is still configs/default/config.yaml

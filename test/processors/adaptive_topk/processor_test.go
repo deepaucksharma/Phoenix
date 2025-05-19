@@ -41,14 +41,15 @@ func TestAdaptiveTopKProcessor(t *testing.T) {
 
 	// Create the processor
 	ctx := context.Background()
-	settings := processor.CreateSettings{
+	settings := processor.Settings{
 		TelemetrySettings: component.TelemetrySettings{
 			Logger: zap.NewNop(),
 		},
-		ID: component.NewID("adaptive_topk"),
+		ID: component.MustNewID("adaptive_topk"),
 	}
 
-	proc, err := factory.CreateMetricsProcessor(ctx, settings, cfg, sink)
+	// Use the factory's methods correctly
+	proc, err := factory.CreateMetrics(ctx, settings, cfg, sink)
 	require.NoError(t, err)
 	require.NotNil(t, proc)
 

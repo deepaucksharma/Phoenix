@@ -5,28 +5,23 @@ package adaptive_topk
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
-	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/processor"
 	"go.uber.org/zap"
 
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
-	"github.com/deepaucksharma/Phoenix/pkg/metrics"
+	"github.com/deepaucksharma/Phoenix/internal/processor/base"
 	"github.com/deepaucksharma/Phoenix/pkg/util/topk"
 )
 
 // processorImpl is the implementation of the adaptive_topk processor.
 type processorImpl struct {
+	*base.BaseProcessor
 	config       *Config
-	logger       *zap.Logger
-	next         consumer.Metrics
 	topkAlgo     *topk.SpaceSaving
-	lock         sync.RWMutex
-	metricsEmitter *metrics.MetricsEmitter
 	topkSet      map[string]struct{} // Set of current top-k items
 	totalItems   int                 // Total number of items seen
 	totalIncluded int                // Number of items included (top-k)
@@ -37,13 +32,12 @@ var _ processor.Metrics = (*processorImpl)(nil)
 var _ interfaces.UpdateableProcessor = (*processorImpl)(nil)
 
 // newProcessor creates a new adaptive_topk processor.
-func newProcessor(cfg *Config, settings processor.CreateSettings, nextConsumer consumer.Metrics) (*processorImpl, error) {
+func newProcessor(cfg *Config, settings component.TelemetrySettings, nextConsumer consumer.Metrics, id component.ID) (*processorImpl, error) {
 	p := &processorImpl{
-		config:     cfg,
-		logger:     settings.Logger,
-		next:       nextConsumer,
-		topkAlgo:   topk.NewSpaceSaving(cfg.KValue),
-		topkSet:    make(map[string]struct{}),
+		BaseProcessor: base.NewBaseProcessor(settings.Logger, nextConsumer, "adaptive_topk", id),
+		config:        cfg,
+		topkAlgo:      topk.NewSpaceSaving(cfg.KValue),
+		topkSet:       make(map[string]struct{}),
 	}
 	
 	return p, nil
@@ -52,27 +46,27 @@ func newProcessor(cfg *Config, settings processor.CreateSettings, nextConsumer c
 // Start implements the Component interface.
 func (p *processorImpl) Start(ctx context.Context, host component.Host) error {
 	// Set up metrics if provider available
-	return nil
+	return p.BaseProcessor.Start(ctx, host)
 }
 
 // Shutdown implements the Component interface.
 func (p *processorImpl) Shutdown(ctx context.Context) error {
-	return nil
+	return p.BaseProcessor.Shutdown(ctx)
 }
 
 // Capabilities implements the processor.Metrics interface.
 func (p *processorImpl) Capabilities() consumer.Capabilities {
-	return consumer.Capabilities{MutatesData: true}
+	return p.BaseProcessor.Capabilities()
 }
 
 // ConsumeMetrics implements the consumer.Metrics interface.
 func (p *processorImpl) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.Lock()
+	defer p.Unlock()
 	
+	// Check if processor is disabled - if so, pass through metrics and return
 	if !p.config.Enabled {
-		// Pass the data unmodified if processor is disabled
-		return p.next.ConsumeMetrics(ctx, md)
+		return p.GetNext().ConsumeMetrics(ctx, md)
 	}
 	
 	// First pass: collect information for topk algorithm
@@ -83,17 +77,18 @@ func (p *processorImpl) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) 
 	
 	// Second pass: filter metrics based on topk set
 	if err := p.filterMetrics(md); err != nil {
-		p.logger.Error("Error filtering metrics", zap.Error(err))
+		p.GetLogger().Error("Error filtering metrics", zap.Error(err))
 		// Continue with unfiltered metrics on error
 	}
 	
 	// Update coverage metrics
 	coverage := p.calculateCoverage()
-	if p.metricsEmitter != nil {
+	metricsEmitter := p.GetMetricsEmitter()
+	if metricsEmitter != nil {
 		// Would record coverage metric here
 	}
 	
-	p.logger.Debug("Adaptive topk processor metrics",
+	p.GetLogger().Debug("Adaptive topk processor metrics",
 		zap.Int("total_items", p.totalItems),
 		zap.Int("included_items", p.totalIncluded),
 		zap.Float64("coverage", coverage),
@@ -101,7 +96,7 @@ func (p *processorImpl) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) 
 	)
 	
 	// Pass the filtered metrics to the next consumer
-	return p.next.ConsumeMetrics(ctx, md)
+	return p.GetNext().ConsumeMetrics(ctx, md)
 }
 
 // collectTopKInfo iterates through metrics to update the topk algorithm.
@@ -224,8 +219,8 @@ func (p *processorImpl) calculateCoverage() float64 {
 
 // OnConfigPatch implements UpdateableProcessor interface.
 func (p *processorImpl) OnConfigPatch(ctx context.Context, patch interfaces.ConfigPatch) error {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.Lock()
+	defer p.Unlock()
 	
 	switch patch.ParameterPath {
 	case "k_value":
@@ -250,7 +245,7 @@ func (p *processorImpl) OnConfigPatch(ctx context.Context, patch interfaces.Conf
 		// Update the top-k set
 		p.updateTopKSet()
 		
-		p.logger.Info("Updated k_value", zap.Int("new_k", newK))
+		p.GetLogger().Info("Updated k_value", zap.Int("new_k", newK))
 		return nil
 		
 	case "enabled":
@@ -263,7 +258,7 @@ func (p *processorImpl) OnConfigPatch(ctx context.Context, patch interfaces.Conf
 		// Apply the change
 		p.config.Enabled = enabled
 		
-		p.logger.Info("Updated enabled state", zap.Bool("enabled", enabled))
+		p.GetLogger().Info("Updated enabled state", zap.Bool("enabled", enabled))
 		return nil
 		
 	default:
@@ -273,8 +268,8 @@ func (p *processorImpl) OnConfigPatch(ctx context.Context, patch interfaces.Conf
 
 // GetConfigStatus implements UpdateableProcessor interface.
 func (p *processorImpl) GetConfigStatus(ctx context.Context) (interfaces.ConfigStatus, error) {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
+	p.RLock()
+	defer p.RUnlock()
 	
 	return interfaces.ConfigStatus{
 		Parameters: map[string]interface{}{

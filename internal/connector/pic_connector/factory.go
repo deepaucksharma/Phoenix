@@ -11,7 +11,7 @@ import (
 // NewFactory creates a factory for the pic_connector exporter
 func NewFactory() exporter.Factory {
 	return exporter.NewFactory(
-		typeStr,
+		component.MustNewType(typeStr),
 		createDefaultConfig,
 		exporter.WithMetrics(createExporter, component.StabilityLevelDevelopment),
 	)
@@ -25,7 +25,7 @@ func createDefaultConfig() component.Config {
 // createExporter creates a metrics exporter based on the config
 func createExporter(
 	ctx context.Context,
-	set exporter.CreateSettings,
+	set exporter.Settings,
 	cfg component.Config,
 ) (exporter.Metrics, error) {
 	return newExporter(cfg, set)

@@ -11,7 +11,7 @@ import (
 // NewFactory creates a factory for the reservoir_sampler processor.
 func NewFactory() processor.Factory {
     return processor.NewFactory(
-        typeStr,
+        component.MustNewType(typeStr),
         createDefaultConfig,
         processor.WithMetrics(createMetricsProcessor, component.StabilityLevelDevelopment),
     )
@@ -26,7 +26,7 @@ func createDefaultConfig() component.Config {
 
 func createMetricsProcessor(
     ctx context.Context,
-    set processor.CreateSettings,
+    set processor.Settings,
     cfg component.Config,
     next consumer.Metrics,
 ) (processor.Metrics, error) {

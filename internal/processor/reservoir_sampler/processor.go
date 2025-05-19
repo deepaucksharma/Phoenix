@@ -38,10 +38,10 @@ var _ processor.Metrics = (*processorImpl)(nil)
 var _ interfaces.UpdateableProcessor = (*processorImpl)(nil)
 
 // newProcessor creates a new reservoir_sampler processor.
-func newProcessor(cfg *Config, settings processor.CreateSettings, next consumer.Metrics) (*processorImpl, error) {
+func newProcessor(cfg *Config, settings processor.Settings, next consumer.Metrics) (*processorImpl, error) {
     p := &processorImpl{
         config:        cfg,
-        logger:        settings.Logger,
+        logger:        settings.TelemetrySettings.Logger,
         next:          next,
         sampler:       reservoir.NewStratifiedReservoirSampler(),
         reservoirSize: cfg.ReservoirSize,

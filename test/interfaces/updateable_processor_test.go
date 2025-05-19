@@ -15,6 +15,21 @@ import (
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 )
 
+// TestPatch defines a test case for a configuration patch.
+type TestPatch struct {
+	Name          string
+	Patch         interfaces.ConfigPatch
+	ExpectedValue interface{}
+}
+
+// UpdateableProcessorSuite provides a standardized way to test any
+// processor that implements the UpdateableProcessor interface.
+type UpdateableProcessorSuite struct {
+	Processor      interfaces.UpdateableProcessor
+	ValidPatches   []TestPatch
+	InvalidPatches []TestPatch
+}
+
 // UpdateableProcessorTestSuite provides a standardized way to test any
 // processor that implements the UpdateableProcessor interface.
 type UpdateableProcessorTestSuite struct {
@@ -23,9 +38,47 @@ type UpdateableProcessorTestSuite struct {
 	InvalidParameters map[string][]interface{}
 }
 
-// RunUpdateableProcessorTests runs a standard suite of tests against any
+// RunUpdateableProcessorTests runs tests for a processor using the new suite.
+func RunUpdateableProcessorTests(t *testing.T, suite UpdateableProcessorSuite) {
+	ctx := context.Background()
+	
+	// Test valid patches
+	for _, testCase := range suite.ValidPatches {
+		t.Run(testCase.Name, func(t *testing.T) {
+			// Apply the patch
+			err := suite.Processor.OnConfigPatch(ctx, testCase.Patch)
+			require.NoError(t, err, "Valid patch should be accepted: %v", testCase.Patch)
+			
+			// Verify the result
+			status, err := suite.Processor.GetConfigStatus(ctx)
+			require.NoError(t, err, "GetConfigStatus should not fail after patch")
+			
+			// Check if the parameter was updated
+			if testCase.Patch.ParameterPath == "enabled" {
+				assert.Equal(t, testCase.ExpectedValue, status.Enabled, 
+					"Enabled state should match expected value")
+			} else {
+				paramValue, found := status.Parameters[testCase.Patch.ParameterPath]
+				assert.True(t, found, "Parameter %s should be in status", testCase.Patch.ParameterPath)
+				assert.Equal(t, testCase.ExpectedValue, paramValue, 
+					"Parameter %s should match expected value", testCase.Patch.ParameterPath)
+			}
+		})
+	}
+	
+	// Test invalid patches
+	for _, testCase := range suite.InvalidPatches {
+		t.Run(testCase.Name, func(t *testing.T) {
+			// Apply the patch - should fail
+			err := suite.Processor.OnConfigPatch(ctx, testCase.Patch)
+			assert.Error(t, err, "Invalid patch should be rejected: %v", testCase.Patch)
+		})
+	}
+}
+
+// Original RunUpdateableProcessorTests runs a standard suite of tests against any
 // UpdateableProcessor implementation.
-func RunUpdateableProcessorTests(t *testing.T, p interfaces.UpdateableProcessor, opts ...TestOption) {
+func RunUpdateableProcessorTestsOriginal(t *testing.T, p interfaces.UpdateableProcessor, opts ...TestOption) {
 	// Create default test suite
 	suite := &UpdateableProcessorTestSuite{
 		Processor:         p,
@@ -75,9 +128,8 @@ func testGetConfigStatus(t *testing.T, suite *UpdateableProcessorTestSuite) {
 	// Verify parameters is not nil
 	require.NotNil(t, status.Parameters, "Status parameters should not be nil")
 	
-	// Check if enabled is a boolean
-	_, ok := status.Enabled.(bool)
-	assert.True(t, ok, "Status.Enabled should be a boolean")
+	// Enabled should be a boolean
+	assert.IsType(t, bool(false), status.Enabled, "Status.Enabled should be a boolean")
 	
 	// Log current parameters for debugging
 	for name, value := range status.Parameters {
@@ -106,7 +158,7 @@ func testEnabledParameter(t *testing.T, suite *UpdateableProcessorTestSuite) {
 	// Verify enabled
 	status, err := suite.Processor.GetConfigStatus(ctx)
 	require.NoError(t, err)
-	assert.True(t, status.Enabled.(bool), "Processor should be enabled")
+	assert.True(t, status.Enabled, "Processor should be enabled")
 	
 	// Test disabling
 	disablePatch := createConfigPatch("enabled", false)
@@ -116,7 +168,7 @@ func testEnabledParameter(t *testing.T, suite *UpdateableProcessorTestSuite) {
 	// Verify disabled
 	status, err = suite.Processor.GetConfigStatus(ctx)
 	require.NoError(t, err)
-	assert.False(t, status.Enabled.(bool), "Processor should be disabled")
+	assert.False(t, status.Enabled, "Processor should be disabled")
 	
 	// Restore original state
 	restorePatch := createConfigPatch("enabled", initialStatus.Enabled)
@@ -235,7 +287,7 @@ func testTTLExpiration(t *testing.T, suite *UpdateableProcessorTestSuite) {
 func createConfigPatch(paramPath string, value interface{}) interfaces.ConfigPatch {
 	return interfaces.ConfigPatch{
 		PatchID:             fmt.Sprintf("test-patch-%s-%v", paramPath, time.Now().UnixNano()),
-		TargetProcessorName: component.NewID("test-processor"),
+		TargetProcessorName: component.MustNewID("test-processor"),
 		ParameterPath:       paramPath,
 		NewValue:            value,
 		Reason:              "Test patch",

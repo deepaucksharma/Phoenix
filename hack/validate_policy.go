@@ -99,9 +99,19 @@ func isTestOrExample(filePath string) bool {
 	return filepath.Base(path) == "example.yaml" ||
 		filepath.Base(path) == "test.yaml" ||
 		filepath.Base(path) == "sample.yaml" ||
-		filepath.Contains(path, "test/") ||
-		filepath.Contains(path, "example/") ||
-		filepath.Contains(path, "testing/")
+		containsSubstring(path, "test/") ||
+		containsSubstring(path, "example/") ||
+		containsSubstring(path, "testing/")
+}
+
+// containsSubstring checks if a string contains another string
+func containsSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 func main() {
