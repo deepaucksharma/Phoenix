@@ -5,11 +5,11 @@ required_checks:
   - lint
   - adr-valid
 can_touch:
-  - docs/adr/**
+  - docs/architecture/adr/**
   - docs/architecture/**
   - docs/design/**
 must_touch:
-  - docs/adr/**
+  - docs/architecture/adr/**
 blocked_files:
   - cmd/**
   - internal/**
