@@ -1,0 +1,45 @@
+id: POL-05
+title: "Implement Patch with Invalid Parameter Value Type Test"
+state: open
+priority: high
+created_at: "2025-05-20"
+assigned_to: "tester"
+area: "test/e2e/policy"
+depends_on: []
+acceptance:
+  - "Test sends patch where NewValue is a string for an expected int parameter"
+  - "pic_control correctly validates and rejects the patch"
+  - "patch_validation_failed_total metric increments"
+  - "Clear error is logged by pic_control"
+  - "Target processor configuration remains unchanged"
+  - "System continues normal operation after invalid patch"
+description: |
+  The pic_control extension must properly validate not just the structure of
+  patches but also the types of values being set. This test verifies that the
+  system correctly handles type mismatches in configuration patches.
+  
+  The test should:
+  
+  1. Set up a collector with control pipeline enabled
+  2. Create a ConfigPatch with an invalid type:
+     - Target an integer parameter (e.g., adaptive_topk.k_value)
+     - Set NewValue to a string ("10" instead of 10)
+     - Configure other patch fields correctly
+  3. Submit the patch to pic_control
+  4. Verify handling of the invalid patch:
+     - pic_control logs an error about type mismatch
+     - patch_validation_failed_total metric increments
+     - Target processor configuration remains unchanged
+     - System continues normal operation
+  5. Repeat with other type mismatches:
+     - Boolean as number
+     - Float as array
+     - Object as string
+  
+  This test is critical for ensuring type safety in the dynamic configuration
+  system, which could otherwise lead to unexpected behavior or crashes.
+  
+  Implementation should include unit tests for the validator component and
+  integration tests for the full validation pipeline. The test should validate
+  that proper type conversion is attempted before rejection (e.g., string "10" 
+  should be converted to int 10 if possible).

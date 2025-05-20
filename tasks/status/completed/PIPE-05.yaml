@@ -1,0 +1,43 @@
+id: PIPE-05
+title: "Implement Control Pipeline Missing Self-Metrics Test"
+state: done
+priority: high
+created_at: "2025-05-20"
+assigned_to: "tester"
+area: "test/e2e/pipelines"
+depends_on: []
+acceptance:
+  - "Test verifies PID decider and pic_connector handle missing self-metrics gracefully"
+  - "System does not panic when KPIs are missing"
+  - "Metrics show aemf_pid_decider_kpi_missing_total > 0 when KPIs are absent"
+  - "System remains stable in a default or degraded state"
+  - "Error logs indicate missing KPI data"
+description: |
+  The control pipeline relies on self-metrics from processors to make adaptation
+  decisions. This test verifies that the system handles missing or corrupted
+  self-metrics gracefully, which can happen due to scraper failures, timing issues,
+  or other problems.
+  
+  The test should:
+  
+  1. Set up a collector with both data and control pipelines enabled
+  2. Configure a mechanism to block or corrupt self-metrics (options include):
+     - Temporarily disable the prometheus self-scrape receiver
+     - Configure a filter processor to drop specific KPI metrics
+     - Use a mock metrics provider that intentionally omits KPIs
+  3. Verify system behavior when KPIs are missing:
+     - No panics or crashes occur
+     - The aemf_pid_decider_kpi_missing_total counter increments
+     - Log messages indicate missing KPI data
+     - System enters a stable state (possibly default configuration)
+  4. Restore normal metrics flow and verify recovery:
+     - System resumes normal operation
+     - PID controllers make appropriate decisions once KPIs are available again
+     - No lingering issues from the metrics interruption
+  
+  This test is critical for ensuring system resilience, as a self-adaptive system
+  must be robust against monitoring failures that could otherwise cause cascading
+  issues.
+  
+  Implementation should include both unit tests (mocking the metrics provider) and
+  an end-to-end test (actual metrics interruption in a running collector).

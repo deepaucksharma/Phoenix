@@ -1,0 +1,55 @@
+id: CHAOS-PATCH
+title: "Implement Flood of Conflicting Patches Test"
+state: open
+priority: high
+created_at: "2025-05-20"
+assigned_to: "tester"
+area: "test/e2e/chaos"
+depends_on: []
+acceptance:
+  - "Test floods pic_control with valid but conflicting patches"
+  - "patch_cooldown_seconds prevents excessive parameter changes"
+  - "hysteresis logic prevents system thrashing"
+  - "patch_rate_limited_total or patch_cooldown_applied_total increments"
+  - "System stabilizes despite patch flood"
+  - "KPIs remain relatively stable during test"
+description: |
+  The rate limiting and hysteresis mechanisms in pic_control are critical
+  for preventing system thrashing when many patches are generated in rapid
+  succession. This test verifies that these mechanisms work correctly under
+  extreme conditions.
+  
+  The test should:
+  
+  1. Configure collector with patch rate limiting and hysteresis:
+     ```yaml
+     extensions:
+       pic_control_ext:
+         max_patches_per_minute: 10
+         patch_cooldown_seconds: 30
+         hysteresis_percent: 5
+     ```
+  2. Generate a flood of conflicting patches:
+     - Create and submit patches rapidly changing a parameter
+     - Alternate between increasing and decreasing the value
+     - Example: k_value alternating between 10-20-10-20-etc.
+     - Submit patches faster than the rate limit
+  3. Verify rate limiting behavior:
+     - patch_rate_limited_total metric increments
+     - Only a subset of patches are applied
+     - System logs rate limiting actions
+  4. Verify hysteresis impact:
+     - Changes below hysteresis threshold are ignored
+     - patch_hysteresis_filtered_total increments
+  5. Verify system stability:
+     - Parameter value stabilizes despite patch flood
+     - KPIs remain relatively stable
+     - System continues normal operation
+  
+  This chaos test validates the safety mechanisms that prevent rapid
+  oscillation in processor parameters, which could otherwise lead to
+  system instability or resource exhaustion.
+  
+  Implementation should include measurement of actual parameter change
+  frequency and verification that it doesn't exceed configured limits.
+  It should also test different rate limiting and hysteresis configurations.

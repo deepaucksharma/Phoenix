@@ -1,0 +1,56 @@
+# Valid test policy file
+version: "1.0"
+
+global_settings:
+  autonomy_level: "active"
+  collector_cpu_safety_limit_mcores: 500
+  collector_rss_safety_limit_mib: 200
+
+processors_config:
+  adaptive_topk:
+    enabled: true
+    k_value: 10
+    k_min: 5
+    k_max: 100
+  priority_tagger:
+    enabled: true
+    rules:
+      - match: "process.name == 'nginx'"
+        priority: "high"
+      - match: "process.name == 'postgres'"
+        priority: "critical"
+  cardinality_guardian:
+    enabled: true
+    max_unique: 1000
+  reservoir_sampler:
+    enabled: true
+    reservoir_size: 100
+  others_rollup:
+    enabled: true
+
+pid_decider_config:
+  controllers:
+    - name: "adaptive_topk_controller"
+      enabled: true
+      kpi_metric_name: "process.coverage"
+      kpi_target_value: 0.95
+      kp: 0.5
+      ki: 0.1
+      kd: 0.05
+      hysteresis_percent: 2.0
+      output_config_patches:
+        - target_processor_name: "adaptive_topk"
+          parameter_path: "k_value"
+          change_scale_factor: 1.0
+          min_value: 5.0
+          max_value: 100.0
+
+pic_control_config:
+  policy_file_path: "/etc/sa-omf/policy.yaml"
+  max_patches_per_minute: 10
+  patch_cooldown_seconds: 5
+  safe_mode_processor_configs:
+    adaptive_topk:
+      k_value: 5
+    priority_tagger:
+      enabled: true

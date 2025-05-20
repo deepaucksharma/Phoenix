@@ -1,0 +1,56 @@
+id: COMP-PRC-03
+title: "Implement Cardinality Guardian High Cardinality Test"
+state: open
+priority: high
+created_at: "2025-05-20"
+assigned_to: "tester"
+area: "test/e2e/components/processors"
+depends_on: []
+acceptance:
+  - "Test generates high cardinality metric stream"
+  - "cardinality_guardian processor is configured with dynamic threshold adjustment"
+  - "aemf_cardinality_guardian_mitigation_applied_total metric increments"
+  - "Output cardinality for specific metrics is reduced according to configuration"
+  - "Threshold metric adjusts dynamically based on system conditions"
+  - "High priority metrics are preserved even under cardinality pressure"
+description: |
+  The cardinality_guardian processor is critical for preventing excessive metric
+  cardinality from overwhelming the system. This test verifies that it correctly
+  identifies and mitigates high cardinality situations while preserving important
+  metrics.
+  
+  The test should:
+  
+  1. Configure the cardinality_guardian processor with dynamic thresholds:
+     ```yaml
+     processors:
+       cardinality_guardian:
+         enabled: true
+         global_limit: 10000
+         per_metric_limit: 1000
+         dynamic_thresholds: true
+         preservation_rules:
+           - attribute: "priority"
+             values: ["critical", "high"]
+     ```
+  2. Generate a high cardinality metric stream:
+     - Many unique label combinations
+     - Mix of high and low priority metrics
+     - Gradually increasing cardinality
+  3. Verify cardinality detection and mitigation:
+     - aemf_cardinality_guardian_limit_exceeded_total increments
+     - aemf_cardinality_guardian_mitigation_applied_total increments
+     - Output cardinality is reduced to configured limits
+  4. Verify priority preservation:
+     - High priority metrics are preserved intact
+     - Low priority metrics are aggregated or dropped
+  5. Verify dynamic threshold adjustment:
+     - Threshold adjusts based on available resources
+     - aemf_cardinality_guardian_threshold_adjusted metric changes
+  
+  This test validates a critical protective mechanism against one of the
+  most common causes of monitoring system overload: excessive metric cardinality.
+  
+  Implementation should include measurement of actual cardinality before and
+  after the processor, verification of resource usage impact, and testing
+  of various preservation rules and thresholds.

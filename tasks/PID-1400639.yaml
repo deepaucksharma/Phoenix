@@ -1,0 +1,14 @@
+id: PID-1400639
+title: "Implement Control Pipeline Missing Self-Metrics Test (PIPE-05)"
+state: open
+priority: medium
+created_at: "2025-05-20"
+assigned_to: ""
+area: ""
+depends_on: []
+acceptance:
+  - ""
+description: |
+  Implement Control Pipeline Missing Self-Metrics Test (PIPE-05)
+  
+  <!-- Add a detailed description of what needs to be done -->
