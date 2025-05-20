@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	
+
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
@@ -71,33 +71,33 @@ func (e *picConnectorExporter) ConsumeMetrics(ctx context.Context, md pmetric.Me
 	if e.picControl == nil {
 		return fmt.Errorf("pic_control not initialized")
 	}
-	
+
 	// Extract ConfigPatch objects from metrics
 	patches := extractConfigPatches(md)
-	
+
 	// Submit each patch to pic_control
 	for _, patch := range patches {
 		err := e.picControl.SubmitConfigPatch(ctx, patch)
 		if err != nil {
-			e.logger.Error("Failed to submit ConfigPatch", 
-			              zap.String("patch_id", patch.PatchID),
-			              zap.String("target", patch.TargetProcessorName.String()),
-			              zap.Error(err))
+			e.logger.Error("Failed to submit ConfigPatch",
+				zap.String("patch_id", patch.PatchID),
+				zap.String("target", patch.TargetProcessorName.String()),
+				zap.Error(err))
 		} else {
 			e.logger.Info("Successfully submitted ConfigPatch",
-			             zap.String("patch_id", patch.PatchID),
-			             zap.String("target", patch.TargetProcessorName.String()),
-			             zap.String("parameter", patch.ParameterPath))
+				zap.String("patch_id", patch.PatchID),
+				zap.String("target", patch.TargetProcessorName.String()),
+				zap.String("parameter", patch.ParameterPath))
 		}
 	}
-	
+
 	return nil
 }
 
 // extractConfigPatches extracts ConfigPatch objects from OTLP metrics
 func extractConfigPatches(md pmetric.Metrics) []interfaces.ConfigPatch {
 	var patches []interfaces.ConfigPatch
-	
+
 	// Iterate through metrics looking for aemf_ctrl_proposed_patch
 	for i := 0; i < md.ResourceMetrics().Len(); i++ {
 		rm := md.ResourceMetrics().At(i)
@@ -105,11 +105,11 @@ func extractConfigPatches(md pmetric.Metrics) []interfaces.ConfigPatch {
 			sm := rm.ScopeMetrics().At(j)
 			for k := 0; k < sm.Metrics().Len(); k++ {
 				metric := sm.Metrics().At(k)
-				
+
 				if metric.Name() != "aemf_ctrl_proposed_patch" {
 					continue
 				}
-				
+
 				// Handle different metric types
 				switch metric.Type() {
 				case pmetric.MetricTypeGauge:
@@ -124,7 +124,7 @@ func extractConfigPatches(md pmetric.Metrics) []interfaces.ConfigPatch {
 			}
 		}
 	}
-	
+
 	return patches
 }
 
@@ -134,49 +134,56 @@ func configPatchFromDataPoint(dp pmetric.NumberDataPoint) *interfaces.ConfigPatc
 		Timestamp:  dp.Timestamp().AsTime().Unix(),
 		TTLSeconds: 300, // Default TTL
 	}
-	
+
 	// Extract required attributes
 	patchID, ok := dp.Attributes().Get("patch_id")
 	if !ok {
 		return nil // Missing required attribute
 	}
 	patch.PatchID = patchID.Str()
-	
-	// Using a hardcoded placeholder for the processor ID to avoid the build issue
-	// In a real implementation, we would parse the processor name from attributes
-	processorType := component.MustNewType("processor")
-	patch.TargetProcessorName = component.NewID(processorType)
-	
+
+	// Parse processor ID from attributes
+	target, ok := dp.Attributes().Get("target_processor_name")
+	if !ok {
+		return nil // Missing required attribute
+	}
+	var procID component.ID
+	if err := procID.UnmarshalText([]byte(target.Str())); err != nil {
+		// Fallback to treating the entire string as the type
+		procID = component.NewID(component.MustNewType(target.Str()))
+	}
+	patch.TargetProcessorName = procID
+
 	paramPath, ok := dp.Attributes().Get("parameter_path")
 	if !ok {
 		return nil // Missing required attribute
 	}
 	patch.ParameterPath = paramPath.Str()
-	
+
 	// Extract value based on type
 	valueInt, ok := dp.Attributes().Get("new_value_int")
 	if ok {
-		patch.NewValue = valueInt.Int()
+		patch.NewValue = int(valueInt.Int())
 		return patch
 	}
-	
+
 	valueDouble, ok := dp.Attributes().Get("new_value_double")
 	if ok {
 		patch.NewValue = valueDouble.Double()
 		return patch
 	}
-	
+
 	valueString, ok := dp.Attributes().Get("new_value_string")
 	if ok {
 		patch.NewValue = valueString.Str()
 		return patch
 	}
-	
+
 	valueBool, ok := dp.Attributes().Get("new_value_bool")
 	if ok {
 		patch.NewValue = valueBool.Bool()
 		return patch
 	}
-	
+
 	return nil // No value found
 }
