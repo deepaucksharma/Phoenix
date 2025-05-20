@@ -8,13 +8,23 @@ receivers:
   hostmetrics:
     collection_interval: 10s
     scrapers:
-      # Only include process metrics to reduce cardinality
       process:
         include:
           match_type: regexp
           processes: [".*"]
+        metrics:
+          process.cpu.time: true
+          process.cpu.utilization: true
+          process.memory.rss: true
+          process.memory.virtual: true
+          process.disk.io: true
+          process.disk.operations: true
+          process.threads: true
+          process.open_file_descriptors: true
+          process.context_switches: false
+          process.signals: false
+          process.pagefaults: false
         resource_attributes:
-          # Include only necessary process attributes
           process.executable.name: true
           process.executable.path: false
           process.command: false
@@ -22,6 +32,7 @@ receivers:
           process.pid: true
           process.parent_pid: false
           process.owner: true
+          process.username: false
   
   # Receiver for self-metrics collection
   prometheus/self:
@@ -33,93 +44,71 @@ receivers:
             - targets: ['localhost:8888']
 
 processors:
-  # Processors will be configured from policy.yaml
-  # This separation ensures that dynamic config lives in policy file
-  # while pipeline structure lives here
-  
-  # Unified resource filter processor that combines the functionality of
-  # priority_tagger, adaptive_topk, and others_rollup
-  resource_filter:
-    enabled: true
-    filter_strategy: hybrid
-    priority_attribute: "aemf.process.priority"
-    priority_rules:
-      - match: "process.executable.name=~/java|javaw/"
-        priority: high
-      - match: "process.executable.name=~/nginx|httpd|apache2/"
-        priority: high
-      - match: "process.executable.name=~/mysql|postgres|mongod|redis-server|elasticsearch/"
-        priority: critical
-      - match: "process.executable.name=~/python|python3|node|dotnet|ruby/"
-        priority: medium
-      - match: "process.executable.name=~/otelcol|sa-omf-otelcol|collector/"
-        priority: critical
-      - match: "process.executable.name=~/newrelic-infra|nri-.*/"
-        priority: critical
-      - match: ".*"
-        priority: low
-    topk:
-      k_value: 20
-      k_min: 10
-      k_max: 40
-      resource_field: "process.executable.name"
-      counter_field: "process.cpu.utilization"
-      coverage_target: 0.95
-    rollup:
+  metric_pipeline:
+    resource_filter:
       enabled: true
-      priority_threshold: low
-      strategy: sum
-      name_prefix: "others"
-  
-  # Histogram aggregator to optimize histogram metrics for OTLP export
-  histogram_aggregator:
-    enabled: true
-    max_buckets: 10
-    target_processors: []  # Empty means apply to all processes
-    custom_boundaries:
-      process.memory.usage:
-        - 10000000  # 10MB
-        - 50000000  # 50MB  
-        - 100000000 # 100MB
-        - 500000000 # 500MB
-        - 1000000000 # 1GB
-      process.cpu.time:
-        - 0.1
-        - 0.5
-        - 1.0
-        - 5.0
-        - 10.0
-  
-  # Attribute processor to control cardinality by filtering metrics attributes
-  attributes/process:
-    actions:
-      # Include only essential attributes to reduce cardinality
-      - key: process.executable.name
-        action: update
-        value: {{ if eq .Value.String "unknown" }}default{{ else }}{{ .Value.String }}{{ end }}
-      # Remove unnecessary attributes that increase cardinality
-      - key: process.command_line
-        action: delete
-      - key: process.command
-        action: delete
-      - key: process.executable.path
-        action: delete
-      # Add New Relic compatibility attributes
-      - key: collector.name
-        action: insert
-        value: "SA-OMF"
-      - key: service.name
-        action: insert
-        value: {{ .Resource.Attributes.GetString "process.executable.name" "unknown" }}
+      filter_strategy: hybrid
+      priority_attribute: "aemf.process.priority"
+      priority_rules:
+        - match: "process.executable.name=~/java|javaw/"
+          priority: high
+        - match: "process.executable.name=~/nginx|httpd|apache2/"
+          priority: high
+        - match: "process.executable.name=~/mysql|postgres|mongod|redis-server|elasticsearch/"
+          priority: critical
+        - match: "process.executable.name=~/python|python3|node|dotnet|ruby/"
+          priority: medium
+        - match: "process.executable.name=~/otelcol|sa-omf-otelcol|collector/"
+          priority: critical
+        - match: "process.executable.name=~/newrelic-infra|nri-.*/"
+          priority: critical
+        - match: ".*"
+          priority: low
+      topk:
+        k_value: 20
+        k_min: 10
+        k_max: 40
+        resource_field: "process.executable.name"
+        counter_field: "process.cpu.utilization"
+        coverage_target: 0.95
+      rollup:
+        enabled: true
+        priority_threshold: low
+        strategy: sum
+        name_prefix: "others"
+    transformation:
+      attributes:
+        actions:
+          - key: "process.pid"
+            action: "delete"
+          - key: "process.command_line"
+            action: "delete"
+          - key: "process.command"
+            action: "delete"
+          - key: "process.executable.path"
+            action: "delete"
+          - key: "container.id"
+            action: "delete"
+          - key: "process.executable.name"
+            action: "update"
+            value: {{ if eq .Value.String "unknown" }}unknown_process{{ else }}{{ .Value.String }}{{ end }}
+          - key: "collector.name"
+            action: "insert"
+            value: "Phoenix-SA-OMF"
+          - key: "service.name"
+            action: "insert"
+            value: "phoenix-process-metrics"
+          - key: "instrumentation.provider"
+            action: "insert"
+            value: "phoenix"
+          - key: "phoenix.priority"
+            action: "insert"
+            value: {{ .Resource.Attributes.GetString "aemf.process.priority" "unknown" }}
+          - key: "phoenix.isRolledUp"
+            action: "insert"
+            value: {{ if eq .Resource.Attributes.GetString "process.executable.name" "phoenix.others.process" }}true{{ else }}false{{ end }}
 
 exporters:
-  logging:
-    verbosity: detailed
-  
-  prometheusremotewrite:
-    endpoint: "http://localhost:9090/api/v1/write"
-    timeout: 5s
-
   otlp:
     endpoint: "https://otlp.nr-data.net:4317"  # New Relic OTLP endpoint
     headers:
@@ -142,8 +131,8 @@ service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      processors: [resource_filter, histogram_aggregator, attributes/process]
-      exporters: [logging, prometheusremotewrite, otlp]
+      processors: [metric_pipeline]
+      exporters: [otlp]
     
     control:
       receivers: [prometheus/self]

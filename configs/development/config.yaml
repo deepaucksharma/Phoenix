@@ -8,16 +8,31 @@ receivers:
   hostmetrics:
     collection_interval: 5s  # Faster for development environment
     scrapers:
-      cpu:
-      memory:
-      load:
-      filesystem:
-      network:
-      paging:
       process:
         include:
           match_type: regexp
           processes: [".*"]
+        metrics:
+          process.cpu.time: true
+          process.cpu.utilization: true
+          process.memory.rss: true
+          process.memory.virtual: true
+          process.disk.io: true
+          process.disk.operations: true
+          process.threads: true
+          process.open_file_descriptors: true
+          process.context_switches: false
+          process.signals: false
+          process.pagefaults: false
+        resource_attributes:
+          process.executable.name: true
+          process.executable.path: false
+          process.command: false
+          process.command_line: false
+          process.pid: true
+          process.parent_pid: false
+          process.owner: true
+          process.username: false
   
   prometheus/self:
     config:
@@ -28,24 +43,94 @@ receivers:
             - targets: ['localhost:8888']
 
 processors:
-  # Processors configured via policy.yaml
+  metric_pipeline:
+    resource_filter:
+      enabled: true
+      filter_strategy: hybrid
+      priority_attribute: "aemf.process.priority"
+      priority_rules:
+        - match: "process.executable.name=~/java|javaw/"
+          priority: high
+        - match: "process.executable.name=~/nginx|httpd|apache2/"
+          priority: high
+        - match: "process.executable.name=~/mysql|postgres|mongod|redis-server|elasticsearch/"
+          priority: critical
+        - match: "process.executable.name=~/python|python3|node|dotnet|ruby/"
+          priority: medium
+        - match: "process.executable.name=~/otelcol|sa-omf-otelcol|collector/"
+          priority: critical
+        - match: "process.executable.name=~/newrelic-infra|nri-.*/"
+          priority: critical
+        - match: ".*"
+          priority: low
+      topk:
+        k_value: 20
+        k_min: 10
+        k_max: 40
+        resource_field: "process.executable.name"
+        counter_field: "process.cpu.utilization"
+        coverage_target: 0.95
+      rollup:
+        enabled: true
+        priority_threshold: low
+        strategy: sum
+        name_prefix: "others"
+    transformation:
+      attributes:
+        actions:
+          - key: "process.pid"
+            action: "delete"
+          - key: "process.command_line"
+            action: "delete"
+          - key: "process.command"
+            action: "delete"
+          - key: "process.executable.path"
+            action: "delete"
+          - key: "container.id"
+            action: "delete"
+          - key: "process.executable.name"
+            action: "update"
+            value: {{ if eq .Value.String "unknown" }}unknown_process{{ else }}{{ .Value.String }}{{ end }}
+          - key: "collector.name"
+            action: "insert"
+            value: "Phoenix-SA-OMF"
+          - key: "service.name"
+            action: "insert"
+            value: "phoenix-process-metrics"
+          - key: "instrumentation.provider"
+            action: "insert"
+            value: "phoenix"
+          - key: "phoenix.priority"
+            action: "insert"
+            value: {{ .Resource.Attributes.GetString "aemf.process.priority" "unknown" }}
+          - key: "phoenix.isRolledUp"
+            action: "insert"
+            value: {{ if eq .Resource.Attributes.GetString "process.executable.name" "phoenix.others.process" }}true{{ else }}false{{ end }}
 
 exporters:
-  logging:
-    verbosity: detailed  # Detailed logs for development
-  
-  prometheusremotewrite:
-    endpoint: "http://localhost:9090/api/v1/write"
-    timeout: 5s
-  
+  otlp:
+    endpoint: "https://otlp.nr-data.net:4317"
+    headers:
+      api-key: "${env:NEW_RELIC_API_KEY}"
+    timeout: 10s
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 100
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
   pic_connector: {}
 
 service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      processors: [priority_tagger, adaptive_topk, others_rollup]
-      exporters: [logging, prometheusremotewrite]
+      processors: [metric_pipeline]
+      exporters: [otlp]
     
     control:
       receivers: [prometheus/self]
