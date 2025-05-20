@@ -28,6 +28,19 @@ controller.SetIntegralLimit(10.0)
 
 Use this to guard against excessive integral buildup when errors persist.
 
+## SetOutputLimits
+
+`SetOutputLimits(min, max float64) error` defines the allowable output range for the controller.
+An error is returned if `min` is not less than `max`.
+
+```go
+controller := pid.NewController(1.0, 0.5, 0.1, 100.0)
+if err := controller.SetOutputLimits(-10.0, 10.0); err != nil {
+    // handle invalid limits
+}
+```
+
+
 ## Back-Calculation Anti-Windup
 
 The controller also implements back-calculation anti-windup, which actively reduces the
@@ -45,12 +58,16 @@ controller.SetAntiWindupEnabled(false) // Disable anti-windup
 
 ### SetAntiWindupGain
 
-`SetAntiWindupGain(gain float64)` sets the gain for the back-calculation anti-windup mechanism.
+`SetAntiWindupGain(gain float64) error` sets the gain for the back-calculation anti-windup mechanism.
 Higher values result in faster integral term reduction during saturation, leading to quicker recovery.
+The method returns an error if a negative gain value is supplied.
 
 ```go
 controller := pid.NewController(1.0, 0.5, 0.1, 100.0)
-controller.SetAntiWindupGain(2.0) // More aggressive anti-windup
+err := controller.SetAntiWindupGain(2.0) // More aggressive anti-windup
+if err != nil {
+    // handle invalid gain
+}
 ```
 
 The default gain is 1.0, which provides a balance between reduction speed and stability.
