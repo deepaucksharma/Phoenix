@@ -4,7 +4,7 @@ Welcome to the documentation for the **Phoenix** project (SA-OMF: Self-Aware Ope
 
 ## Getting Started
 
-- [Project Overview](../readme.md) - Introduction to Phoenix
+- [Project Overview](../README.md) - Introduction to Phoenix
 - [Quick Start](./quickstarts/implementer.md) - Get up and running quickly
 - [Development Guide](./development-guide.md) - Comprehensive guide for developers
 - [Offline Building](./offline-build.md) - Building in network-restricted environments
