@@ -4,26 +4,35 @@ global_settings:
   collector_rss_safety_limit_mib: 350
 
 processors_config:
-  priority_tagger:
-    enabled: true
-    rules:
-      - match: "process.command_line=~/.*java.*/"
-        priority: high
-      - match: "process.name=~/nginx|httpd/"
-        priority: high
-      - match: "process.name=~/mysql|postgres|mongodb/"
-        priority: critical
-      - match: "process.command_line=~/.*python.*/"
-        priority: medium
-      - match: ".*"
-        priority: low
-  
-  adaptive_topk:
-    enabled: true
-    k_value: 30
-    k_min: 10
-    k_max: 60
-  
+  metric_pipeline:
+    resource_filter:
+      enabled: true
+      filter_strategy: hybrid
+      priority_attribute: "aemf.process.priority"
+      priority_rules:
+        - match: "process.command_line=~/.*java.*/"
+          priority: high
+        - match: "process.name=~/nginx|httpd/"
+          priority: high
+        - match: "process.name=~/mysql|postgres|mongodb/"
+          priority: critical
+        - match: "process.command_line=~/.*python.*/"
+          priority: medium
+        - match: ".*"
+          priority: low
+      topk:
+        k_value: 25
+        k_min: 10
+        k_max: 50
+        resource_field: "process.executable.name"
+        counter_field: "process.cpu.utilization"
+        coverage_target: 0.95
+      rollup:
+        enabled: false
+        strategy: "sum"
+        priority_threshold: "low"
+        name_prefix: "others"
+
   cardinality_guardian:
     enabled: false
     max_unique: 1000
@@ -32,9 +41,6 @@ processors_config:
     enabled: false
     reservoir_size: 100
   
-  others_rollup:
-    enabled: false
-
 pid_decider_config:
   controllers:
     - name: coverage_controller
@@ -46,8 +52,8 @@ pid_decider_config:
       kd: 0
       hysteresis_percent: 3
       output_config_patches:
-        - target_processor_name: adaptive_topk
-          parameter_path: k_value
+        - target_processor_name: metric_pipeline
+          parameter_path: resource_filter.topk.k_value
           change_scale_factor: -20.0
           min_value: 10
           max_value: 60
@@ -57,8 +63,10 @@ pic_control_config:
   max_patches_per_minute: 3
   patch_cooldown_seconds: 10
   safe_mode_processor_configs:
-    adaptive_topk:
-      k_value: 10
+    metric_pipeline:
+      resource_filter:
+        topk:
+          k_value: 10
     cardinality_guardian:
       max_unique: 100
 
@@ -67,7 +75,7 @@ service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      processors: [priority_tagger, adaptive_topk]
+      processors: [metric_pipeline]
       exporters: [prometheusremotewrite]
     control:
       receivers: [prometheus/self]
