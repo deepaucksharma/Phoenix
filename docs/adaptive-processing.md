@@ -32,6 +32,8 @@ Phoenix implements several adaptive mechanisms, with PID control being the prima
    - **D term**: Considers the rate of change of error
 5. **Adjust parameters** based on the controller output
 
+![PID Control Loop](images/pid-control-loop.png)
+
 #### Example: Adjusting k in adaptive_topk
 
 The `adaptive_topk` processor uses PID control to adjust its k value:
@@ -53,13 +55,14 @@ To prevent unstable behavior, Phoenix implements several safety features:
 4. **Oscillation detection**: Circuit breakers that temporarily disable adaptation when oscillation is detected
 5. **Rate limiting**: Prevents too-frequent adaptation
 
-### Beyond PID: Other Adaptive Techniques
+### Beyond PID: Bayesian Optimization
 
-In addition to PID control, Phoenix implements:
+For complex parameter spaces where PID control might not be sufficient, Phoenix can use Bayesian optimization:
 
-1. **Bayesian optimization**: Uses Gaussian processes for complex parameter spaces
-2. **Cardinality control**: Dynamically adjusts metrics cardinality based on resource usage
-3. **Statistical sampling**: Automatically adjusts sampling rates to balance detail and overhead
+1. **Gaussian Process Model**: Creates a probabilistic model of the parameter space
+2. **Acquisition Function**: Balances exploration vs. exploitation (Upper Confidence Bound)
+3. **Latin Hypercube Sampling**: Efficiently explores the parameter space
+4. **Automatic Fallback**: Can be triggered when PID control stalls or oscillates
 
 ## Adaptive Components
 
@@ -75,6 +78,19 @@ This processor dynamically adjusts the k parameter (number of top resources to t
 - Applies PID control to adjust k up or down
 - Aims to use the smallest k value that achieves target coverage
 
+```yaml
+adaptive_topk:
+  enabled: true
+  metrics_pattern:
+    - "process.cpu.time"
+  dimension_key: "process.executable.name"
+  k_value: 20          # Initial value
+  k_min: 10            # Minimum allowed value
+  k_max: 50            # Maximum allowed value
+  coverage_target: 0.95  # Target coverage score
+  adaptation_interval: 30s
+```
+
 ### others_rollup
 
 Aggregates metrics from low-priority resources to reduce cardinality while preserving detail for important resources.
@@ -84,6 +100,17 @@ Aggregates metrics from low-priority resources to reduce cardinality while prese
 - Identifies low-priority resources for aggregation
 - Preserves individual metrics for high-priority resources
 - May adjust aggregation threshold based on current cardinality
+
+```yaml
+others_rollup:
+  enabled: true
+  priority_attribute: "priority"
+  low_priority_values:
+    - "low"
+  prefix: "others"
+  metrics_pattern:
+    - "process.cpu.time"
+```
 
 ### cardinality_guardian
 
@@ -95,43 +122,85 @@ Monitors and controls overall metrics cardinality to prevent resource exhaustion
 - Applies more aggressive filtering to low-priority metrics
 - Uses system resource usage (memory, CPU) as inputs
 
-## Configuring Adaptive Behavior
+```yaml
+cardinality_guardian:
+  enabled: true
+  max_cardinality: 5000
+  adaptation_interval: 60s
+  max_decrease_percent: 15
+  metrics_pattern:
+    - ".*"
+  priority_attribute: "priority"
+```
 
-Adaptive behavior is configured through the policy.yaml file. Key parameters include:
+### adaptive_pid
 
-1. **PID parameters** (kp, ki, kd): Control the responsiveness and stability
-2. **Target values**: Define the desired steady state
-3. **Safety limits**: Set boundaries on adaptation
-4. **Adaptation intervals**: Control how frequently adaptation occurs
+Monitors KPIs and adjusts parameters of other processors using PID controllers.
 
-### Example Configuration
+**Adaptation Strategy**:
+- Monitors target KPI metrics
+- Calculates adjustments using PID control logic
+- Can fall back to Bayesian optimization for complex parameters
+- Implements oscillation detection to prevent instability
 
 ```yaml
-adaptive_processors:
-  adaptive_topk:
-    coverage_controller:
-      target_value: 0.95
-      pid:
-        kp: 0.5
-        ki: 0.1
-        kd: 0.05
-        integral_limit: 20.0
-      safety:
-        min_value: 10
-        max_value: 500
-        adaption_interval: "30s"
-        
-  others_rollup:
-    cardinality_controller:
-      target_value: 10000
-      pid:
-        kp: 0.3
-        ki: 0.05
-        kd: 0.02
-      safety:
-        min_threshold: 0.1
-        max_threshold: 0.9
+adaptive_pid:
+  controllers:
+    - name: "coverage_controller"
+      enabled: true
+      kpi_metric_name: "aemf_impact_adaptive_topk_resource_coverage_percent"
+      kpi_target_value: 0.95
+      kp: 0.5
+      ki: 0.1
+      kd: 0.05
+      hysteresis_percent: 3
+      integral_windup_limit: 10
+      use_bayesian: true
+      stall_threshold: 3
 ```
+
+## Configuring Adaptive Behavior
+
+The adaptive behavior is configured through two files:
+
+1. **config.yaml**: Defines the initial processor settings
+2. **policy.yaml**: Controls the adaptation parameters
+
+### Policy Configuration
+
+The `policy.yaml` file defines how the adaptive processing behaves:
+
+```yaml
+processors_config:
+  adaptive_topk:
+    controller:
+      kp: 0.5
+      ki: 0.1
+      kd: 0.05
+      integral_windup_limit: 10
+      hysteresis_percent: 5
+      target_value: 0.95
+
+safety:
+  resource_limits:
+    max_memory_percent: 90
+    max_cpu_percent: 95
+  rate_limiting:
+    max_adaptation_frequency: 10
+    cooldown_period: 30s
+  protection:
+    enable_circuit_breakers: true
+```
+
+## The Adaptation Lifecycle
+
+1. **Collection**: Self-metrics are collected from processors
+2. **Evaluation**: KPIs are calculated and compared to targets
+3. **Calculation**: PID controllers compute necessary adjustments
+4. **Validation**: Adjustments are checked against safety limits
+5. **Application**: Configuration changes are applied to processors
+6. **Observation**: System observes the effects of changes
+7. **Iteration**: Process repeats at the next adaptation interval
 
 ## Monitoring Adaptation
 
@@ -145,13 +214,13 @@ Phoenix's adaptive behavior can be monitored through:
 
 | Metric | Description | When to Investigate |
 |--------|-------------|---------------------|
-| `pid_controller_error` | Current error value | Large oscillations or consistent high values |
-| `pid_controller_output` | Controller output | Hitting min/max limits consistently |
-| `pid_controller_p_term` | Proportional term | Unusually large values |
-| `pid_controller_i_term` | Integral term | Accumulating to large values |
-| `pid_controller_d_term` | Derivative term | Spikes indicating noise |
-| `circuit_breaker_state` | Circuit breaker state | When tripped (value=1) |
-| `parameter_value` | Current value of the adjusted parameter | Hitting limits or plateauing |
+| `aemf_pid_controller_error` | Current error value | Large oscillations or consistent high values |
+| `aemf_pid_controller_output` | Controller output | Hitting min/max limits consistently |
+| `aemf_pid_controller_p_term` | Proportional term | Unusually large values |
+| `aemf_pid_controller_i_term` | Integral term | Accumulating to large values |
+| `aemf_pid_controller_d_term` | Derivative term | Spikes indicating noise |
+| `aemf_controller_pid_circuit_breaker_trips_total` | Circuit breaker trips | When frequently tripped |
+| `aemf_adaptive_topk_current_k_value` | Current k value | Hitting limits or plateauing |
 
 ## Best Practices
 
@@ -183,3 +252,20 @@ For a system experiencing high cardinality from numerous ephemeral resources:
 2. Set up `others_rollup` to aggregate low-priority resources
 3. Let controllers dynamically adjust thresholds as workload changes
 4. Result: Reliable cardinality control preventing resource exhaustion
+
+## Troubleshooting
+
+| Issue | Possible Solution |
+|-------|-------------------|
+| Parameter oscillating | Reduce kp and ki values, increase hysteresis, enable circuit breaker |
+| Slow adaptation | Increase kp value, check if hitting output limits |
+| Adaptation stalled | Check if circuit breaker is tripped, consider enabling Bayesian fallback |
+| Excessive resource usage | Verify safety limits are properly configured |
+| Unexpected adaptation | Check logs for PID controller state and metrics |
+
+## References
+
+- [PID Controller Documentation](pid-controllers.md)
+- [Architecture Decision Record for PID Control](architecture/adr/20250519-use-self-regulating-pid-control-for-adaptive-processing.md)
+- [Bayesian Optimization Guide](bayesian-optimization.md)
+- [Configuration Reference](configuration-reference.md)

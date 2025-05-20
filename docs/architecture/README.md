@@ -1,36 +1,126 @@
 # Architecture Documentation
 
-This directory contains architectural documentation for the Phoenix project.
+This directory contains architectural documentation for the Phoenix project (Self-Aware OpenTelemetry Metrics Fabric).
 
 ## Contents
 
 - **adr/** - Architecture Decision Records
   - Contains formal records of significant architectural decisions made during the project
   - Each ADR explains the context, decision, and consequences of a key architectural choice
+- **[dual-pipeline-architecture.md](dual-pipeline-architecture.md)** - Detailed explanation of the dual-pipeline architecture
+- **[CURRENT_STATE.md](CURRENT_STATE.md)** - Current architectural state and implementation details
 
 ## Current Architecture Overview
 
-Phoenix features a streamlined architecture with self-adaptive processors:
+Phoenix implements a dual-pipeline architecture that separates data processing from control logic:
 
 1. **Data Pipeline**:
-   - Collects metrics from hostmetrics receiver
-   - Processes through various adaptive processors
-   - Exports metrics to configured destinations
+   - Collects metrics from standard OpenTelemetry receivers (e.g., hostmetrics)
+   - Processes through various adaptive processors:
+     - `priority_tagger`: Tags resources with priority levels
+     - `adaptive_topk`: Dynamically filters to the most important resources
+     - `others_rollup`: Aggregates lower-priority resources
+   - Exports processed metrics to configured destinations
+   - Each processor emits self-metrics about its own operation
 
-2. **Self-Adaptive Components**:
-   - Each processor implements internal self-adaptation
-   - PID controllers are embedded within processors
-   - Each processor monitors its own metrics and adjusts parameters
+2. **Control Pipeline**:
+   - Monitors self-metrics from the data pipeline
+   - Runs PID controllers to calculate needed adjustments
+   - Generates configuration patches for the data pipeline
+   - Uses the `adaptive_pid` processor as its core component
+   - Connects to `pic_control_ext` to apply changes
 
-For a detailed explanation of the current architecture and its evolution, see [CURRENT_STATE.md](./CURRENT_STATE.md).
+3. **Integration Components**:
+   - `pic_control_ext`: Central governance layer for configuration changes
+   - `UpdateableProcessor` interface: Allows processors to receive dynamic configuration
 
-## Key Architectural Principles
+## Architectural Principles
 
-1. **Self-Adaptation**: Components automatically adjust to changing conditions
-2. **Feedback Control**: PID controllers provide stable parameter adjustments
-3. **Safety Limits**: All adaptive behavior is constrained by configurable limits
-4. **Observable Decisions**: All adaptation decisions are exposed as metrics
+1. **Separation of Concerns**: Clean separation between data processing and control logic
+2. **Self-Adaptation**: System automatically adjusts to changing conditions
+3. **Feedback Control**: PID controllers provide stable parameter adjustments
+4. **Safety Limits**: All adaptive behavior is constrained by configurable limits
+5. **Observable Decisions**: All adaptation decisions are exposed as metrics
 
-## Historical Context
+## Detailed Component Relationships
 
-The project has evolved from an earlier dual-pipeline design (see [ADR-001](./adr/001-dual-pipeline-architecture.md)) to a more streamlined approach with self-contained adaptive processors. This evolution has simplified the architecture while maintaining the core value proposition of adaptive processing.
+```
+                ┌──────────────────────────────────────────┐
+                │        Host / App  Metrics (OTLP)        │
+                └──────┬────────────────────────────────────┘
+                       │
+       ┌───────────────▼───────────────┐
+       │  Phoenix Data  Pipeline        │
+       │ (Adaptive Processors:         │
+       │  - PriorityTagger             │
+       │  - AdaptiveTopK               │
+       │  - OthersRollup)              │
+       └───────────────┬───────────────┘
+                       │ Self-Metrics
+                       ▼
+       ┌──────────────────────────────────────────┐
+       │        Phoenix Control Pipeline          │
+       │  (Processors:                            │
+       │   - AdaptivePID: PID → Bayesian Logic)   │
+       │  (Outputs: ConfigPatch Objects)          │
+       └──────────────────────┬───────────────────┘
+                              │ ConfigPatch
+                              ▼
+                 ┌───────────────────────────┐
+                 │ PIC Control Extension      │
+                 └───────────────┬───────────┘
+                                 │ OnConfigPatch
+                                 ▼
+                 ┌───────────────────────────┐
+                 │ UpdateableProcessor.apply  │
+                 └───────────────────────────┘
+```
+
+## Safety Mechanisms
+
+Phoenix includes several built-in safety mechanisms:
+
+1. **PID Controller Safeguards**:
+   - Anti-windup protection prevents integral term saturation
+   - Derivative filtering reduces noise sensitivity
+   - Circuit breakers detect and mitigate oscillation
+   - Output clamping ensures parameters stay within bounds
+
+2. **System-Level Safeguards**:
+   - Resource usage monitoring (CPU, memory)
+   - Automatic safe mode activation under high resource pressure
+   - Graduated adaptation response for smoother transitions
+   - Rate limiting prevents too-frequent parameter changes
+
+## Key Architecture Decisions
+
+The core architectural decisions are documented in Architecture Decision Records (ADRs):
+
+1. [ADR-001: Dual-Pipeline Architecture](adr/001-dual-pipeline-architecture.md) - Establishes the separation between data and control pipelines
+2. [ADR-002: Self-Regulating PID Control](adr/20250519-use-self-regulating-pid-control-for-adaptive-processing.md) - Details the decision to use PID controllers for adaptation
+
+## Implementation Notes
+
+Current implementation considerations:
+
+1. **UpdateableProcessor Interface**: The core interface that allows processors to receive configuration updates:
+   ```go
+   type UpdateableProcessor interface {
+       OnConfigPatch(ctx context.Context, patch *ConfigPatch) error
+       GetConfigStatus(ctx context.Context) (any, error)
+   }
+   ```
+
+2. **Configuration Flow**:
+   - Configuration originates in the `policy.yaml` file
+   - PID controllers in `adaptive_pid` processor calculate adjustments
+   - Changes flow through the system as `ConfigPatch` objects
+   - `pic_control_ext` validates and applies changes to processors
+
+3. **Metrics Flow**:
+   - Processors emit self-metrics with the `aemf_` prefix
+   - Control pipeline monitors these metrics to calculate KPIs
+   - Metrics become inputs to PID controllers
+   - System also exports standard OTel metrics with the `otelcol_` prefix
+
+For detailed documentation on specific components, please see the [Components Documentation](../components/README.md).

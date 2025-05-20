@@ -1,6 +1,6 @@
 # PID Controllers in Phoenix
 
-This document describes the PID controller implementation in Phoenix, its usage, and tuning guidelines.
+This document describes the PID controller implementation in Phoenix, its usage, and tuning guidelines, with a focus on advanced stability features.
 
 ## What is a PID Controller?
 
@@ -8,11 +8,11 @@ A PID (Proportional-Integral-Derivative) controller is a control loop mechanism 
 
 ## Core Implementation
 
-The PID controller implementation includes these key features:
+The PID controller implementation in Phoenix includes these key features:
 
 - Traditional PID algorithm with configurable P, I, and D terms
 - Anti-windup protection to prevent integral term saturation
-- Low-pass filtering for derivative term to reduce noise sensitivity
+- Low-pass derivative filtering to reduce noise sensitivity
 - Oscillation detection with circuit breaker capability
 - Thread-safety for concurrent access
 - Comprehensive metrics and logging
@@ -71,9 +71,52 @@ type Controller struct {
 - `EnableCircuitBreaker(enabled bool)`
 - `ConfigureCircuitBreaker(params...)`
 
-## Oscillation Detection
+## Advanced Stability Features
 
-The PID controller includes a sophisticated oscillation detection mechanism:
+### Anti-Windup Protection
+
+Integral windup occurs when a large error causes the integral term to grow excessively large, resulting in overshoots when the system finally responds. Phoenix implements "back-calculation" anti-windup:
+
+1. When the controller output hits the defined limits, it calculates how much "over" the limit it would have gone
+2. This over-saturation value is used to reduce the integral term
+3. The `antiWindupGain` parameter controls how aggressively to back-calculate the integral term
+
+```go
+// Anti-windup back-calculation when output is saturated at max
+if output > c.outputMax {
+    if c.antiWindupEnabled && c.ki != 0 {
+        // Reduce integral term based on saturation amount
+        saturationError := c.outputMax - output
+        c.integral += (saturationError * c.antiWindupGain) / c.ki
+    }
+    output = c.outputMax
+}
+```
+
+### Derivative Filtering
+
+The derivative term can amplify noise in the measured signal. Phoenix applies a first-order low-pass filter to the derivative calculation to smooth out noise:
+
+```go
+// Apply filtering to the derivative to reduce noise sensitivity
+currentDerivative := (error - c.lastError) / dt
+previousDerivative := (c.lastError - c.prevError) / c.lastDeltaTime
+
+// Apply low-pass filter to derivative term
+filteredDerivative := c.derivativeFilterCoeff*currentDerivative +
+    (1.0-c.derivativeFilterCoeff)*previousDerivative
+
+dTerm = c.kd * filteredDerivative
+```
+
+The `derivativeFilterCoeff` ranges from 0 to 1:
+- Value of 1.0: No filtering (use raw derivative)
+- Value of 0.0: Ignore current derivative entirely
+- Typical values: 0.1-0.3 for good noise reduction while maintaining responsiveness
+
+### Oscillation Detection and Circuit Breaking
+
+Phoenix includes an advanced oscillation detection mechanism that monitors the controller output for oscillation patterns and can temporarily disable the controller when unstable behavior is detected:
 
 ```go
 type OscillationDetector struct {
@@ -96,7 +139,12 @@ type OscillationDetector struct {
 }
 ```
 
-The detector analyzes the pattern of zero-crossings (sign changes) in the controller output signal and trips the circuit breaker if oscillations exceed the configured thresholds.
+The detector:
+1. Tracks a window of recent controller outputs and measurements
+2. Counts "zero crossings" (sign changes) in the controller output
+3. If the percentage of samples showing oscillation exceeds a threshold for a defined duration, it trips the circuit breaker
+4. When the circuit breaker is tripped, a safer control strategy is used (proportional-only with reduced gain)
+5. The circuit breaker automatically resets after a configurable duration, or it can be manually reset
 
 ## Using the PID Controller
 
@@ -159,6 +207,24 @@ controller.ConfigureCircuitBreaker(
 status := controller.GetCircuitBreakerStatus()
 ```
 
+## Integration with Bayesian Optimization
+
+For complex parameter spaces or when PID control stalls, Phoenix can automatically switch to Bayesian optimization:
+
+```go
+// In adaptive_pid processor config
+use_bayesian: true
+stall_threshold: 3  // Number of consecutive ineffective PID adjustments before switching
+```
+
+The Bayesian optimizer:
+1. Uses a Gaussian Process (GP) model to learn the relationship between parameters and KPIs
+2. Uses an acquisition function (Upper Confidence Bound) to balance exploration and exploitation
+3. Efficiently explores the parameter space using Latin Hypercube Sampling
+4. Can discover optimal parameter values even in complex, non-linear parameter spaces
+
+See [Bayesian Optimization](bayesian-optimization.md) for more details.
+
 ## Tuning PID Controllers
 
 Properly tuning PID controllers is critical for effective adaptation. Here are guidelines for each parameter:
@@ -217,7 +283,26 @@ pid:
   kd: 0.02
   integral_limit: 20.0
   derivative_filter_coefficient: 0.1
+  circuit_breaker:
+    enabled: true
+    sample_window: 30
+    threshold_percent: 60.0
+    min_duration: 60s
 ```
+
+## Key Metrics to Monitor
+
+Phoenix emits detailed metrics about PID controller behavior. Key metrics to watch:
+
+| Metric | Description | When to Investigate |
+|--------|-------------|---------------------|
+| `aemf_pid_controller_error` | Current error value | Large oscillations or persistent non-zero values |
+| `aemf_pid_controller_output` | Controller output | Hitting min/max limits consistently |
+| `aemf_pid_controller_p_term` | Proportional term contribution | Unusually large values |
+| `aemf_pid_controller_i_term` | Integral term contribution | Growing continuously (windup) |
+| `aemf_pid_controller_d_term` | Derivative term contribution | Spikes indicating noise |
+| `aemf_controller_pid_circuit_breaker_trips_total` | Circuit breaker activations | Frequent tripping suggests instability |
+| `aemf_pid_output_clamped_total` | Output limit hits | Frequent clamping suggests wrong output limits |
 
 ## Best Practices
 
@@ -227,9 +312,24 @@ pid:
 4. **Filter Derivative**: Use derivative filtering to reduce noise sensitivity
 5. **Set Appropriate Limits**: Configure output limits and integral limits based on parameter constraints
 6. **Test with Real Workloads**: Final tuning should be done with representative workloads
+7. **Consider Bayesian Fallback**: For complex parameter spaces, enable Bayesian optimization fallback
+
+## Troubleshooting
+
+| Issue | Symptoms | Solutions |
+|-------|----------|-----------|
+| **Oscillation** | Parameter value rapidly changes back and forth | Reduce kp and ki values, increase derivative term, enable circuit breaker, increase hysteresis |
+| **Slow Response** | System takes too long to reach target | Increase kp, check if output is hitting limits, decrease hysteresis |
+| **Overshooting** | Parameter exceeds target significantly before settling | Increase kd, reduce kp and ki, add anti-windup |
+| **Steady-State Error** | System stabilizes but doesn't reach target | Increase ki to eliminate persistent error |
+| **Noisy Output** | Parameter changes too much in response to noise | Increase derivative filtering, reduce kd |
+| **Windup** | Integral term grows excessively | Enable anti-windup, set appropriate integral limits |
 
 ## References
 
 - [PID Controller Theory](https://en.wikipedia.org/wiki/PID_controller)
 - [Anti-Windup Techniques](https://en.wikipedia.org/wiki/Integral_windup)
 - [Digital PID Controllers](https://www.sciencedirect.com/topics/engineering/digital-pid-controller)
+- [Architecture Decision: Self-Regulating PID Control](architecture/adr/20250519-use-self-regulating-pid-control-for-adaptive-processing.md)
+- [Bayesian Optimization](bayesian-optimization.md)
+- [PID Integral Controls](components/pid/pid_integral_controls.md)
