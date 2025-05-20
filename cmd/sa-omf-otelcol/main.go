@@ -15,9 +15,8 @@ import (
 
 	// Import your components here
 	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
-	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_topk"
-	"github.com/deepaucksharma/Phoenix/internal/processor/priority_tagger"
-	"github.com/deepaucksharma/Phoenix/internal/processor/reservoir_sampler"
+	"github.com/deepaucksharma/Phoenix/internal/processor/histogram_aggregator"
+	"github.com/deepaucksharma/Phoenix/internal/processor/metric_pipeline"
 	// Add more component imports as they are implemented
 )
 
@@ -63,10 +62,9 @@ func components() (otelcol.Factories, error) {
 	// Processors
 	processors := []processor.Factory{
 		// Add custom processors as they are implemented:
-		priority_tagger.NewFactory(),
+		metric_pipeline.NewFactory(),
 		adaptive_pid.NewFactory(),
-		adaptive_topk.NewFactory(),
-		reservoir_sampler.NewFactory(),
+		histogram_aggregator.NewFactory(),
 		// etc.
 	}
 	factories.Processors = make(map[component.Type]processor.Factory)

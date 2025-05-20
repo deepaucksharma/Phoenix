@@ -26,8 +26,6 @@ This directory contains a comprehensive testing framework for the SA-OMF (Phoeni
 
 - `processors/` - Tests for specific metric processors
   - `adaptive_pid/` - Tests for the PID decision processor
-  - `priority_tagger/` - Tests for the priority tagging processor
-  - `others_rollup/` - Tests for the others rollup processor
   - `templates/` - Shared test templates for processors
 
 - `extensions/` - Tests for custom extensions
