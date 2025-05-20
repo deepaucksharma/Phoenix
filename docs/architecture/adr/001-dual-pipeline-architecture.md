@@ -2,6 +2,10 @@
 
 Date: 2025-05-20
 
+## Status
+
+Accepted
+
 ## Context
 
 The SA-OMF (Phoenix) system requires a mechanism for the OpenTelemetry Collector to dynamically configure itself based on the characteristics of the telemetry it is processing. We need a way for the collector to:
@@ -62,7 +66,7 @@ We will implement a dual-pipeline architecture within a single OpenTelemetry Col
 - Design a "safe mode" that can be automatically triggered if the system detects abnormal behavior.
 - Provide extensive metrics and Grafana dashboards to monitor the system's behavior.
 
-## Alternative Approaches Considered
+## Alternatives Considered
 
 1. **External Control Loop**: Using a separate process to monitor and adjust the collector. Rejected due to complexity of deployment and slower reaction time.
 
@@ -71,6 +75,13 @@ We will implement a dual-pipeline architecture within a single OpenTelemetry Col
 3. **Central Control Plane**: Using a central service to manage multiple collectors. While valuable for fleet management, this moves critical adjustment logic away from the edge where it's most needed.
 
 4. **Static Configuration with Overrides**: Using a static baseline with occasional manual overrides. Rejected due to inability to adapt to changing workloads in real-time.
+
+## Implementation Notes
+
+1. Implement processors with an `UpdateableProcessor` interface to allow runtime configuration changes.
+2. Build the `pic_control` extension to validate and apply `ConfigPatch` updates.
+3. Emit metrics and traces for all decisions to provide observability and auditability.
+4. Ensure the control pathway initializes before dynamic processors to avoid race conditions.
 
 ## References
 
