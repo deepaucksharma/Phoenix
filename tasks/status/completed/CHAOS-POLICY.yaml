@@ -1,0 +1,49 @@
+id: CHAOS-POLICY
+title: "Implement Corrupt Policy File During Hot-Reload Test"
+state: done
+priority: high
+created_at: "2025-05-20"
+assigned_to: "tester"
+area: "test/e2e/chaos"
+depends_on: []
+acceptance:
+  - "Test corrupts policy.yaml file during hot-reload process"
+  - "pic_control detects corruption and maintains last known good policy"
+  - "System continues with previous valid policy without disruption"
+  - "policy_reload_failed_total metric increments"
+  - "aemf_pic_control_autonomy_level remains at last good value"
+  - "System logs appropriate error about policy corruption"
+description: |
+  Ensuring that pic_control extension can handle policy file corruption is
+  critical for operational resilience. This test verifies that the system
+  can detect corrupt policy files and maintain operation with the last known
+  good policy.
+  
+  The test should:
+  
+  1. Start the collector with a valid policy.yaml
+  2. Establish baseline operation with this policy
+  3. Corrupt the policy file during reload:
+     - Start a valid policy change (e.g., modifying a parameter)
+     - Before pic_control finishes reading, corrupt the file
+     - Corruption methods to test:
+       * Truncate file mid-read
+       * Inject binary data
+       * Replace with partial/invalid YAML
+  4. Verify robust error handling:
+     - pic_control logs clear error about policy corruption
+     - policy_reload_failed_total metric increments
+     - System continues running with last known good policy
+     - aemf_pic_control_autonomy_level remains unchanged
+  5. Verify system stability:
+     - Data pipeline continues to operate normally
+     - Control loop continues to function with previous policy
+     - No crashes or unexpected behavior
+  
+  This chaos test is important for ensuring the system remains operational
+  even when configuration files are damaged, which could happen due to
+  disk corruption, failed writes, or process interruptions.
+  
+  Implementation should include various corruption scenarios and verify
+  the system's ability to detect them all. It should also test recovery
+  when a valid policy is restored.

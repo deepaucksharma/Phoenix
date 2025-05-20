@@ -23,13 +23,12 @@ import (
 	"github.com/deepaucksharma/Phoenix/pkg/util/typeconv"
 )
 
-// This const is defined in factory.go
-// var typeStr = "pid_decider"
-
-// Removed duplicate Config, ControllerConfig, and OutputConfigPatch definitions
-// These are already defined in config.go
-
 var _ component.Config = (*Config)(nil)
+
+// Interface for pic_control extension
+type picControl interface {
+	SubmitConfigPatch(ctx context.Context, patch interfaces.ConfigPatch) error
+}
 
 // pidProcessor implements the pid_decider processor
 type pidProcessor struct {
@@ -39,6 +38,7 @@ type pidProcessor struct {
 	controllers  []*controller
 	lock         sync.RWMutex
 	metrics      *metrics.MetricsEmitter
+	picControl   picControl // Interface to pic_control_ext
 }
 
 // controller represents a single PID control loop
@@ -57,12 +57,13 @@ var _ processor.Metrics = (*pidProcessor)(nil)
 var _ interfaces.UpdateableProcessor = (*pidProcessor)(nil)
 
 // newProcessor creates a new pid_decider processor
-func newProcessor(config *Config, settings component.TelemetrySettings, nextConsumer consumer.Metrics, id component.ID) (*pidProcessor, error) {
+func newProcessor(config *Config, settings component.TelemetrySettings, picControlExt picControl, id component.ID) (*pidProcessor, error) {
 	p := &pidProcessor{
 		logger:       settings.Logger,
-		nextConsumer: nextConsumer,
+		nextConsumer: nil, // Not used directly, patches are submitted to pic_control
 		config:       config,
 		controllers:  make([]*controller, 0, len(config.Controllers)),
+		picControl:   picControlExt,
 	}
 
 	// Initialize controllers
@@ -109,8 +110,16 @@ func newProcessor(config *Config, settings component.TelemetrySettings, nextCons
 }
 
 // NewProcessor creates a new pid_decider processor - exported for testing
-func NewProcessor(config *Config, settings component.TelemetrySettings, nextConsumer consumer.Metrics, id component.ID) (*pidProcessor, error) {
-	return newProcessor(config, settings, nextConsumer, id)
+func NewProcessor(config *Config, settings component.TelemetrySettings, picControlExt interface{}, id component.ID) (*pidProcessor, error) {
+	// Handle case where picControlExt could be nil or not implement picControl
+	var picCtrl picControl
+	if picControlExt != nil {
+		if pc, ok := picControlExt.(picControl); ok {
+			picCtrl = pc
+		}
+	}
+	
+	return newProcessor(config, settings, picCtrl, id)
 }
 
 // Start implements the Component interface
@@ -129,191 +138,32 @@ func (p *pidProcessor) Capabilities() consumer.Capabilities {
 	return consumer.Capabilities{MutatesData: false}
 }
 
-// ConsumeMetrics processes incoming metrics
+// ConsumeMetrics processes incoming metrics and submits patches to pic_control
 func (p *pidProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	// Extract KPI values from metrics
-	kpiValues := extractKPIValues(md)
-
-	// Process each controller
-	for _, ctrl := range p.controllers {
-		// Get current KPI value
-		kpiValue, found := kpiValues[ctrl.config.KPIMetricName]
-		if !found {
-			// KPI not found in this batch, try next controller
-			continue
-		}
-
-		// Save current value
-		ctrl.lastValues[ctrl.config.KPIMetricName] = kpiValue
-
-		// Update PID controller and get output
-		output := ctrl.pid.Compute(kpiValue)
-
-		if ctrl.optimizer != nil {
-			if math.Abs(output-ctrl.lastPIDOut) < 1e-3 {
-				ctrl.stallCount++
-			} else {
-				ctrl.stallCount = 0
-			}
-			ctrl.lastPIDOut = output
-
-			// Add sample for optimizer based on current outputs
-			sample := make([]float64, len(ctrl.config.OutputConfigPatches))
-			for i, pch := range ctrl.config.OutputConfigPatches {
-				sample[i] = ctrl.lastOutputs[pch.ParameterPath]
-			}
-			score := -math.Abs(ctrl.config.KPITargetValue - kpiValue)
-			ctrl.optimizer.AddSample(sample, score)
-
-			if ctrl.stallCount >= ctrl.config.StallThreshold {
-				suggestion := ctrl.optimizer.Suggest()
-				for i, outConfig := range ctrl.config.OutputConfigPatches {
-					newValue := suggestion[i]
-					if newValue < outConfig.MinValue {
-						newValue = outConfig.MinValue
-					} else if newValue > outConfig.MaxValue {
-						newValue = outConfig.MaxValue
-					}
-					ctrl.lastOutputs[outConfig.ParameterPath] = newValue
-					patch := interfaces.ConfigPatch{
-						PatchID:             uuid.New().String(),
-						TargetProcessorName: component.NewID(component.MustNewType(typeStr)),
-						ParameterPath:       outConfig.ParameterPath,
-						NewValue:            newValue,
-						Reason:              "bayesian_fallback",
-						Severity:            "normal",
-						Source:              "pid_decider",
-						Timestamp:           time.Now().Unix(),
-						TTLSeconds:          300,
-					}
-					p.logger.Info("Bayesian patch", zap.String("controller", ctrl.config.Name), zap.String("patch_id", patch.PatchID))
-				}
-				ctrl.stallCount = 0
-				continue
-			}
-		}
-
-		// Generate ConfigPatch for each output parameter
-		for _, outConfig := range ctrl.config.OutputConfigPatches {
-			// Apply scaling factor to the output
-			scaledDelta := output * outConfig.ChangeScaleFactor
-
-			// Get last output value for this parameter
-			lastValue := ctrl.lastOutputs[outConfig.ParameterPath]
-
-			// Calculate new value
-			newValue := lastValue + scaledDelta
-
-			// Clamp to min/max
-			if newValue < outConfig.MinValue {
-				newValue = outConfig.MinValue
-			} else if newValue > outConfig.MaxValue {
-				newValue = outConfig.MaxValue
-			}
-
-			// Check against hysteresis threshold
-			if lastValue != 0 {
-				changePercent := (newValue - lastValue) / lastValue * 100
-				if math.Abs(changePercent) < ctrl.config.HysteresisPercent {
-					// Change too small, skip
-					continue
-				}
-			}
-
-			// If we get here, the change is significant enough to emit a patch
-
-			// Generate patch
-			patch := interfaces.ConfigPatch{
-				PatchID:             uuid.New().String(),
-				TargetProcessorName: component.NewID(component.MustNewType(typeStr)),
-				ParameterPath:       outConfig.ParameterPath,
-				NewValue:            newValue,
-				Reason:              generateReason(ctrl.config.Name, ctrl.config.KPITargetValue-kpiValue, output),
-				Severity:            "normal",
-				Source:              "pid_decider",
-				Timestamp:           time.Now().Unix(),
-				TTLSeconds:          300, // 5 minute TTL
-			}
-
-			// Emit as metric with attributes
-			// Note: In a full implementation, we'd add this patch to the output metrics
-			// For now, we'll just log it
-			p.logger.Info("Generated patch",
-				zap.String("controller", ctrl.config.Name),
-				zap.String("patch_id", patch.PatchID),
-				zap.String("target", typeStr),
-				zap.String("parameter", outConfig.ParameterPath),
-				zap.Float64("new_value", newValue),
-				zap.Float64("error", ctrl.config.KPITargetValue-kpiValue),
-				zap.Float64("raw_output", output))
-
-			// In a real implementation, we would create a metric for this patch
-			// and add it to the output metrics. For now, we'll create a stub.
-
-			// Update last output value
-			ctrl.lastOutputs[outConfig.ParameterPath] = newValue
-		}
+	// Process metrics and generate patches
+	patches, err := p.ProcessMetricsForTest(ctx, md)
+	if err != nil {
+		return err
 	}
-
-	// Forward metrics to next consumer
-	return p.nextConsumer.ConsumeMetrics(ctx, md)
-}
-
-// extractKPIValues extracts KPI values from metrics
-func extractKPIValues(md pmetric.Metrics) map[string]float64 {
-	kpiValues := make(map[string]float64)
-
-	// Iterate through all metrics
-	for i := 0; i < md.ResourceMetrics().Len(); i++ {
-		rm := md.ResourceMetrics().At(i)
-		for j := 0; j < rm.ScopeMetrics().Len(); j++ {
-			sm := rm.ScopeMetrics().At(j)
-			for k := 0; k < sm.Metrics().Len(); k++ {
-				metric := sm.Metrics().At(k)
-
-				// Check metric name
-				name := metric.Name()
-
-				// Skip metrics that don't start with aemf_impact
-				if !strings.HasPrefix(name, "aemf_impact") {
-					continue
-				}
-
-				// Extract value based on metric type
-				var value float64
-				switch metric.Type() {
-				case pmetric.MetricTypeGauge:
-					if metric.Gauge().DataPoints().Len() > 0 {
-						dp := metric.Gauge().DataPoints().At(metric.Gauge().DataPoints().Len() - 1)
-						value = dp.DoubleValue()
-						kpiValues[name] = value
-					}
-				case pmetric.MetricTypeSum:
-					if metric.Sum().DataPoints().Len() > 0 {
-						dp := metric.Sum().DataPoints().At(metric.Sum().DataPoints().Len() - 1)
-						value = dp.DoubleValue()
-						kpiValues[name] = value
-					}
-				}
+	
+	// Submit patches to pic_control if available
+	if p.picControl != nil {
+		for _, patch := range patches {
+			err := p.picControl.SubmitConfigPatch(ctx, patch)
+			if err != nil {
+				p.logger.Warn("Failed to submit config patch", 
+					zap.String("patch_id", patch.PatchID),
+					zap.Error(err))
 			}
 		}
 	}
-
-	return kpiValues
-}
-
-// generateReason creates a human-readable reason for a patch
-func generateReason(controllerName string, error float64, output float64) string {
-	direction := "increase"
-	if output < 0 {
-		direction = "decrease"
+	
+	// Forward metrics to next consumer if one is configured
+	if p.nextConsumer != nil {
+		return p.nextConsumer.ConsumeMetrics(ctx, md)
 	}
-
-	return fmt.Sprintf("%s: Adjusting parameter to %s coverage (error: %.3f, pid_output: %.3f)",
-		controllerName, direction, error, output)
+	
+	return nil
 }
 
 // OnConfigPatch implements the UpdateableProcessor interface
