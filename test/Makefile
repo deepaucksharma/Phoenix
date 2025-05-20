@@ -20,7 +20,7 @@ unit:
 # Run integration tests
 integration:
 	@echo "Running integration tests..."
-	go test -v ./integration/...
+	go test -v ./e2e/integration/...
 
 # Clean test artifacts
 clean:
@@ -32,7 +32,7 @@ clean:
 # Run tests with coverage
 coverage:
 	@echo "Running tests with coverage..."
-	go test -coverprofile=coverage.out -covermode=atomic ./unit/... ./interfaces/... ./processors/... ./extensions/... ./integration/...
+	go test -coverprofile=coverage.out -covermode=atomic ./unit/... ./interfaces/... ./processors/... ./extensions/... ./e2e/integration/...
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated at coverage.html"
 
