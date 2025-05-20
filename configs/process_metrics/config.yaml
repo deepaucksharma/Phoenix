@@ -109,7 +109,7 @@ processors:
         max_buckets: 10
         metrics:
           process.cpu.time:
-            boundaries: [0.01, 0.05, 0.1, Ω0.5, 1.0, 5.0, 10.0, 30.0]
+            boundaries: [0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0, 30.0]
           process.memory.rss:
             boundaries: [1048576, 10485760, 104857600, 524288000, 1073741824, 2147483648]  # 1MB, 10MB, 100MB, 500MB, 1GB, 2GB
       
