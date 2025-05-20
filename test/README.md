@@ -124,3 +124,13 @@ metrics := testutils.GenerateTestMetrics(10, 5) // 10 resources, 5 metrics each
 ## Test Templates
 
 Processor tests should follow the templates in `processors/templates/` to ensure consistency across all processor implementations.
+
+=======
+
+## Manual Test Environments
+
+Sample Docker Compose setups are provided in the repository under `../test-environments`.
+These configurations match the examples in the validation framework and can be
+used to manually spin up the collector with optional Prometheus and Grafana
+services for local experimentation.
+
