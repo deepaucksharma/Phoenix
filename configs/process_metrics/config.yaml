@@ -33,8 +33,8 @@ receivers:
           process.executable.name: true   # Essential
           process.executable.path: false  # Not needed
           process.command: false          # Not needed
-          process.command_line: false     # Not needed - high cardinality, strip later
-          process.pid: true               # Temporarily include for uniqueness, strip later
+          process.command_line: false     # Disabled as processor later removes this
+          process.pid: false              # Disabled since processor deletes this attribute
           process.parent_pid: false       # Not needed
           process.owner: true             # Useful for grouping
           process.username: false         # Not needed
