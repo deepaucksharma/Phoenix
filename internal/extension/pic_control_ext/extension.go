@@ -208,18 +208,34 @@ func (e *Extension) registerProcessors() error {
 		return fmt.Errorf("host not initialized")
 	}
 
-	// Note: The current implementation doesn't provide direct access to processors
-	// We'll use a placeholder method to simulate processor discovery
-	// This would be replaced with actual processor discovery in a production environment
+	// Host may implement an additional interface exposing processors
+	type processorGetter interface {
+		GetProcessors() map[component.ID]component.Component
+	}
 
-	// Find processors from the host - this simulated code must be updated when a real solution
-	// for processor discovery is implemented
-	testProcessors := map[component.ID]interfaces.UpdateableProcessor{}
+	getter, ok := e.host.(processorGetter)
+	if !ok {
+		return fmt.Errorf("host does not expose processors")
+	}
 
-	// Simulated processors for testing
-	for id, proc := range testProcessors {
+	processors := getter.GetProcessors()
+	if len(processors) == 0 {
+		e.logger.Warn("no processors found on host")
+	}
+
+	for id, comp := range processors {
+		proc, ok := comp.(interfaces.UpdateableProcessor)
+		if !ok {
+			e.logger.Debug("processor does not implement UpdateableProcessor", zap.String("id", id.String()))
+			continue
+		}
+
 		e.processors[id] = proc
 		e.logger.Info("Registered updateable processor", zap.String("id", id.String()))
+	}
+
+	if len(e.processors) == 0 {
+		return fmt.Errorf("no UpdateableProcessor components discovered")
 	}
 
 	return nil
