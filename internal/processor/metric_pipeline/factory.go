@@ -52,7 +52,11 @@ func createDefaultConfig() component.Config {
 			Histograms: HistogramConfig{
 				Enabled:    true,
 				MaxBuckets: 10,
-				Metrics:    make(map[string]HistogramMetric),
+				Metrics: map[string]HistogramMetric{
+					"process.cpu.time": {
+						Boundaries: []float64{0.1, 0.5, 1.0, 5.0, 10.0},
+					},
+				},
 			},
 			Attributes: AttributeConfig{
 				Actions: []AttributeAction{},
