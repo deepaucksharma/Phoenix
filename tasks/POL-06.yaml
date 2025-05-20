@@ -1,0 +1,42 @@
+id: POL-06
+title: "Implement Patch Targeting Non-UpdateableProcessor Test"
+state: open
+priority: medium
+created_at: "2025-05-20"
+assigned_to: "tester"
+area: "test/e2e/policy"
+depends_on: []
+acceptance:
+  - "Test sends patch targeted at a standard OTel processor not implementing UpdateableProcessor"
+  - "pic_control gracefully handles the error"
+  - "System logs 'processor not updateable' or similar error"
+  - "patch_application_failed_total metric increments for that target"
+  - "Other processors are unaffected by the failed patch"
+  - "System continues normal operation"
+description: |
+  In a mixed environment with both standard OpenTelemetry processors and 
+  SA-OMF updateable processors, it's important to handle patches targeting
+  non-updateable components gracefully. This test verifies that the system
+  handles such cases without affecting overall operation.
+  
+  The test should:
+  
+  1. Configure a collector with both updateable and non-updateable processors:
+     - SA-OMF adaptive_topk (implements UpdateableProcessor)
+     - Standard OTel batch processor (does not implement UpdateableProcessor)
+  2. Create and submit a ConfigPatch targeting the batch processor
+  3. Verify pic_control handling:
+     - System logs error about processor not being updateable
+     - patch_application_failed_total metric increments
+     - Failure doesn't affect other processors or system stability
+  4. Verify adaptive_topk still accepts valid patches
+  5. Verify data pipeline continues to function normally
+  
+  This test is important for ensuring system resilience when deployed
+  alongside standard OpenTelemetry components or when configuration systems
+  generate invalid targets.
+  
+  Implementation should include unit tests for the processor type checking
+  logic and integration tests for the full patch application pipeline. The
+  test should also verify that pic_control properly logs the processor ID
+  that could not be updated.

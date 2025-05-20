@@ -19,6 +19,7 @@ type ConfigPatch struct {
 	Source              string       `json:"source"`                // pid_decider|opamp|manual
 	Timestamp           int64        `json:"timestamp"`             // When this patch was created
 	TTLSeconds          int          `json:"ttl_seconds"`           // Time-to-live for this patch
+	SafetyOverride      bool         `json:"safety_override"`       // Override safety thresholds for urgent patches
 }
 
 // ConfigStatus provides current operational parameters of an UpdateableProcessor

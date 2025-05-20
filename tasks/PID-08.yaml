@@ -1,0 +1,62 @@
+id: PID-08
+title: "Implement Stall Detection & Bayesian Fallback Test"
+state: open
+priority: medium
+created_at: "2025-05-20"
+assigned_to: "tester"
+area: "test/e2e/pid"
+depends_on: []
+acceptance:
+  - "Test creates scenario where k_value is stuck at maximum but KPI remains far from target"
+  - "PID stall is detected after configured threshold period"
+  - "aemf_pid_stall_detected_total metric increments"
+  - "System switches to Bayesian optimization fallback if implemented"
+  - "Alternative adaptation approach is attempted"
+  - "System logs indicate stall detection and fallback strategy"
+description: |
+  In some scenarios, a PID controller may be unable to reach its target value
+  despite generating maximum output, indicating a stall condition. This test
+  verifies that the system can detect such stalls and employ alternative
+  strategies such as Bayesian optimization.
+  
+  The test should:
+  
+  1. Configure a PID controller with stall detection:
+     ```yaml
+     controllers:
+       - name: "coverage_controller"
+         enabled: true
+         kpi_metric_name: "aemf_impact_adaptive_topk_resource_coverage_percent_avg_1m"
+         kpi_target_value: 0.9
+         stall_threshold: 5  # Number of cycles before stall detection
+         use_bayesian: true  # Enable Bayesian fallback
+         # ...
+         output_config_patches:
+           - target_processor_name: "adaptive_topk"
+             parameter_path: "k_value"
+             min_value: 5
+             max_value: 100
+     ```
+  2. Generate metrics that force the controller to hit its maximum output:
+     - KPI value stays far from target
+     - k_value increases to max_value
+     - Error remains large and consistent
+  3. Verify stall detection:
+     - After stall_threshold cycles, system detects stall
+     - aemf_pid_stall_detected_total metric increments
+     - Logs indicate stall condition
+  4. Verify fallback behavior:
+     - System switches to Bayesian optimization
+     - Alternative parameter values are tried
+     - Logs indicate fallback strategy activation
+  5. If Bayesian optimizer finds better solution:
+     - System adopts new parameters
+     - KPI improves towards target
+     - System logs success of fallback strategy
+  
+  This test validates advanced adaptation capabilities for situations where
+  simple PID control is insufficient, demonstrating the system's ability to
+  recognize control limitations and employ alternative approaches.
+  
+  Implementation should verify the stall detection logic, the transition
+  to alternative strategies, and the effectiveness of the fallback mechanism.

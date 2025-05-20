@@ -4,294 +4,155 @@ package safety
 
 import (
 	"context"
-	"runtime"
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
+	"go.opentelemetry.io/collector/component"
 )
 
-// SafetyLevel defines different levels of safety mode
-type SafetyLevel int
+// Monitor monitors system resources and activates/deactivates safe mode
+type Monitor struct {
+	config      *Config
+	telemetry   component.TelemetrySettings
+	inSafeMode  bool
+	lock        sync.RWMutex
+	stopCh      chan struct{}
+	metricsProvider MetricsProvider
 
-const (
-	// SafetyLevelNormal indicates normal operation
-	SafetyLevelNormal SafetyLevel = iota
-
-	// SafetyLevelWarning indicates approaching resource limits
-	SafetyLevelWarning
-
-	// SafetyLevelCritical indicates critical resource constraints
-	SafetyLevelCritical
-
-	// SafetyLevelEmergency indicates severe resource exhaustion requiring immediate action
-	SafetyLevelEmergency
-)
-
-// MonitorConfig contains configuration for the safety monitor
-type MonitorConfig struct {
-	// CPU thresholds in millicores (1000 = 1 core)
-	CPUWarningThresholdMCores   int `mapstructure:"cpu_warning_threshold_mcores"`
-	CPUCriticalThresholdMCores  int `mapstructure:"cpu_critical_threshold_mcores"`
-	CPUEmergencyThresholdMCores int `mapstructure:"cpu_emergency_threshold_mcores"`
-
-	// Memory thresholds in MiB
-	MemoryWarningThresholdMiB   int `mapstructure:"memory_warning_threshold_mib"`
-	MemoryCriticalThresholdMiB  int `mapstructure:"memory_critical_threshold_mib"`
-	MemoryEmergencyThresholdMiB int `mapstructure:"memory_emergency_threshold_mib"`
-
-	// Monitoring interval
-	MonitoringIntervalSeconds int `mapstructure:"monitoring_interval_seconds"`
-
-	// Recovery configuration
-	RecoveryThresholdMultiplier float64 `mapstructure:"recovery_threshold_multiplier"`
-	RecoveryTimeSeconds         int     `mapstructure:"recovery_time_seconds"`
+	// Threshold values
+	cpuThreshold int
+	memThreshold int
+	
+	// Threshold override
+	overrideActive bool
+	overrideExpiry time.Time
+	
+	// Safe mode cooldown
+	safeModeEnd time.Time
 }
 
-// GetDefaultConfig returns the default configuration for the safety monitor
-func GetDefaultConfig() *MonitorConfig {
-	return &MonitorConfig{
-		CPUWarningThresholdMCores:   800, // 80% of 1 core
-		CPUCriticalThresholdMCores:  950, // 95% of 1 core
-		CPUEmergencyThresholdMCores: 980, // 98% of 1 core
-
-		MemoryWarningThresholdMiB:   256, // 256 MiB
-		MemoryCriticalThresholdMiB:  384, // 384 MiB
-		MemoryEmergencyThresholdMiB: 448, // 448 MiB
-
-		MonitoringIntervalSeconds: 5, // Check every 5 seconds
-
-		RecoveryThresholdMultiplier: 0.8, // Recover when below 80% of threshold
-		RecoveryTimeSeconds:         30,  // Must be below threshold for 30 seconds
+// NewMonitor creates a new safety monitor
+func NewMonitor(config *Config, telemetry component.TelemetrySettings) *Monitor {
+	monitor := &Monitor{
+		config:      config,
+		telemetry:   telemetry,
+		inSafeMode:  false,
+		stopCh:      make(chan struct{}),
+		metricsProvider: &DefaultMetricsProvider{},
+		cpuThreshold: config.CPUUsageThresholdMCores,
+		memThreshold: config.MemoryThresholdMiB,
 	}
+	
+	return monitor
 }
 
-// SafetyMonitor tracks system resources and provides safety level information
-type SafetyMonitor struct {
-	config         *MonitorConfig
-	logger         *zap.Logger
-	currentLevel   SafetyLevel
-	lock           sync.RWMutex
-	stopCh         chan struct{}
-	levelChangedCh chan SafetyLevel
-
-	// Recovery tracking
-	recoveryStartTime time.Time
-
-	// Current usage metrics
-	currentCPUMCores int
-	currentMemoryMiB int
+// Start starts the safety monitor
+func (m *Monitor) Start(ctx context.Context, host component.Host) error {
+	// Start a goroutine to check metrics periodically
+	go m.checkMetrics(ctx)
+	return nil
 }
 
-// NewSafetyMonitor creates a new safety monitor with the given configuration
-func NewSafetyMonitor(config *MonitorConfig, logger *zap.Logger) *SafetyMonitor {
-	if config == nil {
-		config = GetDefaultConfig()
+// Shutdown stops the safety monitor
+func (m *Monitor) Shutdown(ctx context.Context) error {
+	close(m.stopCh)
+	return nil
+}
+
+// SetMetricsProvider sets the metrics provider for testing
+func (m *Monitor) SetMetricsProvider(provider MetricsProvider) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.metricsProvider = provider
+}
+
+// IsInSafeMode returns whether the system is in safe mode
+func (m *Monitor) IsInSafeMode() bool {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return m.inSafeMode
+}
+
+// TemporarilyOverrideThresholds temporarily increases safety thresholds
+func (m *Monitor) TemporarilyOverrideThresholds(seconds int) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	
+	// Increase thresholds by the configured multiplier
+	m.cpuThreshold = int(float64(m.config.CPUUsageThresholdMCores) * m.config.OverrideMultiplier)
+	m.memThreshold = int(float64(m.config.MemoryThresholdMiB) * m.config.OverrideMultiplier)
+	
+	// Set expiry time
+	expirySeconds := seconds
+	if expirySeconds <= 0 {
+		expirySeconds = m.config.OverrideExpirySeconds
 	}
-
-	return &SafetyMonitor{
-		config:         config,
-		logger:         logger,
-		currentLevel:   SafetyLevelNormal,
-		stopCh:         make(chan struct{}),
-		levelChangedCh: make(chan SafetyLevel, 10),
-	}
+	m.overrideExpiry = time.Now().Add(time.Duration(expirySeconds) * time.Second)
+	m.overrideActive = true
 }
 
-// Start begins monitoring system resources
-func (sm *SafetyMonitor) Start(ctx context.Context) {
-	interval := time.Duration(sm.config.MonitoringIntervalSeconds) * time.Second
+// GetCurrentCPUThreshold returns the current CPU threshold
+func (m *Monitor) GetCurrentCPUThreshold() int {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return m.cpuThreshold
+}
+
+// GetCurrentMemThreshold returns the current memory threshold
+func (m *Monitor) GetCurrentMemThreshold() int {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return m.memThreshold
+}
+
+// checkMetrics periodically checks system metrics
+func (m *Monitor) checkMetrics(ctx context.Context) {
+	interval := time.Duration(m.config.MetricsCheckIntervalMs) * time.Millisecond
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-
-	sm.logger.Info("Safety monitor started",
-		zap.Int("interval_seconds", sm.config.MonitoringIntervalSeconds))
-
+	
 	for {
 		select {
 		case <-ticker.C:
-			sm.checkResources()
+			m.checkAndUpdateState()
 		case <-ctx.Done():
-			sm.logger.Info("Safety monitor stopping due to context cancellation")
-			close(sm.stopCh)
 			return
-		case <-sm.stopCh:
-			sm.logger.Info("Safety monitor stopped")
+		case <-m.stopCh:
 			return
 		}
 	}
 }
 
-// Stop stops the safety monitor
-func (sm *SafetyMonitor) Stop() {
-	close(sm.stopCh)
-}
-
-// GetCurrentLevel returns the current safety level
-func (sm *SafetyMonitor) GetCurrentLevel() SafetyLevel {
-	sm.lock.RLock()
-	defer sm.lock.RUnlock()
-	return sm.currentLevel
-}
-
-// GetCurrentUsage returns the current CPU and memory usage
-func (sm *SafetyMonitor) GetCurrentUsage() (cpuMCores int, memoryMiB int) {
-	sm.lock.RLock()
-	defer sm.lock.RUnlock()
-	return sm.currentCPUMCores, sm.currentMemoryMiB
-}
-
-// Subscribe returns a channel that receives notifications when the safety level changes
-func (sm *SafetyMonitor) Subscribe() <-chan SafetyLevel {
-	return sm.levelChangedCh
-}
-
-// checkResources checks current resource usage and updates safety level if needed
-func (sm *SafetyMonitor) checkResources() {
-	// Get current memory usage
-	var memStats runtime.MemStats
-	runtime.ReadMemStats(&memStats)
-
-	// Convert to MiB
-	currentMemoryMiB := int(memStats.Alloc / (1024 * 1024))
-
-	// CPU usage is harder to estimate accurately in Go
-	// For a real implementation, we'd use platform-specific methods or cgroups
-	// For now, this is a placeholder - in a real system we'd measure CPU usage
-	// over the interval
-	currentCPUMCores := 500 // Placeholder 50% of one core
-
-	sm.lock.Lock()
-
-	// Update current metrics
-	sm.currentCPUMCores = currentCPUMCores
-	sm.currentMemoryMiB = currentMemoryMiB
-
-	// Determine safety level based on CPU and memory
-	var newLevel SafetyLevel
-
-	// Check CPU
-	if currentCPUMCores >= sm.config.CPUEmergencyThresholdMCores {
-		newLevel = SafetyLevelEmergency
-	} else if currentCPUMCores >= sm.config.CPUCriticalThresholdMCores {
-		newLevel = SafetyLevelCritical
-	} else if currentCPUMCores >= sm.config.CPUWarningThresholdMCores {
-		newLevel = SafetyLevelWarning
-	} else {
-		newLevel = SafetyLevelNormal
+// checkAndUpdateState checks metrics and updates system state
+func (m *Monitor) checkAndUpdateState() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	
+	// Check if threshold override has expired
+	if m.overrideActive && time.Now().After(m.overrideExpiry) {
+		// Reset to normal thresholds
+		m.cpuThreshold = m.config.CPUUsageThresholdMCores
+		m.memThreshold = m.config.MemoryThresholdMiB
+		m.overrideActive = false
 	}
-
-	// Check memory (take the higher safety level)
-	if currentMemoryMiB >= sm.config.MemoryEmergencyThresholdMiB {
-		if newLevel < SafetyLevelEmergency {
-			newLevel = SafetyLevelEmergency
-		}
-	} else if currentMemoryMiB >= sm.config.MemoryCriticalThresholdMiB {
-		if newLevel < SafetyLevelCritical {
-			newLevel = SafetyLevelCritical
-		}
-	} else if currentMemoryMiB >= sm.config.MemoryWarningThresholdMiB {
-		if newLevel < SafetyLevelWarning {
-			newLevel = SafetyLevelWarning
-		}
+	
+	// Check if safe mode cooldown has ended
+	if m.inSafeMode && !m.safeModeEnd.IsZero() && time.Now().After(m.safeModeEnd) {
+		m.inSafeMode = false
+		m.safeModeEnd = time.Time{}
 	}
-
-	// Check for recovery conditions
-	if sm.currentLevel > SafetyLevelNormal && newLevel < sm.currentLevel {
-		recoveryThresholdCPU := int(float64(sm.config.CPUWarningThresholdMCores) *
-			sm.config.RecoveryThresholdMultiplier)
-		recoveryThresholdMem := int(float64(sm.config.MemoryWarningThresholdMiB) *
-			sm.config.RecoveryThresholdMultiplier)
-
-		// Check if we're below recovery thresholds
-		if currentCPUMCores < recoveryThresholdCPU &&
-			currentMemoryMiB < recoveryThresholdMem {
-
-			// If we just started recovery, record the time
-			if sm.recoveryStartTime.IsZero() {
-				sm.recoveryStartTime = time.Now()
-			} else if time.Since(sm.recoveryStartTime) >=
-				time.Duration(sm.config.RecoveryTimeSeconds)*time.Second {
-				// We've been below threshold for the required recovery time
-				sm.logger.Info("Resource usage recovered, returning to normal mode",
-					zap.Int("previous_level", int(sm.currentLevel)),
-					zap.Int("new_level", int(newLevel)),
-					zap.Int("cpu_mcores", currentCPUMCores),
-					zap.Int("memory_mib", currentMemoryMiB))
-
-				sm.currentLevel = newLevel
-
-				// Reset recovery start time
-				sm.recoveryStartTime = time.Time{}
-
-				// Notify subscribers
-				select {
-				case sm.levelChangedCh <- newLevel:
-					// Notification sent
-				default:
-					// Channel buffer is full, log and continue
-					sm.logger.Warn("Couldn't notify subscribers of safety level change, channel full")
-				}
-			}
-		} else {
-			// We went back above threshold during recovery, reset timer
-			sm.recoveryStartTime = time.Time{}
-		}
-	} else if newLevel > sm.currentLevel {
-		// Immediate escalation
-		sm.logger.Warn("Resource usage exceeded threshold, increasing safety level",
-			zap.Int("previous_level", int(sm.currentLevel)),
-			zap.Int("new_level", int(newLevel)),
-			zap.Int("cpu_mcores", currentCPUMCores),
-			zap.Int("memory_mib", currentMemoryMiB))
-
-		sm.currentLevel = newLevel
-
-		// Reset recovery start time on escalation
-		sm.recoveryStartTime = time.Time{}
-
-		// Notify subscribers
-		select {
-		case sm.levelChangedCh <- newLevel:
-			// Notification sent
-		default:
-			// Channel buffer is full, log and continue
-			sm.logger.Warn("Couldn't notify subscribers of safety level change, channel full")
-		}
-	}
-
-	sm.lock.Unlock()
-}
-
-// IsInSafeMode returns true if the monitor is in any non-normal safety level
-func (sm *SafetyMonitor) IsInSafeMode() bool {
-	sm.lock.RLock()
-	defer sm.lock.RUnlock()
-	return sm.currentLevel > SafetyLevelNormal
-}
-
-// ForceLevel forces the safety monitor to a specific level (for testing or manual intervention)
-func (sm *SafetyMonitor) ForceLevel(level SafetyLevel) {
-	sm.lock.Lock()
-	defer sm.lock.Unlock()
-
-	if level != sm.currentLevel {
-		sm.logger.Info("Forcing safety level",
-			zap.Int("previous_level", int(sm.currentLevel)),
-			zap.Int("new_level", int(level)))
-
-		sm.currentLevel = level
-
-		// Reset recovery start time
-		sm.recoveryStartTime = time.Time{}
-
-		// Notify subscribers
-		select {
-		case sm.levelChangedCh <- level:
-			// Notification sent
-		default:
-			// Channel buffer is full, log and continue
-			sm.logger.Warn("Couldn't notify subscribers of safety level change, channel full")
-		}
+	
+	// Get current metrics
+	cpuUsage := m.metricsProvider.GetCPUUsage()
+	memUsage := m.metricsProvider.GetMemoryUsage()
+	
+	// Check if thresholds are exceeded
+	if cpuUsage > m.cpuThreshold || memUsage > m.memThreshold {
+		// Enter safe mode
+		m.inSafeMode = true
+		m.safeModeEnd = time.Time{} // Clear end time while thresholds are still exceeded
+	} else if m.inSafeMode && m.safeModeEnd.IsZero() {
+		// Start cooldown period
+		m.safeModeEnd = time.Now().Add(time.Duration(m.config.SafeModeCooldownSeconds) * time.Second)
 	}
 }

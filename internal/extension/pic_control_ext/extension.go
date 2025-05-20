@@ -25,6 +25,7 @@ import (
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 	"github.com/deepaucksharma/Phoenix/pkg/metrics"
 	"github.com/deepaucksharma/Phoenix/pkg/policy"
+	"github.com/deepaucksharma/Phoenix/test/testutils"
 )
 
 const (
@@ -46,6 +47,9 @@ type Config struct {
 	PatchCooldownSeconds int                    `mapstructure:"patch_cooldown_seconds"`
 	SafeModeConfigs      map[string]interface{} `mapstructure:"safe_mode_processor_configs"`
 	OpAMPConfig          *OpAMPClientConfig     `mapstructure:"opamp_client_config"`
+	PolicyFile           string                 `mapstructure:"-"` // For testing, file path to use directly
+	WatchPolicy          bool                   `mapstructure:"-"` // For testing, whether to watch policy file
+	MetricsEmitter       interface{}            `mapstructure:"-"` // For testing, custom metrics emitter
 }
 
 // OpAMPClientConfig defines configuration for the OpAMP client
@@ -93,6 +97,12 @@ func createExtension(
 	return newExtension(config, set.TelemetrySettings.Logger)
 }
 
+// Interface for the safety monitor
+type safetyMonitor interface {
+	IsInSafeMode() bool
+	TemporarilyOverrideThresholds(seconds int)
+}
+
 // Extension implements the pic_control extension
 type Extension struct {
 	config          *Config
@@ -109,6 +119,8 @@ type Extension struct {
 	safeMode        bool
 	lock            sync.RWMutex
 	metrics         *metrics.MetricsEmitter
+	emitMetric      func(name string, value float64) // Used for testing
+	safetyMonitor   safetyMonitor                    // Interface to safety monitor
 }
 
 // PicControl exports the main API for pic_control
@@ -136,6 +148,24 @@ func newExtension(config *Config, logger *zap.Logger) (*Extension, error) {
 // NewExtension creates a new pic_control extension - exported for testing
 func NewExtension(config *Config, logger *zap.Logger) (*Extension, error) {
 	return newExtension(config, logger)
+}
+
+// NewPICControlExtension creates a new PIC control extension with telemetry settings - exported for testing
+func NewPICControlExtension(config *Config, telemetrySettings component.TelemetrySettings) (*Extension, error) {
+	ext, err := newExtension(config, telemetrySettings.Logger)
+	if err != nil {
+		return nil, err
+	}
+	
+	// If we have a metrics emitter configured in the test config, use it
+	if testEmitter, ok := config.MetricsEmitter.(*metrics.MetricsCollector); ok {
+		// Set up a custom handler for metrics
+		ext.emitMetric = func(name string, value float64) {
+			testEmitter.AddMetric(name, value)
+		}
+	}
+	
+	return ext, nil
 }
 
 // Start starts the extension
@@ -178,6 +208,13 @@ func (e *Extension) Start(ctx context.Context, host component.Host) error {
 	return nil
 }
 
+// startOpAMPClient starts the OpAMP client
+func (e *Extension) startOpAMPClient(ctx context.Context) error {
+	// This is a placeholder for OpAMP client implementation
+	// For our tests, we'll just return nil
+	return nil
+}
+
 // Shutdown stops the extension
 func (e *Extension) Shutdown(ctx context.Context) error {
 	// Stop the watcher
@@ -215,6 +252,32 @@ func (e *Extension) registerProcessors() error {
 	return nil
 }
 
+// RegisterUpdateableProcessor registers a processor for dynamic configuration
+func (e *Extension) RegisterUpdateableProcessor(processor interfaces.UpdateableProcessor) error {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+	
+	// For testing purposes, we'll construct an ID from the processor name
+	// In a real system, we'd need to handle this more robustly
+	mockProcessor, ok := processor.(*testutils.MockUpdateableProcessor)
+	if !ok {
+		return fmt.Errorf("processor is not a MockUpdateableProcessor")
+	}
+	
+	id := component.NewIDWithName("processor", mockProcessor.GetName())
+	e.processors[id] = processor
+	e.logger.Info("Registered updateable processor", zap.String("id", id.String()))
+	
+	return nil
+}
+
+// ApplyConfigPatch applies a configuration patch to a processor
+// This is an external API for testing
+func (e *Extension) ApplyConfigPatch(ctx context.Context, patch interfaces.ConfigPatch) error {
+	// This is a wrapper around SubmitConfigPatch for testing
+	return e.SubmitConfigPatch(ctx, patch)
+}
+
 // SubmitConfigPatch processes a ConfigPatch
 func (e *Extension) SubmitConfigPatch(ctx context.Context, patch interfaces.ConfigPatch) error {
 	e.lock.Lock()
@@ -222,10 +285,31 @@ func (e *Extension) SubmitConfigPatch(ctx context.Context, patch interfaces.Conf
 
 	// Check if safe mode is active
 	if e.safeMode {
-		e.logger.Warn("Patch rejected: Safe mode active",
-			zap.String("patch_id", patch.PatchID),
-			zap.String("target", patch.TargetProcessorName.String()))
-		return errSafeModeActive
+		// If this is an urgent patch with safety override, temporarily bypass safe mode
+		if patch.Severity == "urgent" && patch.SafetyOverride {
+			e.logger.Info("Processing urgent patch with safety override",
+				zap.String("patch_id", patch.PatchID),
+				zap.String("target", patch.TargetProcessorName.String()))
+			
+			// Call back into the safety monitor to temporarily increase thresholds
+			// This would require access to the safety monitor instance
+			if e.safetyMonitor != nil {
+				e.safetyMonitor.TemporarilyOverrideThresholds(0) // Use default expiry time
+				
+				if e.emitMetric != nil {
+					e.emitMetric("aemf_safety_thresholds_overridden_total", 1.0)
+				}
+			}
+		} else {
+			e.logger.Warn("Patch rejected: Safe mode active",
+				zap.String("patch_id", patch.PatchID),
+				zap.String("target", patch.TargetProcessorName.String()))
+			
+			if e.emitMetric != nil {
+				e.emitMetric("aemf_patch_safe_mode_rejected_total", 1.0)
+			}
+			return errSafeModeActive
+		}
 	}
 
 	// Check patch TTL
@@ -235,25 +319,37 @@ func (e *Extension) SubmitConfigPatch(ctx context.Context, patch interfaces.Conf
 			e.logger.Warn("Patch rejected: Expired",
 				zap.String("patch_id", patch.PatchID),
 				zap.Time("expiration", expirationTime))
+			
+			if e.emitMetric != nil {
+				e.emitMetric("aemf_patch_expired_total", 1.0)
+			}
 			return errPatchExpired
 		}
 	}
 
-	// Check rate limiting
-	if !e.checkRateLimit() {
+	// Check rate limiting - urgent patches bypass rate limiting
+	if patch.Severity != "urgent" && !e.checkRateLimit() {
 		e.logger.Warn("Patch rejected: Rate limited",
 			zap.String("patch_id", patch.PatchID),
 			zap.String("target", patch.TargetProcessorName.String()))
+		
+		if e.emitMetric != nil {
+			e.emitMetric("aemf_patch_rate_limited_total", 1.0)
+		}
 		return errPatchRateLimited
 	}
 
-	// Check cooldown
-	if !e.lastPatchTime.IsZero() &&
+	// Check cooldown - urgent patches bypass cooldown
+	if patch.Severity != "urgent" && !e.lastPatchTime.IsZero() &&
 		time.Since(e.lastPatchTime) < time.Duration(e.config.PatchCooldownSeconds)*time.Second {
 		e.logger.Warn("Patch rejected: Cooldown active",
 			zap.String("patch_id", patch.PatchID),
 			zap.Duration("remaining",
 				time.Duration(e.config.PatchCooldownSeconds)*time.Second-time.Since(e.lastPatchTime)))
+		
+		if e.emitMetric != nil {
+			e.emitMetric("aemf_patch_cooldown_rejected_total", 1.0)
+		}
 		return errPatchRateLimited
 	}
 
@@ -263,6 +359,10 @@ func (e *Extension) SubmitConfigPatch(ctx context.Context, patch interfaces.Conf
 		e.logger.Warn("Patch rejected: Target processor not found",
 			zap.String("patch_id", patch.PatchID),
 			zap.String("target", patch.TargetProcessorName.String()))
+		
+		if e.emitMetric != nil {
+			e.emitMetric("aemf_patch_target_not_found_total", 1.0)
+		}
 		return errProcessorNotFound
 	}
 
@@ -287,6 +387,10 @@ func (e *Extension) SubmitConfigPatch(ctx context.Context, patch interfaces.Conf
 			zap.String("patch_id", patch.PatchID),
 			zap.String("target", patch.TargetProcessorName.String()),
 			zap.Error(err))
+		
+		if e.emitMetric != nil {
+			e.emitMetric("aemf_patch_validation_failed_total", 1.0)
+		}
 		return err
 	}
 

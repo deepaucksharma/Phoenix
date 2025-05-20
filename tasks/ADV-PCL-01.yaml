@@ -1,0 +1,54 @@
+id: ADV-PCL-01
+title: "Implement Process Context Learner Hierarchy Test"
+state: open
+priority: medium
+created_at: "2025-05-20"
+assigned_to: "tester"
+area: "test/e2e/advanced"
+depends_on: []
+acceptance:
+  - "Test simulates a chain of processes (A calls B calls C)"
+  - "process_context_learner correctly identifies the dependency chain"
+  - "Importance scores are assigned with C highest, then B, then A"
+  - "aemf_process_context_learner_importance_score metric reflects hierarchy"
+  - "Tagged processes show context information in metrics"
+  - "System adapts priority based on learned context"
+description: |
+  The process_context_learner processor identifies relationships between
+  processes to determine importance and dependencies. This test verifies
+  that it correctly identifies process hierarchies and assigns appropriate
+  importance scores.
+  
+  The test should:
+  
+  1. Configure the process_context_learner processor:
+     ```yaml
+     processors:
+       process_context_learner:
+         enabled: true
+         analysis_window_seconds: 300
+         min_confidence: 0.7
+         learning_rate: 0.1
+     ```
+  2. Simulate a chain of processes with clear dependency:
+     - Process A initiates actions
+     - Process B is called by A and calls C
+     - Process C performs the critical work
+     - Create metrics showing this causal relationship
+  3. Run the system long enough for learning to occur
+  4. Verify context learning:
+     - aemf_process_context_learner_dependency_detected_total increments
+     - dependency graph shows A -> B -> C relationship
+     - importance scores reflect the hierarchy (C highest)
+  5. Verify context enrichment:
+     - Process metrics are enriched with context information
+     - `aemf.context.importance_score` attribute is added
+     - `aemf.context.dependencies` attribute lists relationships
+  
+  This test validates the advanced context learning capabilities that enable
+  more intelligent metric prioritization and filtering based on process
+  relationships rather than just individual metrics.
+  
+  Implementation should include verification that importance scores correctly
+  propagate through the dependency chain and that scores are updated when
+  relationships change.
