@@ -37,7 +37,7 @@ const Schema = `{
     },
     "processors_config": {
       "type": "object",
-      "required": ["priority_tagger", "adaptive_topk", "cardinality_guardian", "reservoir_sampler", "others_rollup"],
+      "required": ["priority_tagger", "adaptive_topk", "cardinality_guardian", "reservoir_sampler", "others_rollup", "timeseries_estimator"],
       "properties": {
         "priority_tagger": {
           "type": "object",
@@ -88,6 +88,15 @@ const Schema = `{
           "required": ["enabled"],
           "properties": {
             "enabled": { "type": "boolean" }
+          }
+        },
+        "timeseries_estimator": {
+          "type": "object",
+          "required": ["enabled", "max_unique_time_series"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "estimator_type": { "type": "string" },
+            "max_unique_time_series": { "type": "integer", "minimum": 100 }
           }
         }
       }

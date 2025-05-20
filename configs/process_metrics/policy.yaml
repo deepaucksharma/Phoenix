@@ -80,8 +80,13 @@ processors_config:
             action: "insert"
             value: "phoenix-process-metrics"
           - key: "instrumentation.provider"
-            action: "insert" 
-            value: "phoenix"
+          action: "insert"
+          value: "phoenix"
+
+  timeseries_estimator:
+    enabled: true
+    estimator_type: "exact"
+    max_unique_time_series: 5000
 
 # Adaptive PID controller configuration for process metrics monitoring
 adaptive_pid_config:

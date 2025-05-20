@@ -100,6 +100,12 @@ processors:
         priority_threshold: low
         strategy: sum
         name_prefix: "phoenix.others.process"  # Use a prefix making clear these are aggregated
+
+  # Estimate active time series with circuit breaker
+  timeseries_estimator:
+    enabled: true
+    estimator_type: "exact"
+    max_unique_time_series: 5000
     
     # Metric transformation configuration tailored for New Relic
     transformation:
@@ -192,7 +198,7 @@ service:
     metrics/process:
       receivers: [hostmetrics]
       # Process flow: Convert CPU counters to delta → Process with unified metric pipeline → Batch for efficiency
-      processors: [cumulativetodelta, metric_pipeline, batch]
+      processors: [cumulativetodelta, metric_pipeline, timeseries_estimator, batch]
       exporters: [logging, otlphttp/newrelic]
     
     # Self-metrics pipeline to export Phoenix's own metrics to New Relic

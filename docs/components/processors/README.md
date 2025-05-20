@@ -12,6 +12,7 @@ This directory contains documentation for the various processors implemented in 
 | [adaptive_pid](./adaptive_pid.md) | PID-based processor for monitoring KPIs and adapting behavior | Stable |
 | [cardinality_guardian](./cardinality_guardian.md) | Controls metrics cardinality based on resource usage | Planning |
 | [reservoir_sampler](./reservoir_sampler.md) | Provides statistical sampling with adjustable rates | Implemented |
+| [timeseries_estimator](./timeseries_estimator.md) | Estimates active time series with circuit breaker | Implemented |
 
 ## Processor Concepts
 
