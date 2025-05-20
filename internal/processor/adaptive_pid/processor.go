@@ -180,7 +180,7 @@ func (p *pidProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) e
 					ctrl.lastOutputs[outConfig.ParameterPath] = newValue
 					patch := interfaces.ConfigPatch{
 						PatchID:             uuid.New().String(),
-						TargetProcessorName: component.NewID(component.MustNewType(typeStr)),
+						TargetProcessorName: component.NewID(component.MustNewType(outConfig.TargetProcessorName)),
 						ParameterPath:       outConfig.ParameterPath,
 						NewValue:            newValue,
 						Reason:              "bayesian_fallback",
@@ -228,7 +228,7 @@ func (p *pidProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) e
 			// Generate patch
 			patch := interfaces.ConfigPatch{
 				PatchID:             uuid.New().String(),
-				TargetProcessorName: component.NewID(component.MustNewType(typeStr)),
+				TargetProcessorName: component.NewID(component.MustNewType(outConfig.TargetProcessorName)),
 				ParameterPath:       outConfig.ParameterPath,
 				NewValue:            newValue,
 				Reason:              generateReason(ctrl.config.Name, ctrl.config.KPITargetValue-kpiValue, output),
@@ -361,7 +361,7 @@ func (p *pidProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 
 		// Update controller state
 		p.config.Controllers[i].Enabled = enabled
-		p.logger.Info("Updated controller enabled state", 
+		p.logger.Info("Updated controller enabled state",
 			zap.String("controller", controllerName),
 			zap.Bool("enabled", enabled))
 		return nil
@@ -408,7 +408,7 @@ func (p *pidProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 		// Update the PID controller's setpoint
 		ctrlInstance.pid.SetSetpoint(targetValue)
 
-		p.logger.Info("Updated controller KPI target value", 
+		p.logger.Info("Updated controller KPI target value",
 			zap.String("controller", controllerName),
 			zap.Float64("target_value", targetValue))
 		return nil
