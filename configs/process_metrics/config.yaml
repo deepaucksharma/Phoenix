@@ -56,8 +56,8 @@ processors:
       match_type: strict
       metrics:
         - process.cpu.time
-        - process.disk.io
-        - process.disk.operations
+        - process.io.read_bytes
+        - process.io.write_bytes
     max_stale: 15s
   
   # Batch metrics for efficient export to New Relic
