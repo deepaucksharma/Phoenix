@@ -81,7 +81,9 @@ func ToInt64(value interface{}) (int64, error) {
 	case uint:
 		return int64(v), nil
 	case uint64:
-		if v > uint64(^int64(0)) {
+		// uint64 values larger than math.MaxInt64 cannot be safely converted to int64
+		const maxInt64 = uint64(9223372036854775807) // 2^63 - 1
+		if v > maxInt64 {
 			return 0, fmt.Errorf("uint64 value %d overflows int64", v)
 		}
 		return int64(v), nil
@@ -110,7 +112,9 @@ func ToInt64(value interface{}) (int64, error) {
 			return rv.Int(), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 			uv := rv.Uint()
-			if uv > uint64(^int64(0)) {
+			// uint64 values larger than math.MaxInt64 cannot be safely converted to int64
+			const maxInt64 = uint64(9223372036854775807) // 2^63 - 1
+			if uv > maxInt64 {
 				return 0, fmt.Errorf("uint64 value %d overflows int64", uv)
 			}
 			return int64(uv), nil
