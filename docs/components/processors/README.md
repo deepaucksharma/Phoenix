@@ -6,9 +6,7 @@ This directory contains documentation for the various processors implemented in 
 
 | Processor | Description | Status |
 |-----------|-------------|--------|
-| [priority_tagger](./priority_tagger.md) | Tags metrics with priority levels based on rules | Stable |
-| [adaptive_topk](./adaptive_topk.md) | Dynamically adjusts k value for top-k filtering | Stable |
-| [others_rollup](./others_rollup.md) | Aggregates low-priority metrics to reduce cardinality | Stable |
+| [metric_pipeline](../processor/metric_pipeline.md) | Unified filtering and transformation processor | Stable |
 | [adaptive_pid](./adaptive_pid.md) | PID-based processor for monitoring KPIs and adapting behavior | Stable |
 | [cardinality_guardian](./cardinality_guardian.md) | Controls metrics cardinality based on resource usage | Planning |
 | [reservoir_sampler](./reservoir_sampler.md) | Provides statistical sampling with adjustable rates | Implemented |
