@@ -21,8 +21,8 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/deepaucksharma/Phoenix/internal/connector/pic_connector"
-	piccontrol "github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
 	pic_control_ext "github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
+	piccontrol "github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_topk"
 	"github.com/deepaucksharma/Phoenix/pkg/policy"
@@ -47,12 +47,12 @@ func loadPolicyBytes(*piccontrol.Extension, []byte) error
 
 // mockProcessor implements interfaces.UpdateableProcessor for testing.
 type mockProcessor struct {
-	params  map[string]any
-	enabled bool
-	patches []interfaces.ConfigPatch
+	params       map[string]any
+	enabled      bool
+	patches      []interfaces.ConfigPatch
 	patchApplied bool
-	lastPatch interfaces.ConfigPatch
-	parameters map[string]any
+	lastPatch    interfaces.ConfigPatch
+	parameters   map[string]any
 }
 
 func getProcessors(e *piccontrol.Extension) map[component.ID]interfaces.UpdateableProcessor {
@@ -82,8 +82,8 @@ func isSafeMode(e *piccontrol.Extension) bool {
 
 func newMockProcessor() *mockProcessor {
 	return &mockProcessor{
-		params: make(map[string]any), 
-		enabled: true,
+		params:     make(map[string]any),
+		enabled:    true,
 		parameters: make(map[string]any),
 	}
 }
@@ -95,7 +95,7 @@ func (m *mockProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Conf
 	m.patches = append(m.patches, patch)
 	m.patchApplied = true
 	m.lastPatch = patch
-	
+
 	if patch.ParameterPath == "enabled" {
 		v, ok := patch.NewValue.(bool)
 		if !ok {
@@ -154,6 +154,17 @@ pic_control_config:
       k_value: 10
 `
 
+const updatedPolicy = `
+global_settings:
+  autonomy_level: shadow
+processors_config:
+  adaptive_topk:
+    enabled: true
+    k_value: 40
+    k_min: 5
+    k_max: 80
+`
+
 // createExtension with a single mock processor registered
 func createExtension(t *testing.T) (*piccontrol.Extension, component.ID, *mockProcessor) {
 	cfg := &piccontrol.Config{
@@ -207,6 +218,14 @@ func (m *mockHost) AddProcessor(id component.ID, proc *mockProcessor) {
 
 func newMockHost() *mockHost {
 	return &mockHost{}
+}
+
+// resetRateLimit resets the patch count and minute window for rate limit tests.
+func resetRateLimit(e *piccontrol.Extension) {
+	vCount := reflect.ValueOf(e).Elem().FieldByName("patchCount")
+	reflect.NewAt(vCount.Type(), unsafe.Pointer(vCount.UnsafeAddr())).Elem().SetInt(0)
+	vReset := reflect.ValueOf(e).Elem().FieldByName("patchCountReset")
+	reflect.NewAt(vReset.Type(), unsafe.Pointer(vReset.UnsafeAddr())).Elem().Set(time.Now().Add(-2 * time.Minute))
 }
 
 func TestLoadPolicyAppliesConfig(t *testing.T) {
@@ -354,8 +373,84 @@ func TestPicControlExtension(t *testing.T) {
 }
 
 func TestPicControlExtensionComprehensive(t *testing.T) {
-	t.Skip("Test temporarily disabled until API compatibility issues are fixed")
-	
-	// Original test implementation has been temporarily removed
-	assert.True(t, true, "Test skipped")
+	ctx := context.Background()
+
+	ext, id, proc := createStartedExtension(t)
+
+	// verify initial policy load
+	require.Equal(t, 30, proc.params["k_value"])
+
+	// write updated policy to trigger hot reload
+	require.NoError(t, os.WriteFile(getConfig(ext).PolicyFilePath, []byte(updatedPolicy), 0o644))
+	require.Eventually(t, func() bool { return proc.params["k_value"] == 40 }, time.Second, 50*time.Millisecond)
+
+	// expired patch should be rejected
+	err := ext.SubmitConfigPatch(ctx, interfaces.ConfigPatch{
+		PatchID:             "expired",
+		TargetProcessorName: id,
+		ParameterPath:       "k_value",
+		NewValue:            50,
+		Timestamp:           time.Now().Add(-2 * time.Second).Unix(),
+		TTLSeconds:          1,
+	})
+	assert.Error(t, err)
+	assert.Equal(t, 40, proc.params["k_value"])
+	assert.Len(t, getPatchHistory(ext), 0)
+
+	// rate limit after first successful patch
+	cfg := getConfig(ext)
+	cfg.MaxPatchesPerMinute = 1
+	cfg.PatchCooldownSeconds = 0
+
+	require.NoError(t, ext.SubmitConfigPatch(ctx, interfaces.ConfigPatch{
+		PatchID:             "p1",
+		TargetProcessorName: id,
+		ParameterPath:       "k_value",
+		NewValue:            41,
+	}))
+	assert.Equal(t, 41, proc.params["k_value"])
+	assert.Len(t, getPatchHistory(ext), 1)
+
+	err = ext.SubmitConfigPatch(ctx, interfaces.ConfigPatch{
+		PatchID:             "p2",
+		TargetProcessorName: id,
+		ParameterPath:       "k_value",
+		NewValue:            42,
+	})
+	assert.Error(t, err)
+	assert.Equal(t, 41, proc.params["k_value"])
+	assert.Len(t, getPatchHistory(ext), 1)
+
+	// enter safe mode and ensure patch rejection
+	require.NoError(t, enterSafeMode(ext))
+	assert.True(t, isSafeMode(ext))
+	require.Equal(t, 10, proc.params["k_value"])
+
+	err = ext.SubmitConfigPatch(ctx, interfaces.ConfigPatch{
+		PatchID:             "p3",
+		TargetProcessorName: id,
+		ParameterPath:       "k_value",
+		NewValue:            50,
+	})
+	assert.Error(t, err)
+	assert.Equal(t, 10, proc.params["k_value"])
+	assert.Len(t, getPatchHistory(ext), 1)
+
+	// exit safe mode - policy should be reapplied
+	require.NoError(t, exitSafeMode(ext))
+	assert.False(t, isSafeMode(ext))
+	assert.Equal(t, 40, proc.params["k_value"])
+
+	// reset rate limits to allow a new patch
+	resetRateLimit(ext)
+	cfg.MaxPatchesPerMinute = 2
+
+	require.NoError(t, ext.SubmitConfigPatch(ctx, interfaces.ConfigPatch{
+		PatchID:             "p4",
+		TargetProcessorName: id,
+		ParameterPath:       "k_value",
+		NewValue:            45,
+	}))
+	assert.Equal(t, 45, proc.params["k_value"])
+	assert.Len(t, getPatchHistory(ext), 2)
 }
