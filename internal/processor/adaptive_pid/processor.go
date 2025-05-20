@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"sync"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -16,7 +15,7 @@ import (
 
 	"github.com/deepaucksharma/Phoenix/internal/control/pid"
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
-	"github.com/deepaucksharma/Phoenix/pkg/metrics"
+	"github.com/deepaucksharma/Phoenix/internal/processor/base"
 	"github.com/deepaucksharma/Phoenix/pkg/util/bayesian"
 	"github.com/deepaucksharma/Phoenix/pkg/util/typeconv"
 )
@@ -30,13 +29,10 @@ type picControl interface {
 
 // pidProcessor implements the pid_decider processor
 type pidProcessor struct {
-	logger       *zap.Logger
-	nextConsumer consumer.Metrics
-	config       *Config
-	controllers  []*controller
-	lock         sync.RWMutex
-	metrics      *metrics.MetricsEmitter
-	picControl   picControl // Interface to pic_control_ext
+	*base.BaseProcessor
+	config      *Config
+	controllers []*controller
+	picControl  picControl // Interface to pic_control_ext
 }
 
 // controller represents a single PID control loop
@@ -57,11 +53,10 @@ var _ interfaces.UpdateableProcessor = (*pidProcessor)(nil)
 // newProcessor creates a new pid_decider processor
 func newProcessor(config *Config, settings component.TelemetrySettings, picControlExt picControl, id component.ID) (*pidProcessor, error) {
 	p := &pidProcessor{
-		logger:       settings.Logger,
-		nextConsumer: nil, // Not used directly, patches are submitted to pic_control
-		config:       config,
-		controllers:  make([]*controller, 0, len(config.Controllers)),
-		picControl:   picControlExt,
+		BaseProcessor: base.NewBaseProcessor(settings.Logger, nil, typeStr, id),
+		config:        config,
+		controllers:   make([]*controller, 0, len(config.Controllers)),
+		picControl:    picControlExt,
 	}
 
 	// Initialize controllers
@@ -116,56 +111,55 @@ func NewProcessor(config *Config, settings component.TelemetrySettings, picContr
 			picCtrl = pc
 		}
 	}
-	
+
 	return newProcessor(config, settings, picCtrl, id)
 }
 
 // Start implements the Component interface
 func (p *pidProcessor) Start(ctx context.Context, host component.Host) error {
-	// No initialization required for now
-	return nil
+	return p.BaseProcessor.Start(ctx, host)
 }
 
 // Shutdown implements the Component interface
 func (p *pidProcessor) Shutdown(ctx context.Context) error {
-	return nil
+	return p.BaseProcessor.Shutdown(ctx)
 }
 
 // Capabilities implements the processor.Metrics interface
 func (p *pidProcessor) Capabilities() consumer.Capabilities {
-	return consumer.Capabilities{MutatesData: false}
+	return p.BaseProcessor.Capabilities()
 }
 
 // ConsumeMetrics processes incoming metrics and submits patches to pic_control
 func (p *pidProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
 	// Only acquire a read lock during processing to allow parallel metric processing
-	p.lock.RLock()
+	p.RLock()
 	patches, err := p.processMetricsInternal(ctx, md)
-	p.lock.RUnlock()
+	p.RUnlock()
 
 	if err != nil {
 		return err
 	}
-	
+
 	// Submit patches to pic_control if available
 	// Do this outside our lock to prevent deadlocks with pic_control extension
 	if p.picControl != nil && len(patches) > 0 {
 		for _, patch := range patches {
 			err := p.picControl.SubmitConfigPatch(ctx, patch)
 			if err != nil {
-				p.logger.Warn("Failed to submit config patch", 
+				p.GetLogger().Warn("Failed to submit config patch",
 					zap.String("patch_id", patch.PatchID),
 					zap.Error(err))
 			}
 		}
 	}
-	
+
 	// Forward metrics to next consumer if one is configured
 	// Also outside our lock to prevent possible deadlocks
-	if p.nextConsumer != nil {
-		return p.nextConsumer.ConsumeMetrics(ctx, md)
+	if next := p.GetNext(); next != nil {
+		return next.ConsumeMetrics(ctx, md)
 	}
-	
+
 	return nil
 }
 
@@ -177,46 +171,46 @@ func (p *pidProcessor) processMetricsInternal(ctx context.Context, md pmetric.Me
 	if len(kpiValues) == 0 {
 		return nil, nil
 	}
-	
+
 	// Generate patches - we'll implement this in ProcessMetricsForTest
 	patches := make([]interfaces.ConfigPatch, 0)
-	
+
 	// Process each enabled controller
 	for _, controller := range p.controllers {
 		if !controller.config.Enabled {
 			continue
 		}
-		
+
 		// Look for this controller's KPI metric
 		kpiValue, exists := kpiValues[controller.config.KPIMetricName]
 		if !exists {
 			continue // Skip if KPI metric not found
 		}
-		
+
 		// Compute PID output
 		pidOutput := controller.pid.Compute(kpiValue)
-		
+
 		// Check for oscillation (will be used by circuit breaker later)
 		oscillating := false
-		if controller.lastPIDOut * pidOutput < 0 && 
-		   math.Abs(pidOutput) > 0.1 && 
-		   math.Abs(controller.lastPIDOut) > 0.1 {
+		if controller.lastPIDOut*pidOutput < 0 &&
+			math.Abs(pidOutput) > 0.1 &&
+			math.Abs(controller.lastPIDOut) > 0.1 {
 			oscillating = true
 		}
 		controller.lastPIDOut = pidOutput
-		
+
 		// Generate patches based on the output
 		controllerPatches := controller.generatePatches(ctx, pidOutput, kpiValue, oscillating)
 		patches = append(patches, controllerPatches...)
 	}
-	
+
 	return patches, nil
 }
 
 // OnConfigPatch implements the UpdateableProcessor interface
 func (p *pidProcessor) OnConfigPatch(ctx context.Context, patch interfaces.ConfigPatch) error {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.Lock()
+	defer p.Unlock()
 
 	// Helper to extract controller name from target processor name
 	getControllerName := func(targetName component.ID) string {
@@ -258,7 +252,7 @@ func (p *pidProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 
 		// Update controller state
 		p.config.Controllers[i].Enabled = enabled
-		p.logger.Info("Updated controller enabled state",
+		p.GetLogger().Info("Updated controller enabled state",
 			zap.String("controller", controllerName),
 			zap.Bool("enabled", enabled))
 		return nil
@@ -306,7 +300,7 @@ func (p *pidProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 		// Reset integral term when setpoint changes significantly to prevent windup
 		ctrlInstance.pid.ResetIntegral()
 
-		p.logger.Info("Updated controller KPI target value",
+		p.GetLogger().Info("Updated controller KPI target value",
 			zap.String("controller", controllerName),
 			zap.Float64("target_value", targetValue))
 		return nil
@@ -346,14 +340,14 @@ func (p *pidProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 
 		// Get current tuning values to update only kp
 		_, currentKI, currentKD := ctrlInstance.pid.GetTunings()
-		
+
 		// Update the controller configuration
 		p.config.Controllers[configIdx].KP = kp
 
 		// Update the PID controller's tuning
 		ctrlInstance.pid.SetTunings(kp, currentKI, currentKD)
 
-		p.logger.Info("Updated controller proportional gain",
+		p.GetLogger().Info("Updated controller proportional gain",
 			zap.String("controller", controllerName),
 			zap.Float64("kp", kp))
 		return nil
@@ -393,7 +387,7 @@ func (p *pidProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 
 		// Get current tuning values to update only ki
 		currentKP, _, currentKD := ctrlInstance.pid.GetTunings()
-		
+
 		// Update the controller configuration
 		p.config.Controllers[configIdx].KI = ki
 
@@ -403,7 +397,7 @@ func (p *pidProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 		// Reset integral term when ki changes to prevent windup
 		ctrlInstance.pid.ResetIntegral()
 
-		p.logger.Info("Updated controller integral gain",
+		p.GetLogger().Info("Updated controller integral gain",
 			zap.String("controller", controllerName),
 			zap.Float64("ki", ki))
 		return nil
@@ -443,14 +437,14 @@ func (p *pidProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 
 		// Get current tuning values to update only kd
 		currentKP, currentKI, _ := ctrlInstance.pid.GetTunings()
-		
+
 		// Update the controller configuration
 		p.config.Controllers[configIdx].KD = kd
 
 		// Update the PID controller's tuning
 		ctrlInstance.pid.SetTunings(currentKP, currentKI, kd)
 
-		p.logger.Info("Updated controller derivative gain",
+		p.GetLogger().Info("Updated controller derivative gain",
 			zap.String("controller", controllerName),
 			zap.Float64("kd", kd))
 		return nil
@@ -467,8 +461,8 @@ func (p *pidProcessor) GetName() string {
 
 // GetConfigStatus implements the UpdateableProcessor interface
 func (p *pidProcessor) GetConfigStatus(ctx context.Context) (interfaces.ConfigStatus, error) {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
+	p.RLock()
+	defer p.RUnlock()
 
 	// Determine if any controllers are enabled
 	enabled := false
