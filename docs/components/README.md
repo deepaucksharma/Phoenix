@@ -16,10 +16,8 @@ Processors handle metrics data transformation and filtering:
 
 | Processor | Description | Status |
 |-----------|-------------|--------|
-| [priority_tagger](./processors/priority_tagger.md) | Tags resources with priority levels based on rules | Implemented |
-| [adaptive_topk](./processors/adaptive_topk.md) | Dynamically adjusts k parameter based on coverage score | Implemented |
+| [metric_pipeline](./processor/metric_pipeline.md) | Unified filtering and transformation processor | Implemented |
 | [adaptive_pid](./processors/adaptive_pid.md) | Generates configuration patches using PID control | Implemented |
-| [others_rollup](./processors/others_rollup.md) | Aggregates non-priority processes | Implemented |
 | [cardinality_guardian](./processors/cardinality_guardian.md) | Controls metrics cardinality | In Progress |
 | [reservoir_sampler](./processors/reservoir_sampler.md) | Statistical sampling with adjustable reservoir sizes | In Progress |
 | [process_context_learner](./processors/process_context_learner.md) | Learns and associates context with processes | In Progress |
@@ -42,7 +40,9 @@ Connectors bridge between components:
 
 | Connector | Description | Status |
 |-----------|-------------|--------|
-| [pic_connector](./connectors/pic_connector.md) | Connects adaptive_pid to pic_control_ext | Implemented |
+| None currently in production | - | - |
+
+*Note: The previously documented `pic_connector` has been removed as part of the codebase cleanup.*
 
 ### Control Components
 
@@ -80,13 +80,8 @@ Phoenix implements a dual pipeline architecture that separates data processing f
         │                          │
         ▼                          ▼
 ┌───────────────┐          ┌───────────────┐
-│  Exporters    │          │ pic_connector │
-└───────────────┘          └───────┬───────┘
-                                   │
-                                   ▼
-                           ┌───────────────┐
-                           │ pic_control   │
-                           │   extension   │
+│  Exporters    │          │ pic_control   │
+└───────────────┘          │   extension   │
                            └───────┬───────┘
                                    │
                                    ▼

@@ -25,7 +25,7 @@ adaptive_pid:
   controllers:
     - name: coverage_controller
       enabled: true
-      kpi_metric_name: aemf_impact_adaptive_topk_resource_coverage_percent_avg_1m
+      kpi_metric_name: phoenix.filter.coverage_ratio_avg_1m
       kpi_target_value: 0.90
       kp: 30
       ki: 5
@@ -117,7 +117,7 @@ adaptive_pid_config:
   controllers:
     - name: coverage_controller
       enabled: true
-      kpi_metric_name: aemf_impact_adaptive_topk_resource_coverage_percent_avg_1m
+      kpi_metric_name: phoenix.filter.coverage_ratio_avg_1m
       kpi_target_value: 0.90
       kp: 30
       ki: 5
@@ -128,6 +128,6 @@ service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      processors: [priority_tagger, adaptive_topk, adaptive_pid]
+      processors: [metric_pipeline, adaptive_pid]
       exporters: [prometheusremotewrite]
 ```

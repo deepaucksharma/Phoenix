@@ -31,7 +31,7 @@ Use the prebuilt configuration in `configs/default/config.yaml` which includes:
 - Process-only metrics collection
 - Attribute filtering to control cardinality
 - Histogram optimization for New Relic visualization
-- Adaptive k-value control for top processes
+- Adaptive resource filtering through the `metric_pipeline` processor
 
 ### 3. Start the Collector
 
@@ -61,13 +61,12 @@ receivers:
 
 ### Adaptive Processing Pipeline
 
-The metrics pipeline uses these processors in sequence:
+The metrics pipeline uses the unified **metric_pipeline** processor which combines:
 
-1. **priority_tagger**: Tags processes by importance (critical, high, medium, low)
-2. **adaptive_topk**: Dynamically adjusts which processes pass through based on CPU usage
-3. **others_rollup**: Aggregates low-priority processes into a single "others" metric
-4. **histogram_aggregator**: Optimizes histograms for New Relic visualization
-5. **attributes/process**: Filters and normalizes attributes to control cardinality
+1. Priority tagging and top-K filtering with adaptive parameters
+2. Rollup aggregation for low-priority processes
+3. Histogram optimization for New Relic visualization
+4. Attribute processing to control cardinality
 
 ### PID Controllers
 
@@ -95,7 +94,7 @@ Monitor the configuration through:
 
 ### Key Metrics to Watch
 
-- `aemf_impact_adaptive_topk_resource_coverage_percent`: Should stay near 95%
+- `phoenix.filter.coverage_ratio`: Should stay near 95%
 - `aemf_metrics_cardinality`: Total unique metrics being exported
 - `aemf_metrics_export_rate`: Rate of metrics being exported to New Relic
 
@@ -104,15 +103,15 @@ Monitor the configuration through:
 ### Common Issues
 
 1. **High Cardinality Alerts**: If New Relic shows high cardinality alerts:
-   - Decrease `k_max` in the adaptive_topk configuration
-   - Increase priority threshold for `others_rollup`
+   - Decrease `topk.k_max` in the `metric_pipeline` configuration
+   - Increase `rollup.priority_threshold` in the same configuration
 
 2. **Missing Important Processes**: If key processes aren't visible:
-   - Add them to the priority_tagger rules with "critical" priority
-   - Increase `k_min` value in adaptive_topk
+   - Add them to the `priority_rules` with "critical" priority
+   - Increase `topk.k_min` value in `metric_pipeline`
 
 3. **Poor Histogram Visualization**: If histograms don't display well:
-   - Adjust the `custom_boundaries` in histogram_aggregator processor
+   - Adjust `transformation.histograms.custom_boundaries` in `metric_pipeline`
 
 4. **Authentication Failures**:
    - Verify your NEW_RELIC_API_KEY environment variable is set correctly

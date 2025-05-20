@@ -16,10 +16,7 @@ Phoenix implements a dual-pipeline architecture that separates data processing f
 
 1. **Data Pipeline**:
    - Collects metrics from standard OpenTelemetry receivers (e.g., hostmetrics)
-   - Processes through various adaptive processors:
-     - `priority_tagger`: Tags resources with priority levels
-     - `adaptive_topk`: Dynamically filters to the most important resources
-     - `others_rollup`: Aggregates lower-priority resources
+   - Processes metrics through the unified `metric_pipeline` processor for resource filtering and transformation
    - Exports processed metrics to configured destinations
    - Each processor emits self-metrics about its own operation
 
