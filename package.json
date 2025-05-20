@@ -1,0 +1,16 @@
+{
+  "name": "sa-omf",
+  "version": "0.1.0",
+  "description": "Self-Aware OpenTelemetry Metrics Fabric",
+  "private": true,
+  "scripts": {
+    "start": "go run ./cmd/sa-omf-otelcol",
+    "build": "go build -o ./bin/sa-omf-otelcol ./cmd/sa-omf-otelcol",
+    "test": "go test ./...",
+    "lint": "golangci-lint run",
+    "clean": "rm -rf ./bin"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
