@@ -3,6 +3,7 @@ package metricpipeline
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 	"github.com/deepaucksharma/Phoenix/internal/processor/metric_pipeline"
 	"github.com/deepaucksharma/Phoenix/internal/processor/resource_filter"
+	"github.com/deepaucksharma/Phoenix/internal/receiver/processscraper"
 	"github.com/deepaucksharma/Phoenix/test/testutils"
 )
 
@@ -780,6 +782,56 @@ func TestMetricPipelineProcessor_ConfigPatching(t *testing.T) {
 	assert.Equal(t, 10, result.ResourceMetrics().Len())
 
 	// Shutdown the processor
+	err = proc.Shutdown(context.Background())
+	require.NoError(t, err)
+}
+
+func TestMetricPipelineProcessor_ProcessScraperMetrics(t *testing.T) {
+	factory := metric_pipeline.NewFactory()
+	require.NotNil(t, factory)
+
+	cfg := createTestConfig()
+
+	next := new(consumertest.MetricsSink)
+	proc, err := factory.CreateMetrics(
+		context.Background(),
+		processor.Settings{
+			TelemetrySettings: component.TelemetrySettings{Logger: zap.NewNop()},
+		},
+		cfg,
+		next,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, proc)
+
+	err = proc.Start(context.Background(), nil)
+	require.NoError(t, err)
+
+	scraper := processscraper.New(os.Getpid())
+	md, err := scraper.Scrape()
+	require.NoError(t, err)
+
+	err = proc.ConsumeMetrics(context.Background(), md)
+	require.NoError(t, err)
+
+	result := next.AllMetrics()[0]
+	names := map[string]bool{}
+	for i := 0; i < result.ResourceMetrics().Len(); i++ {
+		rm := result.ResourceMetrics().At(i)
+		for j := 0; j < rm.ScopeMetrics().Len(); j++ {
+			sm := rm.ScopeMetrics().At(j)
+			for k := 0; k < sm.Metrics().Len(); k++ {
+				m := sm.Metrics().At(k)
+				names[m.Name()] = true
+			}
+		}
+	}
+
+	assert.Contains(t, names, "process.open_fds")
+	assert.Contains(t, names, "process.threads")
+	assert.Contains(t, names, "process.io.read_bytes")
+	assert.Contains(t, names, "process.io.write_bytes")
+
 	err = proc.Shutdown(context.Background())
 	require.NoError(t, err)
 }

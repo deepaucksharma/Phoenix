@@ -18,6 +18,7 @@ receivers:
         include:
           match_type: regexp
           processes: [".*"]
+      processscraper: {}
   
   prometheus/self:
     config:
