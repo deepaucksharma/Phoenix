@@ -12,7 +12,7 @@ fi
 TITLE=$1
 DATE=$(date +%Y%m%d)
 FILENAME="${DATE}-$(echo $TITLE | tr '[:upper:]' '[:lower:]' | tr ' ' '-').md"
-FULLPATH="docs/adr/$FILENAME"
+FULLPATH="docs/architecture/adr/$FILENAME"
 
 # Check if file already exists
 
