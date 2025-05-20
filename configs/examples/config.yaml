@@ -1,11 +1,3 @@
-extensions:
-  pic_control:
-    policy_file_path: /etc/sa-omf/policy.yaml # Example, typically overridden by example-specific policy.yaml
-    max_patches_per_minute: 3
-    patch_cooldown_seconds: 10
-    safe_mode_processor_configs:
-      adaptive_topk:
-        k_value: 10
 
 receivers:
   hostmetrics:
@@ -57,7 +49,6 @@ processors:
 exporters:
   logging:
     verbosity: detailed
-  pic_connector: {}
 
 service:
   pipelines:
@@ -69,7 +60,5 @@ service:
     control:
       receivers: [hostmetrics]
       processors: [pid_decider]
-      exporters: [pic_connector, logging]
-  
-  extensions: [pic_control]
+      exporters: [logging]
 

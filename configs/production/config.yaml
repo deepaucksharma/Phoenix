@@ -1,8 +1,3 @@
-extensions:
-  pic_control:
-    policy_file_path: /etc/sa-omf/policy.yaml # Path inside the container / expected by service
-    max_patches_per_minute: 3
-    patch_cooldown_seconds: 10
 
 receivers:
   hostmetrics:
@@ -38,7 +33,6 @@ exporters:
     endpoint: "http://localhost:9090/api/v1/write"
     timeout: 5s
   
-  pic_connector: {}
 
 service:
   pipelines:
@@ -50,7 +44,5 @@ service:
     control:
       receivers: [prometheus/self]
       processors: [adaptive_pid]
-      exporters: [pic_connector, logging]
-  
-  extensions: [pic_control]
+      exporters: [logging]
 

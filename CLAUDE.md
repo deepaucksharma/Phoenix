@@ -153,13 +153,9 @@ scripts/dev/create-task.sh "Add new processor"
 
 - **ConfigPatch**: Structure representing a proposed change to a processor's configuration
 
-### Key Extensions
+### Configuration Management
 
-- **pic_control_ext**: Central governance layer for config changes
-  - Manages policy file watching
-  - Handles configuration change requests
-  - Enforces rate limiting and safety measures
-  - Registers and manages all UpdateableProcessor instances
+The config manager applies patches directly without a separate extension layer.
 
 ### Processors
 
@@ -189,9 +185,7 @@ scripts/dev/create-task.sh "Add new processor"
    - Generates stable control signals for processor reconfiguration
    - Handles anti-windup protection
 
-2. **pic_connector**: Connects adaptive_pid to pic_control_ext
-   - Extracts ConfigPatch objects from metrics
-   - Submits them to pic_control_ext
+2. **pic_connector**: (Deprecated) formerly routed patches from adaptive_pid to the control layer
 
 3. **safety_monitor**: Provides safeguards against excessive resource usage
    - Monitors system resources
@@ -244,9 +238,8 @@ sa-omf/
 ├── internal/
 │   ├── interfaces/                 # Core interfaces (UpdateableProcessor, etc.)
 │   ├── extension/
-│   │   └── pic_control_ext/        # pic_control implementation
 │   ├── connector/
-│   │   └── pic_connector/          # pic_connector implementation
+│   │   └── pic_connector/          # Deprecated connector implementation
 │   ├── processor/                  # All custom processors
 │   │   ├── adaptive_pid/           # PID-based adaptive configuration
 │   │   ├── adaptive_topk/          # Adaptive top-k filtering

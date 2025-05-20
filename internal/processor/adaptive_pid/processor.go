@@ -22,17 +22,11 @@ import (
 
 var _ component.Config = (*Config)(nil)
 
-// Interface for pic_control extension
-type picControl interface {
-	SubmitConfigPatch(ctx context.Context, patch interfaces.ConfigPatch) error
-}
-
 // pidProcessor implements the pid_decider processor
 type pidProcessor struct {
 	*base.BaseProcessor
 	config      *Config
 	controllers []*controller
-	picControl  picControl // Interface to pic_control_ext
 }
 
 // controller represents a single PID control loop
@@ -51,12 +45,11 @@ var _ processor.Metrics = (*pidProcessor)(nil)
 var _ interfaces.UpdateableProcessor = (*pidProcessor)(nil)
 
 // newProcessor creates a new pid_decider processor
-func newProcessor(config *Config, settings component.TelemetrySettings, picControlExt picControl, id component.ID) (*pidProcessor, error) {
+func newProcessor(config *Config, settings component.TelemetrySettings, id component.ID) (*pidProcessor, error) {
 	p := &pidProcessor{
 		BaseProcessor: base.NewBaseProcessor(settings.Logger, nil, typeStr, id),
 		config:        config,
 		controllers:   make([]*controller, 0, len(config.Controllers)),
-		picControl:    picControlExt,
 	}
 
 	// Initialize controllers
@@ -103,16 +96,8 @@ func newProcessor(config *Config, settings component.TelemetrySettings, picContr
 }
 
 // NewProcessor creates a new pid_decider processor - exported for testing
-func NewProcessor(config *Config, settings component.TelemetrySettings, picControlExt interface{}, id component.ID) (*pidProcessor, error) {
-	// Handle case where picControlExt could be nil or not implement picControl
-	var picCtrl picControl
-	if picControlExt != nil {
-		if pc, ok := picControlExt.(picControl); ok {
-			picCtrl = pc
-		}
-	}
-
-	return newProcessor(config, settings, picCtrl, id)
+func NewProcessor(config *Config, settings component.TelemetrySettings, id component.ID) (*pidProcessor, error) {
+	return newProcessor(config, settings, id)
 }
 
 // Start implements the Component interface
@@ -139,19 +124,6 @@ func (p *pidProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) e
 
 	if err != nil {
 		return err
-	}
-
-	// Submit patches to pic_control if available
-	// Do this outside our lock to prevent deadlocks with pic_control extension
-	if p.picControl != nil && len(patches) > 0 {
-		for _, patch := range patches {
-			err := p.picControl.SubmitConfigPatch(ctx, patch)
-			if err != nil {
-				p.GetLogger().Warn("Failed to submit config patch",
-					zap.String("patch_id", patch.PatchID),
-					zap.Error(err))
-			}
-		}
 	}
 
 	// Forward metrics to next consumer if one is configured

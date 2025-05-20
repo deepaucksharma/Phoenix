@@ -18,23 +18,8 @@ import (
 	"github.com/deepaucksharma/Phoenix/internal/processor/metric_pipeline"
 )
 
-// MockPICControl is a mock implementation of the pic_control extension
-type MockPICControl struct {
-	ReceivedPatches []interfaces.ConfigPatch
-}
-
-// SubmitConfigPatch is a method to mock the pic_control extension's patch submission
-func (m *MockPICControl) SubmitConfigPatch(ctx context.Context, patch interfaces.ConfigPatch) error {
-	m.ReceivedPatches = append(m.ReceivedPatches, patch)
-	return nil
-}
-
 // TestPatchGeneration tests that the PID controller generates and applies patches correctly
 func TestPatchGeneration(t *testing.T) {
-	// Create a mock pic_control extension
-	mockPICControl := &MockPICControl{
-		ReceivedPatches: make([]interfaces.ConfigPatch, 0),
-	}
 
 	// Create a logger
 	logger := zaptest.NewLogger(t)
@@ -68,7 +53,7 @@ func TestPatchGeneration(t *testing.T) {
 	// Create a test sink
 	sink := new(consumertest.MetricsSink)
 
-	// Create the processor with the mock pic_control
+	// Create the processor
 	settings := processor.Settings{
 		TelemetrySettings: component.TelemetrySettings{
 			Logger: logger,
@@ -76,7 +61,7 @@ func TestPatchGeneration(t *testing.T) {
 		ID: component.NewIDWithName(component.MustNewType("adaptive_pid"), ""),
 	}
 
-	proc, err := adaptive_pid.NewProcessor(cfg, settings.TelemetrySettings, mockPICControl, settings.ID)
+	proc, err := adaptive_pid.NewProcessor(cfg, settings.TelemetrySettings, settings.ID)
 	require.NoError(t, err)
 	require.NotNil(t, proc)
 
@@ -93,18 +78,16 @@ func TestPatchGeneration(t *testing.T) {
 	m.SetName("aemf_test_metric")
 	m.SetEmptyGauge().DataPoints().AppendEmpty().SetDoubleValue(80.0)
 
-	// Process the metrics
-	err = proc.ConsumeMetrics(context.Background(), metrics)
+	// Process the metrics and capture patches
+	patches, err := proc.ProcessMetricsForTest(context.Background(), metrics)
 	require.NoError(t, err)
-
-	// Verify that a patch was submitted
-	assert.Equal(t, 1, len(mockPICControl.ReceivedPatches))
-	patch := mockPICControl.ReceivedPatches[0]
+	require.Len(t, patches, 1)
+	patch := patches[0]
 
 	// Validate the patch details
 	assert.Equal(t, "metric_pipeline", patch.TargetProcessorName.Type().String())
 	assert.Equal(t, "resource_filter.topk.k_value", patch.ParameterPath)
-	
+
 	// With current value 80, target 100, error 20, and ChangeScaleFactor -1.0,
 	// we expect a patch value of -20
 	// This would be used to adjust k_value by -20
@@ -171,18 +154,18 @@ func TestPatchApplication(t *testing.T) {
 	// Verify the patch was applied by examining the processor's state
 	// (This requires exposing internal state through the ConfigStatus)
 	assert.True(t, status.Enabled)
-	
+
 	// Verify through processing behavior
 	// Create test metrics with many resources
 	metrics := generateTestMetrics(50) // 50 processes
-	
+
 	// Process the metrics
 	err = proc.ConsumeMetrics(context.Background(), metrics)
 	require.NoError(t, err)
-	
+
 	// Verify that approximately 30 resources were kept (after the patch changed k_value from 20 to 30)
 	processedMetrics := sink.AllMetrics()[0]
-	
+
 	// Count the number of non-rollup resources
 	nonRollupCount := 0
 	for i := 0; i < processedMetrics.ResourceMetrics().Len(); i++ {
@@ -192,7 +175,7 @@ func TestPatchApplication(t *testing.T) {
 			nonRollupCount++
 		}
 	}
-	
+
 	// The exact count might vary due to topk algorithm and priority rules, but should be around 30
 	assert.InDelta(t, 30, nonRollupCount, 5)
 
@@ -206,11 +189,11 @@ func TestPatchApplication(t *testing.T) {
 // generateTestMetrics creates test metrics with multiple resources
 func generateTestMetrics(processCount int) pmetric.Metrics {
 	metrics := pmetric.NewMetrics()
-	
+
 	for i := 0; i < processCount; i++ {
 		rm := metrics.ResourceMetrics().AppendEmpty()
 		resourceName := ""
-		
+
 		// Create some diversity in process names and priorities
 		if i < 5 {
 			resourceName = "critical-process-" + string(i)
@@ -225,14 +208,14 @@ func generateTestMetrics(processCount int) pmetric.Metrics {
 			rm.Resource().Attributes().PutStr("process.executable.name", resourceName)
 			rm.Resource().Attributes().PutStr("aemf.process.priority", "medium")
 		}
-		
+
 		// Add metrics with varying CPU values
 		sm := rm.ScopeMetrics().AppendEmpty()
 		m := sm.Metrics().AppendEmpty()
 		m.SetName("process.cpu.time")
 		m.SetEmptyGauge().DataPoints().AppendEmpty().SetDoubleValue(float64(processCount - i))
 	}
-	
+
 	return metrics
 }
 

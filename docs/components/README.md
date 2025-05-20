@@ -32,7 +32,7 @@ Extensions provide additional functionality outside the data path:
 
 | Extension | Description | Status |
 |-----------|-------------|--------|
-| [pic_control_ext](./extensions/pic_control_ext.md) | Central governance layer for config changes | Implemented |
+| None currently in production | - | - |
 
 ### Connectors
 
@@ -80,8 +80,8 @@ Phoenix implements a dual pipeline architecture that separates data processing f
         │                          │
         ▼                          ▼
 ┌───────────────┐          ┌───────────────┐
-│  Exporters    │          │ pic_control   │
-└───────────────┘          │   extension   │
+│  Exporters    │          │ config        │
+└───────────────┘          │   manager     │
                            └───────┬───────┘
                                    │
                                    ▼

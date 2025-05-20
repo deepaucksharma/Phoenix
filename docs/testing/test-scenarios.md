@@ -20,12 +20,12 @@ These tests verify the behavior of the policy management and configuration patch
 
 | ID | Scenario | Purpose | Location |
 |----|----------|---------|----------|
-| POL-05 | Patch with Invalid Parameter Value Type | Verify pic_control correctly validates and rejects patches with wrong types | `test/e2e/policy/invalid_parameter_type_test.go` ✅ |
+| POL-05 | Patch with Invalid Parameter Value Type | Verify the config manager correctly validates and rejects patches with wrong types | `test/e2e/policy/invalid_parameter_type_test.go` ✅ |
 | POL-06 | Patch Targeting Non-UpdateableProcessor | Verify graceful handling of patches targeting non-updateable processors | `test/e2e/policy/non_updateable_target_test.go` ✅ |
-| POL-07 | Rate Limiting of Configuration Patches | Verify pic_control correctly applies rate limiting to patches | `test/e2e/policy/rate_limit_test.go` ✅ |
+| POL-07 | Rate Limiting of Configuration Patches | Verify the config manager correctly applies rate limiting to patches | `test/e2e/policy/rate_limit_test.go` ✅ |
 | POL-08 | Policy with Conflicting PID Output Targets | Verify conflict resolution for multiple controllers targeting same parameter | `test/e2e/policy/conflicting_targets_test.go` |
-| POL-09 | Safe Mode Policy Application | Verify pic_control applies safe mode configurations correctly | `test/e2e/policy/safe_mode_test.go` |
-| POL-10 | Policy File Syntax Error | Verify pic_control handles corrupt or invalid policy files | `test/e2e/policy/policy_syntax_error_test.go` |
+| POL-09 | Safe Mode Policy Application | Verify the config manager applies safe mode configurations correctly | `test/e2e/policy/safe_mode_test.go` |
+| POL-10 | Policy File Syntax Error | Verify the config manager handles corrupt or invalid policy files | `test/e2e/policy/policy_syntax_error_test.go` |
 
 ### PID Controller Behavior Tests
 
@@ -72,7 +72,7 @@ These tests verify system behavior under failure conditions.
 
 | ID | Scenario | Purpose | Location |
 |----|----------|---------|----------|
-| CHAOS-POLICY | Corrupt Policy File During Hot-Reload | Verify pic_control handles corrupt policy files gracefully | `test/e2e/chaos/corrupt_policy_test.go` ✅ |
+| CHAOS-POLICY | Corrupt Policy File During Hot-Reload | Verify the config manager handles corrupt policy files gracefully | `test/e2e/chaos/corrupt_policy_test.go` ✅ |
 | CHAOS-PATCH | Flood of Conflicting Patches | Verify rate limiting and hysteresis prevent system thrashing | `test/e2e/chaos/patch_flood_test.go` |
 | CHAOS-DISK | Disk Full | Verify system remains operational with full disk | `test/e2e/chaos/disk_full_test.go` |
 

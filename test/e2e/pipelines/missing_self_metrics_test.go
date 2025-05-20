@@ -58,7 +58,7 @@ func TestMissingSelfMetrics(t *testing.T) {
 
 	// Create the PID processor
 	settings := component.TelemetrySettings{}
-	processor, err := adaptive_pid.NewProcessor(config, settings, nil, component.NewIDWithName(component.MustNewType("processor"), "adaptive_pid"))
+	processor, err := adaptive_pid.NewProcessor(config, settings, component.NewIDWithName(component.MustNewType("processor"), "adaptive_pid"))
 	require.NoError(t, err, "Failed to create adaptive_pid processor")
 
 	// Create metrics with NO KPI data

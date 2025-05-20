@@ -39,7 +39,7 @@ We've created task definitions for 17 new test scenarios covering various aspect
 We've implemented several test scenarios:
 
 1. **POL-05: Patch with Invalid Parameter Value Type Test**
-   - Test verifies pic_control correctly validates and rejects patches with wrong types
+   - Test verifies the config manager correctly validates and rejects patches with wrong types
    - Implemented in `test/e2e/policy/invalid_parameter_type_test.go`
    - Uses mock processor to test type validation
    - Verifies both rejection of invalid type and acceptance of valid type
@@ -51,7 +51,7 @@ We've implemented several test scenarios:
    - Verifies metrics for clamping are emitted
 
 3. **CHAOS-POLICY: Corrupt Policy File During Hot-Reload Test**
-   - Test verifies pic_control handles corrupt policy files gracefully
+   - Test verifies the config manager handles corrupt policy files gracefully
    - Implemented in `test/e2e/chaos/corrupt_policy_test.go`
    - Tests corruption during hot-reload process
    - Verifies system continues with last known good policy

@@ -25,10 +25,9 @@ Phoenix implements a dual-pipeline architecture that separates data processing f
    - Runs PID controllers to calculate needed adjustments
    - Generates configuration patches for the data pipeline
    - Uses the `adaptive_pid` processor as its core component
-   - Connects to `pic_control_ext` to apply changes
+   - Applies configuration patches directly through the config manager
 
 3. **Integration Components**:
-   - `pic_control_ext`: Central governance layer for configuration changes
    - `UpdateableProcessor` interface: Allows processors to receive dynamic configuration
 
 ## Architectural Principles
@@ -112,7 +111,7 @@ Current implementation considerations:
    - Configuration originates in the `policy.yaml` file
    - PID controllers in `adaptive_pid` processor calculate adjustments
    - Changes flow through the system as `ConfigPatch` objects
-   - `pic_control_ext` validates and applies changes to processors
+   - The config manager validates and applies changes to processors
 
 3. **Metrics Flow**:
    - Processors emit self-metrics with the `aemf_` prefix

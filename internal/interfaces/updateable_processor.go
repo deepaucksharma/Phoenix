@@ -70,27 +70,6 @@ type UpdateableProcessor interface {
 	GetName() string
 }
 
-// PicControl defines the interface for the policy-in-code control extension.
-// This extension manages configuration patch application and policy enforcement.
-type PicControl interface {
-	// ApplyConfigPatch applies a configuration patch to a processor.
-	// Returns an error if the patch cannot be applied.
-	ApplyConfigPatch(ctx context.Context, patch ConfigPatch) error
-
-	// RegisterUpdateableProcessor registers a processor that can have its
-	// configuration updated dynamically.
-	RegisterUpdateableProcessor(processor UpdateableProcessor) error
-
-	// IsInSafeMode returns whether the control system is currently in safe mode.
-	IsInSafeMode() bool
-
-	// SetSafeMode sets the safe mode state.
-	SetSafeMode(safeMode bool)
-
-	// RegisterSafetyMonitor registers a safety monitor that can trigger safe mode.
-	RegisterSafetyMonitor(monitor SafetyMonitor)
-}
-
 // SafetyMonitor defines the interface for components that monitor system
 // resource usage and can trigger safe mode to prevent resource exhaustion.
 type SafetyMonitor interface {

@@ -13,7 +13,7 @@ import (
 const Schema = `{
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["global_settings", "processors_config", "pid_decider_config", "pic_control_config"],
+  "required": ["global_settings", "processors_config", "pid_decider_config"],
   "properties": {
     "global_settings": {
       "type": "object",
@@ -129,16 +129,6 @@ const Schema = `{
         }
       }
     },
-    "pic_control_config": {
-      "type": "object",
-      "required": ["policy_file_path", "max_patches_per_minute", "patch_cooldown_seconds", "safe_mode_processor_configs"],
-      "properties": {
-        "policy_file_path": { "type": "string" },
-        "max_patches_per_minute": { "type": "integer", "minimum": 1 },
-        "patch_cooldown_seconds": { "type": "integer", "minimum": 0 },
-        "safe_mode_processor_configs": { "type": "object" }
-      }
-    }
   }
 }`
 
@@ -147,7 +137,6 @@ type Policy struct {
 	GlobalSettings   GlobalSettings            `yaml:"global_settings"`
 	ProcessorsConfig map[string]map[string]any `yaml:"processors_config"`
 	PIDDeciderConfig PIDDeciderConfig          `yaml:"pid_decider_config"`
-	PICControlConfig PICControlConfig          `yaml:"pic_control_config"`
 	Service          map[string]any            `yaml:"service"`
 }
 
@@ -185,13 +174,7 @@ type OutputConfigPatch struct {
 	MaxValue            float64 `yaml:"max_value"`
 }
 
-// PICControlConfig contains configuration for the pic_control extension
-type PICControlConfig struct {
-	PolicyFilePath           string                    `yaml:"policy_file_path"`
-	MaxPatchesPerMinute      int                       `yaml:"max_patches_per_minute"`
-	PatchCooldownSeconds     int                       `yaml:"patch_cooldown_seconds"`
-	SafeModeProcessorConfigs map[string]map[string]any `yaml:"safe_mode_processor_configs"`
-}
+// PICControlConfig contains legacy configuration for the removed pic_control extension
 
 // LoadPolicy loads and validates a policy from a file
 func LoadPolicy(filename string) (*Policy, error) {

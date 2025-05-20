@@ -293,108 +293,6 @@ func RunProcessorTests(t *testing.T, factory component.Factory, defaultConfig co
 EOL
 ```
 
-### 2.4 PIC Control Extension Testing
-
-The pic_control extension requires specialized tests:
-
-```bash
-cat > test/extension/pic_control_test.go <<EOL
-package extension
-
-import (
-    "context"
-    "os"
-    "path/filepath"
-    "testing"
-    "time"
-    
-    "github.com/stretchr/testify/assert"
-    "github.com/stretchr/testify/require"
-    "go.opentelemetry.io/collector/component"
-    
-    "github.com/yourorg/sa-omf/api/updateable"
-    "github.com/yourorg/sa-omf/otel/ext_pic"
-)
-
-func TestPICControl(t *testing.T) {
-    // Setup temp policy file
-    dir, err := os.MkdirTemp("", "pic-test")
-    require.NoError(t, err)
-    defer os.RemoveAll(dir)
-    
-    policyPath := filepath.Join(dir, "policy.yaml")
-    err = os.WriteFile(policyPath, []byte("global_settings:\n  autonomy_level: shadow"), 0644)
-    require.NoError(t, err)
-    
-    // Create extension
-    factory := ext_pic.NewFactory()
-    config := factory.CreateDefaultConfig().(*ext_pic.Config)
-    config.PolicyFilePath = policyPath
-    
-    ext, err := factory.CreateExtension(context.Background(), component.ExtensionCreateSettings{}, config)
-    require.NoError(t, err)
-    
-    // Start with mock host
-    mockHost := newMockHost()
-    err = ext.Start(context.Background(), mockHost)
-    require.NoError(t, err)
-    
-    // Test policy file watching
-    err = os.WriteFile(policyPath, []byte("global_settings:\n  autonomy_level: active"), 0644)
-    require.NoError(t, err)
-    
-    // Wait for policy reload
-    time.Sleep(200 * time.Millisecond)
-    
-    // Test patch submission
-    picControl, ok := ext.(ext_pic.PicControl)
-    require.True(t, ok)
-    
-    patch := updateable.ConfigPatch{
-        PatchID: "test-patch",
-        TargetProcessorName: component.NewID("processor"),
-        ParameterPath: "test",
-        NewValue: 42,
-    }
-    
-    // Test with no processors
-    err = picControl.SubmitConfigPatch(context.Background(), patch)
-    assert.Error(t, err)
-    
-    // Add mock processor
-    mockProc := newMockProcessor()
-    mockHost.AddProcessor(component.NewID("processor"), mockProc)
-    
-    // Test with processor
-    err = picControl.SubmitConfigPatch(context.Background(), patch)
-    require.NoError(t, err)
-    
-    // Verify patch was applied
-    assert.True(t, mockProc.PatchApplied)
-    
-    // Test rate limiting
-    for i := 0; i < 10; i++ {
-        patch.PatchID = fmt.Sprintf("test-patch-%d", i)
-        err = picControl.SubmitConfigPatch(context.Background(), patch)
-        if i >= config.MaxPatchesPerMinute {
-            assert.Error(t, err)
-        }
-    }
-    
-    // Test safe mode
-    // ...
-    
-    // Shutdown
-    err = ext.Shutdown(context.Background())
-    require.NoError(t, err)
-}
-
-// Mock implementations
-func newMockHost() *mockHost { ... }
-func newMockProcessor() *mockProcessor { ... }
-EOL
-```
-
 ## 3. Phase-by-Phase Validation Checklist
 
 ### 3.1 Phase 1: Foundation - Validation Script
@@ -422,7 +320,6 @@ echo "Step 4: Checking health endpoint"
 curl -s http://localhost:13133/health | grep -q "status\":\"ready" || { echo "Health check failed"; exit 1; }
 
 echo "Step 5: Validating metrics endpoint"
-curl -s http://localhost:8888/metrics | grep -q "aemf_pic_control" || { echo "Self-metrics missing"; exit 1; }
 curl -s http://localhost:8888/metrics | grep -q "aemf_priority_tagger" || { echo "Priority tagger metrics missing"; exit 1; }
 curl -s http://localhost:8888/metrics | grep -q "aemf_adaptive_topk" || { echo "Adaptive topK metrics missing"; exit 1; }
 

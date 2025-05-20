@@ -77,6 +77,5 @@ func createMetricsProcessor(
 	nextConsumer consumer.Metrics,
 ) (processor.Metrics, error) {
 	pCfg := cfg.(*Config)
-	// We're using a simple interface for pic_control
-	return newProcessor(pCfg, set.TelemetrySettings, nil, set.ID)
+	return newProcessor(pCfg, set.TelemetrySettings, set.ID)
 }

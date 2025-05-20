@@ -142,7 +142,7 @@ The processor implements the `UpdateableProcessor` interface, allowing its confi
 - Threshold adjustments for prioritization
 - On-the-fly changes to attribute handling and histogram configuration
 
-Configuration patches can be applied programmatically or through the pic_control extension.
+Configuration patches are applied programmatically through the config manager.
 
 ## Performance Considerations
 

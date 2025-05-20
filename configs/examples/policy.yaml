@@ -52,18 +52,8 @@ pid_decider_config:
           min_value: 10
           max_value: 60
 
-pic_control_config:
-  policy_file_path: /etc/sa-omf/policy.yaml
-  max_patches_per_minute: 3
-  patch_cooldown_seconds: 10
-  safe_mode_processor_configs:
-    adaptive_topk:
-      k_value: 10
-    cardinality_guardian:
-      max_unique: 100
-
 service:
-  extensions: [pic_control, health_check]
+  extensions: [health_check]
   pipelines:
     metrics:
       receivers: [hostmetrics]
@@ -72,5 +62,5 @@ service:
     control:
       receivers: [prometheus/self]
       processors: [pid_decider]
-      exporters: [pic_connector]
+      exporters: [logging]
 
