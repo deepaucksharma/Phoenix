@@ -2,8 +2,11 @@
 package pid
 
 import (
+	"context"
 	"sync"
 	"time"
+
+	"github.com/deepaucksharma/Phoenix/pkg/metrics"
 )
 
 // Controller implements a PID (Proportional-Integral-Derivative) controller
@@ -28,6 +31,10 @@ type Controller struct {
 	antiWindupEnabled bool    // Whether anti-windup protection is enabled
 	antiWindupGain    float64 // Gain for anti-windup back-calculation
 	
+	// Metrics
+	name          string      // Controller name for metrics
+	metricsCollector *metrics.PIDMetrics // For collecting and emitting metrics
+	
 	lock          sync.Mutex  // For thread safety
 }
 
@@ -46,6 +53,39 @@ func NewController(kp, ki, kd, setpoint float64) *Controller {
 		outputMax:         1000,
 		antiWindupEnabled: true,  // Enable anti-windup by default
 		antiWindupGain:    1.0,   // Default gain for anti-windup
+		name:              "pid_controller", // Default name
+		metricsCollector:  nil,   // No metrics collection by default
+	}
+}
+
+// NewControllerWithMetrics creates a new PID controller with metrics collection
+func NewControllerWithMetrics(kp, ki, kd, setpoint float64, name string, parent *metrics.MetricsEmitter) *Controller {
+	c := NewController(kp, ki, kd, setpoint)
+	c.name = name
+	c.metricsCollector = metrics.NewPIDMetrics(name, parent)
+	return c
+}
+
+// SetName sets the controller name used in metrics
+func (c *Controller) SetName(name string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	
+	c.name = name
+	if c.metricsCollector != nil {
+		c.metricsCollector.ControllerName = name
+	}
+}
+
+// EnableMetrics enables metrics collection for this controller
+func (c *Controller) EnableMetrics(parent *metrics.MetricsEmitter) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	
+	if c.metricsCollector == nil {
+		c.metricsCollector = metrics.NewPIDMetrics(c.name, parent)
+	} else {
+		c.metricsCollector.Parent = parent
 	}
 }
 
@@ -113,8 +153,11 @@ func (c *Controller) Compute(currentValue float64) float64 {
 		dTerm = c.kd * (error - c.lastError) / dt
 	}
 	
-	// Calculate output
-	output := pTerm + iTerm + dTerm
+	// Calculate raw output (before limits)
+	rawOutput := pTerm + iTerm + dTerm
+	
+	// Start with raw output
+	output := rawOutput
 	
 	// Apply output limits and anti-windup if enabled
 	if output > c.outputMax {
@@ -138,6 +181,25 @@ func (c *Controller) Compute(currentValue float64) float64 {
 	// Update state
 	c.lastError = error
 	c.lastTime = now
+	
+	// Update metrics if enabled
+	if c.metricsCollector != nil {
+		c.metricsCollector.Update(
+			c.setpoint,
+			currentValue,
+			error,
+			pTerm,
+			iTerm,
+			dTerm,
+			rawOutput,
+			output,
+		)
+		
+		// Emit metrics if interval has passed
+		if c.metricsCollector.ShouldEmit() {
+			c.metricsCollector.EmitMetrics(context.Background())
+		}
+	}
 	
 	return output
 }
@@ -174,6 +236,24 @@ func (c *Controller) GetState() (float64, float64, float64) {
 	defer c.lock.Unlock()
 	
 	return c.lastError, c.integral, c.setpoint
+}
+
+// GetMetrics returns the metrics collector for this controller
+func (c *Controller) GetMetrics() *metrics.PIDMetrics {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	
+	return c.metricsCollector
+}
+
+// EmitMetrics immediately emits metrics for this controller
+func (c *Controller) EmitMetrics(ctx context.Context) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	
+	if c.metricsCollector != nil {
+		c.metricsCollector.EmitMetrics(ctx)
+	}
 }
 
 // SetAntiWindupEnabled enables or disables anti-windup protection

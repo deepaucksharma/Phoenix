@@ -20,6 +20,7 @@ import (
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 	"github.com/deepaucksharma/Phoenix/pkg/metrics"
 	"github.com/deepaucksharma/Phoenix/pkg/util/bayesian"
+	"github.com/deepaucksharma/Phoenix/pkg/util/typeconv"
 )
 
 // This const is defined in factory.go
@@ -320,53 +321,101 @@ func (p *pidProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	switch patch.ParameterPath {
-	case "enabled":
-		// Find the controller by name (from Target)
-		parts := strings.Split(patch.TargetProcessorName.String(), "/")
+	// Helper to extract controller name from target processor name
+	getControllerName := func(targetName component.ID) string {
+		parts := strings.Split(targetName.String(), "/")
 		if len(parts) > 0 {
-			controllerName := parts[len(parts)-1]
+			return parts[len(parts)-1]
+		}
+		return ""
+	}
 
-			for i, ctrl := range p.config.Controllers {
-				if ctrl.Name == controllerName {
-					enabled, ok := patch.NewValue.(bool)
-					if !ok {
-						return fmt.Errorf("invalid value type for enabled: %T", patch.NewValue)
-					}
-					p.config.Controllers[i].Enabled = enabled
-					return nil
-				}
+	// Helper to find controller by name
+	findControllerIndex := func(name string) (int, bool) {
+		for i, ctrl := range p.config.Controllers {
+			if ctrl.Name == name {
+				return i, true
 			}
 		}
-		return fmt.Errorf("controller not found: %s", patch.TargetProcessorName.String())
+		return -1, false
+	}
+
+	switch patch.ParameterPath {
+	case "enabled":
+		// Find the controller by name
+		controllerName := getControllerName(patch.TargetProcessorName)
+		if controllerName == "" {
+			return fmt.Errorf("invalid target processor name: %s", patch.TargetProcessorName.String())
+		}
+
+		i, found := findControllerIndex(controllerName)
+		if !found {
+			return fmt.Errorf("controller not found: %s", controllerName)
+		}
+
+		// Convert to bool using type converter
+		enabled, err := typeconv.ToBool(patch.NewValue)
+		if err != nil {
+			return fmt.Errorf("invalid value for enabled: %v", err)
+		}
+
+		// Update controller state
+		p.config.Controllers[i].Enabled = enabled
+		p.logger.Info("Updated controller enabled state", 
+			zap.String("controller", controllerName),
+			zap.Bool("enabled", enabled))
+		return nil
 
 	case "kpi_target_value":
 		// Find the controller by name
-		parts := strings.Split(patch.TargetProcessorName.String(), "/")
-		if len(parts) > 0 {
-			controllerName := parts[len(parts)-1]
+		controllerName := getControllerName(patch.TargetProcessorName)
+		if controllerName == "" {
+			return fmt.Errorf("invalid target processor name: %s", patch.TargetProcessorName.String())
+		}
 
-			for i, ctrl := range p.controllers {
-				if ctrl.config.Name == controllerName {
-					targetValue, ok := patch.NewValue.(float64)
-					if !ok {
-						return fmt.Errorf("invalid value type for kpi_target_value: %T", patch.NewValue)
-					}
+		// Find controller in config
+		configIdx, found := findControllerIndex(controllerName)
+		if !found {
+			return fmt.Errorf("controller not found in config: %s", controllerName)
+		}
 
-					// Update the controller configuration
-					p.config.Controllers[i].KPITargetValue = targetValue
-
-					// Update the PID controller's setpoint
-					ctrl.pid.SetSetpoint(targetValue)
-
-					return nil
-				}
+		// Find the runtime controller instance
+		var ctrlInstance *controller
+		var ctrlInstanceIdx int
+		found = false
+		for i, ctrl := range p.controllers {
+			if ctrl.config.Name == controllerName {
+				ctrlInstance = ctrl
+				ctrlInstanceIdx = i
+				found = true
+				break
 			}
 		}
-		return fmt.Errorf("controller not found: %s", patch.TargetProcessorName.String())
-	}
 
-	return fmt.Errorf("unsupported parameter: %s", patch.ParameterPath)
+		if !found {
+			return fmt.Errorf("controller runtime instance not found: %s", controllerName)
+		}
+
+		// Convert to float64 using type converter
+		targetValue, err := typeconv.ToFloat64(patch.NewValue)
+		if err != nil {
+			return fmt.Errorf("invalid value for kpi_target_value: %v", err)
+		}
+
+		// Update the controller configuration
+		p.config.Controllers[configIdx].KPITargetValue = targetValue
+
+		// Update the PID controller's setpoint
+		ctrlInstance.pid.SetSetpoint(targetValue)
+
+		p.logger.Info("Updated controller KPI target value", 
+			zap.String("controller", controllerName),
+			zap.Float64("target_value", targetValue))
+		return nil
+
+	default:
+		return fmt.Errorf("unsupported parameter: %s", patch.ParameterPath)
+	}
 }
 
 // GetConfigStatus implements the UpdateableProcessor interface

@@ -15,6 +15,7 @@ import (
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 	"github.com/deepaucksharma/Phoenix/internal/processor/base"
 	"github.com/deepaucksharma/Phoenix/pkg/util/topk"
+	"github.com/deepaucksharma/Phoenix/pkg/util/typeconv"
 )
 
 // processorImpl is the implementation of the adaptive_topk processor.
@@ -176,6 +177,9 @@ func (p *processorImpl) updateTopKSet() {
 func (p *processorImpl) filterMetrics(md pmetric.Metrics) error {
 	p.totalIncluded = 0
 	
+	// Get original metrics count for logging
+	originalCount := md.ResourceMetrics().Len()
+	
 	// Create a new metrics collection for filtered results
 	filtered := pmetric.NewMetrics()
 	
@@ -189,6 +193,8 @@ func (p *processorImpl) filterMetrics(md pmetric.Metrics) error {
 			resourceID = val.AsString()
 		} else {
 			// Skip resources without the specified field
+			p.GetLogger().Debug("Skipping resource without required field", 
+				zap.String("required_field", p.config.ResourceField))
 			continue
 		}
 		
@@ -207,8 +213,17 @@ func (p *processorImpl) filterMetrics(md pmetric.Metrics) error {
 		}
 	}
 	
-	// Replace the original metrics with the filtered ones
-	filtered.CopyTo(md)
+	// Log filtering stats
+	p.GetLogger().Debug("Filtered resources",
+		zap.Int("original_count", originalCount),
+		zap.Int("filtered_count", p.totalIncluded),
+		zap.Int("k_value", p.config.KValue))
+	
+	// Clear the original metrics before copying filtered results
+	md.ResourceMetrics().RemoveIf(func(_ pmetric.ResourceMetrics) bool { return true })
+	
+	// Copy filtered metrics to the original
+	filtered.ResourceMetrics().CopyTo(md.ResourceMetrics())
 	
 	return nil
 }
@@ -229,10 +244,10 @@ func (p *processorImpl) OnConfigPatch(ctx context.Context, patch interfaces.Conf
 	
 	switch patch.ParameterPath {
 	case "k_value":
-		// Type assertion
-		newK, ok := patch.NewValue.(int)
-		if !ok {
-			return fmt.Errorf("invalid value type for k_value: %T", patch.NewValue)
+		// Convert to int using type converter
+		newK, err := typeconv.ToInt(patch.NewValue)
+		if err != nil {
+			return fmt.Errorf("invalid value for k_value: %v", err)
 		}
 		
 		// Validate range
@@ -254,10 +269,10 @@ func (p *processorImpl) OnConfigPatch(ctx context.Context, patch interfaces.Conf
 		return nil
 		
 	case "enabled":
-		// Type assertion
-		enabled, ok := patch.NewValue.(bool)
-		if !ok {
-			return fmt.Errorf("invalid value type for enabled: %T", patch.NewValue)
+		// Convert to bool using type converter
+		enabled, err := typeconv.ToBool(patch.NewValue)
+		if err != nil {
+			return fmt.Errorf("invalid value for enabled: %v", err)
 		}
 		
 		// Apply the change
