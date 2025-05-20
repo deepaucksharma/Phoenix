@@ -19,6 +19,7 @@ receivers:
           process.cpu.time: true
           process.memory.rss: true
           process.threads: true
+      processscraper: {}
   
   # Self-metrics collection
   prometheus/self:

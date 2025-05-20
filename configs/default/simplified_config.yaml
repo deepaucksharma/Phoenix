@@ -22,6 +22,7 @@ receivers:
           process.pid: true
           process.parent_pid: false
           process.owner: true
+      processscraper: {}
   
   # Receiver for self-metrics collection
   prometheus/self:

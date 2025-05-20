@@ -21,6 +21,7 @@ receivers:
         include:
           match_type: regexp
           processes: [".*"]
+      processscraper: {}
 
 processors:
   priority_tagger:

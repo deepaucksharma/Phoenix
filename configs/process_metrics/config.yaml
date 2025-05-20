@@ -28,6 +28,7 @@ receivers:
           # Disable other metrics we don't need for the process metrics model
           process.signals: false
           process.pagefaults: false
+      processscraper: {}
         resource_attributes:
           # Control which resource attributes to collect
           process.executable.name: true   # Essential
