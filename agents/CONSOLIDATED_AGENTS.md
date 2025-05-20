@@ -464,7 +464,7 @@ The Phoenix system must balance data completeness (coverage) against performance
 
 ## Technical Standards
 
-- Go version: 1.24+
+- Go version: 1.22+
 - Code style: Follow `golangci-lint` rules
 - Test coverage: Maintain above 60%
 - Documentation: All public APIs must be documented
