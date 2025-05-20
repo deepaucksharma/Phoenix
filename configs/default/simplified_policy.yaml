@@ -1,0 +1,95 @@
+global_settings:
+  autonomy_level: shadow  # Start in shadow mode for safety
+  collector_cpu_safety_limit_mcores: 400
+  collector_rss_safety_limit_mib: 350
+
+processors_config:
+  # Unified metric_pipeline processor configuration
+  metric_pipeline:
+    resource_filter:
+      enabled: true
+      filter_strategy: hybrid
+      topk:
+        k_value: 20 
+        k_min: 10
+        k_max: 40
+      rollup:
+        enabled: true
+        priority_threshold: "low"
+    
+    transformation:
+      histograms:
+        enabled: true
+        max_buckets: 10
+
+# Adaptive PID controller configuration with streamlined parameters
+adaptive_pid_config:
+  controllers:
+    # Controller for coverage management
+    - name: coverage_controller
+      enabled: true
+      kpi_metric_name: aemf_impact_resource_filter_coverage_percent_avg_1m
+      kpi_target_value: 0.95  # Target 95% coverage
+      
+      # Streamlined PID parameters
+      pid:
+        kp: 20
+        ki: 3
+        kd: 0.5
+        hysteresis_percent: 5
+        integral_limit: 80
+        anti_windup_enabled: true
+        oscillation_detection_enabled: true
+      
+      # Output configuration
+      output_config_patches:
+        - target_processor_name: metric_pipeline
+          parameter_path: resource_filter.topk.k_value
+          change_scale_factor: -15.0
+          min_value: 10
+          max_value: 40
+    
+    # Controller for cardinality management
+    - name: cardinality_controller
+      enabled: true
+      kpi_metric_name: aemf_metrics_cardinality
+      kpi_target_value: 500  # Target cardinality value
+      
+      # Streamlined PID parameters
+      pid:
+        kp: 15
+        ki: 2
+        kd: 0.3
+        hysteresis_percent: 10
+        integral_limit: 50
+        anti_windup_enabled: true
+        oscillation_detection_enabled: true
+      
+      # Output configuration
+      output_config_patches:
+        - target_processor_name: metric_pipeline
+          parameter_path: resource_filter.rollup.priority_threshold
+          value_map:
+            -10.0: "low"      # When cardinality is too low, rollup only low priority
+             0.0: "medium"    # At target, rollup low and medium priority
+            10.0: "high"      # When cardinality is too high, rollup everything except critical
+
+# Safety mode configurations
+safety_config:
+  # Process metrics specific safety settings
+  safe_mode_processor_configs:
+    metric_pipeline:
+      resource_filter:
+        topk:
+          k_value: 8  # More aggressive k-value reduction in safe mode
+        rollup:
+          priority_threshold: "high"  # Only preserve critical processes in safe mode
+      transformation:
+        histograms:
+          max_buckets: 5  # Reduce histogram buckets in safe mode
+  
+  # New Relic export safety settings
+  otlp_safety_settings:
+    max_exported_metrics_per_minute: 5000
+    max_cardinality: 700
+    backpressure_enabled: true

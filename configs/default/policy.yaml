@@ -4,60 +4,74 @@ global_settings:
   collector_rss_safety_limit_mib: 350
 
 processors_config:
-  # Priority tagging configuration
-  priority_tagger:
+  # Unified resource filter processor configuration
+  resource_filter:
     enabled: true
-    rules:
-      - match: "process.command_line=~/.*java.*/"
-        priority: high
-      - match: "process.name=~/nginx|httpd/"
-        priority: high
-      - match: "process.name=~/mysql|postgres|mongodb/"
-        priority: critical
-      - match: "process.command_line=~/.*python.*/"
-        priority: medium
-      - match: ".*"
-        priority: low
-  
-  # Adaptive top-k processor configuration 
-  adaptive_topk:
-    enabled: true
-    k_value: 30
-    k_min: 10
-    k_max: 60
-    resource_field: "process.executable.name"
-    counter_field: "process.cpu.utilization"
-  
-  # Others rollup processor for low-priority processes
-  others_rollup:
-    enabled: true
-    priority_threshold: "low"
-    metric_name_prefix: "others"
+    filter_strategy: hybrid
+    priority_attribute: "aemf.process.priority"
+    topk:
+      k_value: 20 
+      k_min: 10
+      k_max: 40
+      resource_field: "process.executable.name"
+      counter_field: "process.cpu.utilization"
+      coverage_target: 0.95
+    rollup:
+      enabled: true
+      priority_threshold: "low"
+      strategy: "sum"
+      name_prefix: "others"
 
 # Adaptive PID controller configuration
 adaptive_pid_config:
   controllers:
     - name: coverage_controller
       enabled: true
-      kpi_metric_name: aemf_impact_adaptive_topk_resource_coverage_percent_avg_1m
-      kpi_target_value: 0.90
-      kp: 30
-      ki: 5
-      kd: 0
-      hysteresis_percent: 3
-      integral_windup_limit: 100
+      kpi_metric_name: aemf_impact_resource_filter_coverage_percent_avg_1m
+      kpi_target_value: 0.95
+      kp: 20
+      ki: 3
+      kd: 0.5
+      hysteresis_percent: 5
+      integral_windup_limit: 80
       output_config_patches:
-        - target_processor_name: adaptive_topk
-          parameter_path: k_value
-          change_scale_factor: -20.0
+        - target_processor_name: resource_filter
+          parameter_path: topk.k_value
+          change_scale_factor: -15.0
           min_value: 10
-          max_value: 60
+          max_value: 40
+    
+    # Controller for cardinality management
+    - name: cardinality_controller
+      enabled: true
+      kpi_metric_name: aemf_metrics_cardinality
+      kpi_target_value: 500
+      kp: 15
+      ki: 2
+      kd: 0.3
+      hysteresis_percent: 10
+      integral_windup_limit: 50
+      output_config_patches:
+        - target_processor_name: resource_filter
+          parameter_path: rollup.priority_threshold
+          value_map:
+            -10.0: "low"      # When cardinality is too low, rollup only low priority
+             0.0: "medium"    # At target, rollup low and medium priority
+            10.0: "high"      # When cardinality is too high, rollup everything except critical
 
 # Safety mode configurations
 safety_config:
   safe_mode_processor_configs:
-    adaptive_topk:
-      k_value: 10
-    others_rollup:
-      priority_threshold: "critical"
-
+    resource_filter:
+      topk:
+        k_value: 8  # More aggressive k-value reduction in safe mode
+      rollup:
+        priority_threshold: "high"  # Only preserve critical processes in safe mode
+    histogram_aggregator:
+      max_buckets: 5  # Reduce histogram buckets further in safe mode
+  
+  # Safe mode settings for New Relic export
+  otlp_safety_settings:
+    max_exported_metrics_per_minute: 5000
+    max_cardinality: 700
+    backpressure_enabled: true
