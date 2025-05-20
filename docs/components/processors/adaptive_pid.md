@@ -1,15 +1,22 @@
 # Adaptive PID Processor
 
-The Adaptive PID processor is a key component of the control loop architecture in SA-OMF. It monitors system KPIs (Key Performance Indicators) and uses PID (Proportional-Integral-Derivative) controllers to generate configuration patches that adapt the system's behavior.
+The Adaptive PID processor monitors system KPIs (Key Performance Indicators) and uses PID (Proportional-Integral-Derivative) controllers to adjust its behavior, providing insights into system performance.
 
 ## Overview
 
-This processor sits in the control pipeline, not the data pipeline. It:
+This processor:
 
 1. Consumes metrics that contain KPI values (like coverage scores, cardinality reduction ratios)
 2. Computes the error between actual KPI values and desired target values 
-3. Uses PID control to generate stable configuration adjustments
-4. Emits configuration patches to adapt other processors' parameters
+3. Uses PID control to monitor system behavior
+4. Adapts its own parameters based on observations
+5. Emits metrics about KPI status and control decisions
+
+## Current Implementation
+
+> **Important Note**: This processor has evolved from its original design. In the current implementation, it functions as a self-contained adaptive component rather than generating configuration patches for other processors.
+
+Each adaptive processor (like adaptive_topk, others_rollup) now implements its own adaptation mechanisms internally, making the system more modular and simpler to maintain.
 
 ## Configuration
 
@@ -27,12 +34,8 @@ adaptive_pid:
       integral_windup_limit: 100
       use_bayesian: true
       stall_threshold: 3  
-      output_config_patches:
-        - target_processor_name: adaptive_topk
-          parameter_path: k_value
-          change_scale_factor: -20.0
-          min_value: 10
-          max_value: 60
+      min_value: 10
+      max_value: 60
     
     - name: rollup_controller
       enabled: true
@@ -43,12 +46,8 @@ adaptive_pid:
       kd: 0
       hysteresis_percent: 5
       integral_windup_limit: 50
-      output_config_patches:
-        - target_processor_name: others_rollup
-          parameter_path: priority_threshold
-          change_scale_factor: 1.0
-          min_value: 0  # Corresponds to "low" 
-          max_value: 3  # Corresponds to "critical"
+      min_value: 0
+      max_value: 3
 ```
 
 ### Configuration Parameters
@@ -67,12 +66,6 @@ adaptive_pid:
 - `integral_windup_limit`: Maximum value for the integral term to prevent windup
 - `use_bayesian`: Enable Bayesian optimization fallback if PID control stalls
 - `stall_threshold`: Number of consecutive ineffective adjustments before trying Bayesian optimization
-
-#### For each output_config_patch:
-
-- `target_processor_name`: Which processor to configure
-- `parameter_path`: Which parameter in the processor to adjust
-- `change_scale_factor`: Multiply PID output by this factor before applying
 - `min_value`: Minimum allowed value for the parameter
 - `max_value`: Maximum allowed value for the parameter
 
@@ -87,9 +80,8 @@ adaptive_pid:
    - I term = Accumulated Error × Integral Gain
    - D term = Error Change Rate × Derivative Gain
    - Output = P + I + D
-4. **Output Scaling**: Multiply by change_scale_factor (can be negative to invert relationship)
-5. **Output Clamping**: Ensure the new parameter value stays within [min_value, max_value]
-6. **Configuration Patch Generation**: Create a patch to update the target processor
+4. **Output Clamping**: Ensure the output stays within [min_value, max_value]
+5. **Metrics Generation**: Create metrics about KPI status and controller behavior
 
 ### Bayesian Optimization Fallback
 
@@ -108,18 +100,16 @@ If PID control is not effective after several iterations:
 | `aemf_pid_controller_proportional_term` | Current P term contribution |
 | `aemf_pid_controller_integral_term` | Current I term contribution |
 | `aemf_pid_controller_derivative_term` | Current D term contribution |
-| `aemf_pid_controller_output` | Raw controller output before scaling and clamping |
+| `aemf_pid_controller_output` | Raw controller output before clamping |
 | `aemf_pid_output_clamped_total` | Count of times output was clamped to min/max |
-| `aemf_pid_patch_generated_total` | Count of configuration patches generated |
 
 ## Use Cases
 
-- **Adaptive Top-K Processing**: Dynamically adjust k value to maintain coverage target
-- **Priority Threshold Adjustment**: Adjust which priority level metrics get aggregated
-- **Cardinality Control**: Maintain desired reduction ratio by adjusting parameters
-- **Resource Management**: Balance CPU/memory usage against data quality
+- **KPI Monitoring**: Track key system metrics against target values
+- **Observability**: Generate metrics about controller behavior and system performance
+- **Performance Insights**: Identify when KPIs deviate from targets
 
-## Example
+## Example Configuration
 
 ```yaml
 # In the policy.yaml:
@@ -132,23 +122,12 @@ adaptive_pid_config:
       kp: 30
       ki: 5
       kd: 0
-      output_config_patches:
-        - target_processor_name: adaptive_topk
-          parameter_path: k_value
-          change_scale_factor: -20.0
-          min_value: 10
-          max_value: 60
 
 # In the config.yaml pipeline:
 service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      processors: [priority_tagger, adaptive_topk]
+      processors: [priority_tagger, adaptive_topk, adaptive_pid]
       exporters: [prometheusremotewrite]
-    
-    control:
-      receivers: [prometheus/self]
-      processors: [adaptive_pid]
-      exporters: [pic_connector]
 ```

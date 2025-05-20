@@ -1,6 +1,6 @@
 # Phoenix: Self-Aware OpenTelemetry Metrics Fabric (SA-OMF)
 
-Phoenix (codename for SA-OMF) is an advanced metrics collection and processing system built on top of OpenTelemetry. It features adaptive processing that automatically adjusts parameters based on system behavior through PID control loops.
+Phoenix (codename for SA-OMF) is an advanced metrics collection and processing system built on top of OpenTelemetry. It features adaptive processing that automatically adjusts parameters based on system behavior through embedded PID control and optimization algorithms.
 
 ## Overview
 
@@ -8,50 +8,54 @@ SA-OMF enables intelligent, self-adaptive metrics processing by:
 
 - **Dynamically adjusting** key parameters in real-time
 - **Self-tuning** to maintain target KPIs
-- **Monitoring** its own behavior through control feedback loops
+- **Monitoring** its own behavior through internal feedback loops
 - **Protecting** against resource exhaustion with built-in safety mechanisms
 
 ## Key Features
 
-- **Dual Pipeline Architecture**: Separates data processing from control operations
 - **Adaptive Processors**: Self-tuning processors that adjust their parameters automatically
-- **PID Control Loops**: Industrial-grade control theory applied to software systems
+- **PID Control Systems**: Industrial-grade control theory applied to software systems
 - **Safety Mechanisms**: Built-in guard rails to prevent resource exhaustion
 - **Configuration Policies**: Define target KPIs and acceptable operating parameters
 
 ## Architecture
 
-The architecture consists of:
+Phoenix uses a streamlined architecture that embeds adaptation capabilities directly in processors:
 
 1. **Data Pipeline**: Processes incoming metrics data
    - Collects metrics from standard OpenTelemetry receivers
    - Processes through various adaptive processors
    - Exports metrics to configured destinations
 
-2. **Control Pipeline**: Monitors and adjusts the data pipeline
-   - Monitors self-metrics
-   - Evaluates KPIs against targets
-   - Generates and applies configuration patches
-   - Maintains system within operational bounds
+2. **Adaptive Processors**: Self-contained components that monitor and adjust their behavior
+   - Monitor their own performance metrics
+   - Apply PID controllers and other algorithms to optimize behavior
+   - Automatically adjust to changing conditions
+
+## Development Workflow
+
+The Phoenix project uses `make` as its primary development interface:
+
+```bash
+# Build the project
+make fast-build
+
+# Run with development config
+make fast-run
+
+# Run unit tests
+make test-unit
+
+# Start hot reload development server (requires Docker)
+make hot-reload
+
+# For help with all available commands
+make help
+```
+
+For more detailed instructions, see the [Development Guide](docs/development-guide.md).
 
 ## Core Components
-
-- **PID Control System**: Core implementation of PID controllers with:
-  - Anti-windup protection
-  - Hysteresis for stable adjustments
-  - Min/max bound clamping
-  - Configurable gain parameters
-
-- **PIC Control Extension**: Central governance layer for configuration management
-  - Manages policy file watching and hot reloading
-  - Handles configuration change requests via the PIC connector
-  - Enforces rate limiting and safety measures
-  - Maintains registry of UpdateableProcessor components
-
-- **Adaptive PID Processor**: Generates configuration patches using PID control
-  - Monitors KPIs and calculates needed configuration changes
-  - Provides both PID and Bayesian optimization approaches
-  - Configurable control parameters for each target
 
 - **Adaptive Processors**:
   - **adaptive_topk**: Dynamically selects top-k resources by importance
@@ -63,11 +67,79 @@ The architecture consists of:
   - **others_rollup**: Aggregates low-priority metrics to reduce cardinality
     - Configurable priority threshold
     - Maintains detailed metrics for important resources
+  - **adaptive_pid**: Monitors KPIs and provides insights into system performance
+    - Uses PID controllers for stable monitoring
+    - Provides both PID and Bayesian optimization approaches
+    - Configurable control parameters for each target
+
+- **PID Controllers**: Embedded control systems in adaptive processors
+  - Anti-windup protection
+  - Hysteresis for stable adjustments
+  - Min/max bound clamping
+  - Configurable gain parameters
+  - Oscillation detection and circuit breaking
 
 - **Advanced Optimization**:
   - Bayesian optimization with Gaussian processes
   - Multi-dimensional parameter space exploration
-  - Dynamic fallback when PID control stalls
+  - Dynamic exploration/exploitation balance
+
+## Quick Start
+
+### Prerequisites
+
+- Go 1.24 or higher
+- OpenTelemetry Collector Contrib
+- Docker (for containerized testing)
+
+### Quick Start with Dev Container
+
+The fastest way to get started is using the VS Code Dev Container:
+
+1. Install [VS Code](https://code.visualstudio.com/) and the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+2. Clone this repository
+3. Open the repository in VS Code
+4. Click "Reopen in Container" when prompted
+5. The container will set up all dependencies and tools automatically
+
+### Local Development
+
+```bash
+# Set up development environment (installs tools and dependencies)
+make dev-setup
+
+# Build the collector
+make build
+
+# Run the collector with development config
+make run 
+
+# Run with a specific config
+make run CONFIG=configs/production/config.yaml
+```
+
+### Docker Deployment
+
+```bash
+# Development environment with mounted source code
+docker-compose up dev
+
+# Run with Prometheus for metrics visualization
+docker-compose up prometheus collector-development
+
+# Run full stack with Grafana dashboards
+docker-compose up
+```
+
+## Documentation
+
+For more information, see:
+- [Current Architecture State](docs/architecture/CURRENT_STATE.md) 👈 Start here to understand Phoenix's current architecture
+- [Architecture Documentation](docs/architecture/README.md)
+- [Component Documentation](docs/components/README.md)
+- [Development Guide](docs/development-guide.md)
+- [Configuration Reference](docs/configuration-reference.md)
+- [Adaptive Processing Concepts](docs/concepts/adaptive-processing.md)
 
 ## Recent Improvements
 
@@ -79,49 +151,6 @@ The project has undergone significant stability and reliability improvements:
 - [Advanced Bayesian Optimization with Multi-Dimensional Support](docs/improvements/stability-improvements.md#4-bayesian-optimization-enhancements)
 
 See the [complete stability improvements documentation](docs/improvements/stability-improvements.md) for details.
-
-## Getting Started
-
-### Prerequisites
-
-- Go 1.24 or higher
-- OpenTelemetry Collector Contrib
-- Docker (for containerized testing)
-
-### Build and Run
-
-```bash
-# Build the collector binary
-make build
-
-# Run the collector with default config
-make run
-
-# Run with specific config
-./bin/sa-omf-otelcol --config=configs/production/config.yaml
-```
-
-### Docker Deployment
-
-```bash
-# Run with Docker Compose (bare environment)
-docker-compose -f deploy/compose/bare/docker-compose.yaml up -d
-
-# Run with Docker Compose (Prometheus included)
-docker-compose -f deploy/compose/prometheus/docker-compose.yaml up -d
-
-# Run with Docker Compose (full stack with Grafana)
-docker-compose -f deploy/compose/full/docker-compose.yaml up -d
-```
-
-## Documentation
-
-For more information, see:
-- [Architecture Documentation](docs/architecture/README.md)
-- [Component Documentation](docs/components/README.md)
-- [Development Guide](docs/development-guide.md)
-- [Configuration Reference](docs/configuration-reference.md)
-- [Concept Documentation](docs/concepts/README.md)
 
 ## License
 

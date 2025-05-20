@@ -1,0 +1,47 @@
+# Hot Reload Configuration for Air
+# https://github.com/cosmtrek/air
+
+root = "."
+tmp_dir = ".air-tmp"
+
+[build]
+# Binary file yields from `cmd` command.
+bin = "bin/sa-omf-otelcol"
+# Command to build the application.
+cmd = "go build -o bin/sa-omf-otelcol ./cmd/sa-omf-otelcol"
+# Watch these directories for changes.
+include_dir = ["cmd", "internal", "pkg"]
+# Exclude directories/files for watching.
+exclude_dir = ["vendor", "bin", ".air-tmp", "test", "scripts"]
+# Exclude files by extension.
+exclude_file = [".air.toml", ".git", ".gitignore", "go.sum", "go.mod"]
+# Use full recursive scan for files.
+include_ext = ["go", "yaml", "yml"]
+# Kill process before starting a new one.
+kill_delay = "0s"
+# Send interrupt signal before killing process.
+send_interrupt = true
+# Delay after each execution.
+delay = 1000 # ms
+# Stop builds on error.
+stop_on_error = true
+
+[log]
+# Show log time.
+time = true
+# Only show main log.
+main_only = false
+
+[color]
+# Customize each part's color.
+main = "magenta"
+watcher = "cyan"
+build = "yellow"
+runner = "green"
+
+[misc]
+# Delete tmp directory on exit.
+clean_on_exit = true
+
+[screen]
+clear_on_rebuild = true
