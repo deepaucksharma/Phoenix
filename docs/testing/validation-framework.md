@@ -725,6 +725,16 @@ EOF
 # Similar to CPU spike but with --vm and --vm-bytes flags
 ```
 
+### 4.3 Scenario Checklist
+
+The following checklist is generated from the [Master Scenario Table](./master_scenario_table.md). Run `scripts/ci/generate_scenario_checklist.sh` to update it.
+
+<!-- scenario-checklist:start -->
+- [ ] high_cardinality - Generates a very high cardinality metric workload
+- [ ] cpu_spike - Stress CPU to simulate spikes
+- [ ] memory_pressure - Stress memory to simulate pressure
+<!-- scenario-checklist:end -->
+
 ## 5. Performance & Chaos Testing
 
 ### 5.1 Performance Benchmarks

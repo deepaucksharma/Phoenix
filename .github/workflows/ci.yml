@@ -40,11 +40,16 @@ jobs:
           go-version: '1.22'
           cache: true
 
-      - name: Check go mod
-        run: |
-          echo "Skipping go mod tidy - using vendored modules"
-          # Don't check for go.mod/go.sum changes in CI pipeline
-          echo "Skipping go.mod/go.sum diff check for CI"
+        - name: Check go mod
+          run: |
+            echo "Skipping go mod tidy - using vendored modules"
+            # Don't check for go.mod/go.sum changes in CI pipeline
+            echo "Skipping go.mod/go.sum diff check for CI"
+
+        - name: Verify scenario checklist
+          run: |
+            scripts/ci/generate_scenario_checklist.sh
+            git diff --exit-code docs/testing/validation-framework.md
 
   build:
     name: Basic Build Check
