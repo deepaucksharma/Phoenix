@@ -14,8 +14,6 @@ import (
 	"go.opentelemetry.io/collector/receiver"
 
 	// Import your components here
-	"github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
-	"github.com/deepaucksharma/Phoenix/internal/connector/pic_connector"
        "github.com/deepaucksharma/Phoenix/internal/processor/priority_tagger"
        "github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
        "github.com/deepaucksharma/Phoenix/internal/processor/adaptive_topk"
@@ -50,7 +48,6 @@ func components() (otelcol.Factories, error) {
 
 	// Extensions
 	extensions := []extension.Factory{
-		pic_control_ext.NewFactory(),
 		// Add more extensions as needed
 	}
 	factories.Extensions = make(map[component.Type]extension.Factory)
@@ -80,7 +77,6 @@ func components() (otelcol.Factories, error) {
 	// Exporters
 	exporters := []exporter.Factory{
 		// Add custom exporters as they are implemented:
-		pic_connector.NewFactory(),
 		// etc.
 	}
 	factories.Exporters = make(map[component.Type]exporter.Factory)
