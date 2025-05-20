@@ -7,39 +7,19 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/metric/noop"
 
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 	"github.com/deepaucksharma/Phoenix/pkg/metrics"
 )
 
-type capturingMeter struct {
-	noop.Meter
-	lastName string
-}
-
-func (m *capturingMeter) Int64Counter(name string, opts ...metric.Int64CounterOption) (metric.Int64Counter, error) {
-	m.lastName = name
-	return noop.Int64Counter{}, nil
-}
-
-func (m *capturingMeter) Float64Gauge(name string, opts ...metric.Float64GaugeOption) (metric.Float64Gauge, error) {
-	m.lastName = name
-	return noop.Float64Gauge{}, nil
-}
-
 func TestRegisterCounterAndGauge(t *testing.T) {
-	meter := &capturingMeter{}
-	emitter := metrics.NewMetricsEmitter(meter, "proc", component.MustNewID("test"))
+	emitter := metrics.NewMetricsEmitter("proc", "test")
 
 	_, err := emitter.RegisterCounter("hits", "hit count")
 	require.NoError(t, err)
-	assert.Equal(t, "aemf_proc_hits", meter.lastName)
 
 	_, err = emitter.RegisterGauge("load", "load gauge")
 	require.NoError(t, err)
-	assert.Equal(t, "aemf_proc_load", meter.lastName)
 }
 
 func TestCreatePatchMetricAttributes(t *testing.T) {

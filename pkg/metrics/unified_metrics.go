@@ -25,9 +25,9 @@ const (
 
 // MetricDataPoint represents a single data point for a metric
 type MetricDataPoint struct {
-	Value       float64
-	Timestamp   time.Time
-	Attributes  map[string]string
+	Value            float64
+	Timestamp        time.Time
+	Attributes       map[string]string
 	HistogramBuckets []HistogramBucket
 }
 
@@ -66,7 +66,7 @@ type MetricsBuilder struct {
 func NewUnifiedMetricsCollector(logger *zap.Logger) *UnifiedMetricsCollector {
 	return &UnifiedMetricsCollector{
 		metrics:      make(map[string]*MetricDefinition),
-		emitter:      NewMetricsEmitter(),
+		emitter:      NewMetricsEmitter("unified_metrics_collector", "collector"),
 		logger:       logger,
 		defaultAttrs: make(map[string]string),
 	}
@@ -76,7 +76,7 @@ func NewUnifiedMetricsCollector(logger *zap.Logger) *UnifiedMetricsCollector {
 func (c *UnifiedMetricsCollector) SetDefaultAttributes(attrs map[string]string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	c.defaultAttrs = attrs
 }
 
@@ -84,7 +84,7 @@ func (c *UnifiedMetricsCollector) SetDefaultAttributes(attrs map[string]string) 
 func (c *UnifiedMetricsCollector) AddDefaultAttribute(key, value string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	c.defaultAttrs[key] = value
 }
 
@@ -98,7 +98,7 @@ func (c *UnifiedMetricsCollector) WithLogger(logger *zap.Logger) *UnifiedMetrics
 func (c *UnifiedMetricsCollector) ResetAll() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	c.metrics = make(map[string]*MetricDefinition)
 }
 
@@ -106,7 +106,7 @@ func (c *UnifiedMetricsCollector) ResetAll() {
 func (c *UnifiedMetricsCollector) AddGauge(name, description, unit string) *MetricsBuilder {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	metric, exists := c.metrics[name]
 	if !exists {
 		metric = &MetricDefinition{
@@ -118,7 +118,7 @@ func (c *UnifiedMetricsCollector) AddGauge(name, description, unit string) *Metr
 		}
 		c.metrics[name] = metric
 	}
-	
+
 	return &MetricsBuilder{metric: metric}
 }
 
@@ -126,7 +126,7 @@ func (c *UnifiedMetricsCollector) AddGauge(name, description, unit string) *Metr
 func (c *UnifiedMetricsCollector) AddCounter(name, description, unit string) *MetricsBuilder {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	metric, exists := c.metrics[name]
 	if !exists {
 		metric = &MetricDefinition{
@@ -138,7 +138,7 @@ func (c *UnifiedMetricsCollector) AddCounter(name, description, unit string) *Me
 		}
 		c.metrics[name] = metric
 	}
-	
+
 	return &MetricsBuilder{metric: metric}
 }
 
@@ -146,7 +146,7 @@ func (c *UnifiedMetricsCollector) AddCounter(name, description, unit string) *Me
 func (c *UnifiedMetricsCollector) AddHistogram(name, description, unit string) *MetricsBuilder {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	metric, exists := c.metrics[name]
 	if !exists {
 		metric = &MetricDefinition{
@@ -158,7 +158,7 @@ func (c *UnifiedMetricsCollector) AddHistogram(name, description, unit string) *
 		}
 		c.metrics[name] = metric
 	}
-	
+
 	return &MetricsBuilder{metric: metric}
 }
 
@@ -169,7 +169,7 @@ func (b *MetricsBuilder) WithValue(value float64) *MetricsBuilder {
 		Timestamp:  time.Now(),
 		Attributes: make(map[string]string),
 	}
-	
+
 	b.metric.DataPoints = append(b.metric.DataPoints, dataPoint)
 	return b
 }
@@ -186,13 +186,13 @@ func (b *MetricsBuilder) WithAttributes(attrs map[string]string) *MetricsBuilder
 		b.metric.DataPoints = append(b.metric.DataPoints, dataPoint)
 		return b
 	}
-	
+
 	// Add attributes to the most recent data point
 	dp := &b.metric.DataPoints[len(b.metric.DataPoints)-1]
 	for k, v := range attrs {
 		dp.Attributes[k] = v
 	}
-	
+
 	return b
 }
 
@@ -201,7 +201,7 @@ func (b *MetricsBuilder) WithHistogramBuckets(buckets []HistogramBucket) *Metric
 	if b.metric.Type != MetricTypeHistogram {
 		return b
 	}
-	
+
 	if len(b.metric.DataPoints) == 0 {
 		// Create a data point if none exists
 		dataPoint := MetricDataPoint{
@@ -213,11 +213,11 @@ func (b *MetricsBuilder) WithHistogramBuckets(buckets []HistogramBucket) *Metric
 		b.metric.DataPoints = append(b.metric.DataPoints, dataPoint)
 		return b
 	}
-	
+
 	// Add buckets to the most recent data point
 	dp := &b.metric.DataPoints[len(b.metric.DataPoints)-1]
 	dp.HistogramBuckets = buckets
-	
+
 	return b
 }
 
@@ -233,11 +233,11 @@ func (b *MetricsBuilder) WithTimestamp(ts time.Time) *MetricsBuilder {
 		b.metric.DataPoints = append(b.metric.DataPoints, dataPoint)
 		return b
 	}
-	
+
 	// Update timestamp for the most recent data point
 	dp := &b.metric.DataPoints[len(b.metric.DataPoints)-1]
 	dp.Timestamp = ts
-	
+
 	return b
 }
 
@@ -245,49 +245,49 @@ func (b *MetricsBuilder) WithTimestamp(ts time.Time) *MetricsBuilder {
 func (c *UnifiedMetricsCollector) Emit(ctx context.Context) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	// Create metrics data
 	md := pmetric.NewMetrics()
 	rm := md.ResourceMetrics().AppendEmpty()
-	
+
 	// Add default resource attributes
 	for k, v := range c.defaultAttrs {
 		rm.Resource().Attributes().PutStr(k, v)
 	}
-	
+
 	sm := rm.ScopeMetrics().AppendEmpty()
 	sm.Scope().SetName("sa-omf")
-	
+
 	// Add all metrics
 	for _, metric := range c.metrics {
 		m := sm.Metrics().AppendEmpty()
 		m.SetName(metric.Name)
 		m.SetDescription(metric.Description)
 		m.SetUnit(metric.Unit)
-		
+
 		switch metric.Type {
 		case MetricTypeGauge:
 			gauge := m.SetEmptyGauge()
 			addGaugeDataPoints(gauge, metric.DataPoints)
-			
+
 		case MetricTypeCounter:
 			sum := m.SetEmptySum()
 			sum.SetIsMonotonic(true)
 			sum.SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
 			addSumDataPoints(sum, metric.DataPoints)
-			
+
 		case MetricTypeHistogram:
 			histogram := m.SetEmptyHistogram()
 			histogram.SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
 			addHistogramDataPoints(histogram, metric.DataPoints)
 		}
 	}
-	
+
 	// Call the emitter to actually emit the metrics
 	if c.emitter != nil {
 		return c.emitter.EmitMetrics(ctx, md)
 	}
-	
+
 	return nil
 }
 
@@ -297,7 +297,7 @@ func addGaugeDataPoints(gauge pmetric.Gauge, dataPoints []MetricDataPoint) {
 		pdp := gauge.DataPoints().AppendEmpty()
 		pdp.SetDoubleValue(dp.Value)
 		pdp.SetTimestamp(pcommon.NewTimestampFromTime(dp.Timestamp))
-		
+
 		// Add attributes
 		for k, v := range dp.Attributes {
 			pdp.Attributes().PutStr(k, v)
@@ -311,7 +311,7 @@ func addSumDataPoints(sum pmetric.Sum, dataPoints []MetricDataPoint) {
 		pdp := sum.DataPoints().AppendEmpty()
 		pdp.SetDoubleValue(dp.Value)
 		pdp.SetTimestamp(pcommon.NewTimestampFromTime(dp.Timestamp))
-		
+
 		// Add attributes
 		for k, v := range dp.Attributes {
 			pdp.Attributes().PutStr(k, v)
@@ -325,25 +325,25 @@ func addHistogramDataPoints(histogram pmetric.Histogram, dataPoints []MetricData
 		pdp := histogram.DataPoints().AppendEmpty()
 		pdp.SetCount(uint64(len(dp.HistogramBuckets)))
 		pdp.SetTimestamp(pcommon.NewTimestampFromTime(dp.Timestamp))
-		
+
 		// Calculate sum from buckets
 		sum := 0.0
 		for _, bucket := range dp.HistogramBuckets {
 			sum += float64(bucket.Count) * bucket.Boundary
 		}
 		pdp.SetSum(sum)
-		
+
 		// Add bucket boundaries and counts
 		if len(dp.HistogramBuckets) > 0 {
 			pdp.ExplicitBounds().EnsureCapacity(len(dp.HistogramBuckets))
 			pdp.BucketCounts().EnsureCapacity(len(dp.HistogramBuckets))
-			
+
 			for _, bucket := range dp.HistogramBuckets {
 				pdp.ExplicitBounds().Append(bucket.Boundary)
 				pdp.BucketCounts().Append(bucket.Count)
 			}
 		}
-		
+
 		// Add attributes
 		for k, v := range dp.Attributes {
 			pdp.Attributes().PutStr(k, v)
@@ -355,6 +355,6 @@ func addHistogramDataPoints(histogram pmetric.Histogram, dataPoints []MetricData
 func (c *UnifiedMetricsCollector) GetMetric(name string) *MetricDefinition {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	return c.metrics[name]
 }
