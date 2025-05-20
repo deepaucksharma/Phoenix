@@ -3,7 +3,6 @@ package others_rollup
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
@@ -11,9 +10,9 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/processor"
-	"go.uber.org/zap"
 
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
+	"github.com/deepaucksharma/Phoenix/internal/processor/base"
 )
 
 const (
@@ -24,10 +23,8 @@ const (
 
 // processorImpl aggregates metrics for low priority processes.
 type processorImpl struct {
+	*base.BaseProcessor
 	config *Config
-	logger *zap.Logger
-	next   consumer.Metrics
-	lock   sync.RWMutex
 }
 
 var _ processor.Metrics = (*processorImpl)(nil)
@@ -39,34 +36,33 @@ func newProcessor(cfg *Config, settings processor.Settings, next consumer.Metric
 		return nil, err
 	}
 	return &processorImpl{
-		config: cfg,
-		logger: settings.TelemetrySettings.Logger,
-		next:   next,
+		BaseProcessor: base.NewBaseProcessor(settings.TelemetrySettings.Logger, next, typeStr, settings.ID),
+		config:        cfg,
 	}, nil
 }
 
 // Start implements the component.Component interface.
 func (p *processorImpl) Start(ctx context.Context, host component.Host) error {
-	return nil
+	return p.BaseProcessor.Start(ctx, host)
 }
 
 // Shutdown implements the component.Component interface.
 func (p *processorImpl) Shutdown(ctx context.Context) error {
-	return nil
+	return p.BaseProcessor.Shutdown(ctx)
 }
 
 // Capabilities implements the processor.Metrics interface.
 func (p *processorImpl) Capabilities() consumer.Capabilities {
-	return consumer.Capabilities{MutatesData: true}
+	return p.BaseProcessor.Capabilities()
 }
 
 // ConsumeMetrics aggregates low priority process metrics.
 func (p *processorImpl) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.Lock()
+	defer p.Unlock()
 
 	if !p.config.Enabled {
-		return p.next.ConsumeMetrics(ctx, md)
+		return p.GetNext().ConsumeMetrics(ctx, md)
 	}
 
 	out := pmetric.NewMetrics()
@@ -159,13 +155,13 @@ func (p *processorImpl) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) 
 		}
 	}
 
-	return p.next.ConsumeMetrics(ctx, out)
+	return p.GetNext().ConsumeMetrics(ctx, out)
 }
 
 // OnConfigPatch implements UpdateableProcessor.
 func (p *processorImpl) OnConfigPatch(ctx context.Context, patch interfaces.ConfigPatch) error {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.Lock()
+	defer p.Unlock()
 
 	switch patch.ParameterPath {
 	case "enabled":
@@ -197,8 +193,8 @@ func (p *processorImpl) GetName() string {
 
 // GetConfigStatus implements UpdateableProcessor.
 func (p *processorImpl) GetConfigStatus(ctx context.Context) (interfaces.ConfigStatus, error) {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
+	p.RLock()
+	defer p.RUnlock()
 
 	return interfaces.ConfigStatus{
 		Parameters: map[string]any{

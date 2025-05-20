@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"sync"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -14,7 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
-	"github.com/deepaucksharma/Phoenix/pkg/metrics"
+	"github.com/deepaucksharma/Phoenix/internal/processor/base"
 )
 
 const (
@@ -48,12 +47,9 @@ func (cfg *Config) Validate() error {
 
 // processorImp is the implementation of the priority_tagger processor.
 type processorImp struct {
-	config  Config
-	logger  *zap.Logger
-	next    consumer.Metrics
-	rules   []*regexp.Regexp
-	lock    sync.RWMutex
-	metrics *metrics.MetricsEmitter
+	*base.BaseProcessor
+	config *Config
+	rules  []*regexp.Regexp
 }
 
 // Ensure the processor implements the required interfaces.
@@ -63,10 +59,9 @@ var _ interfaces.UpdateableProcessor = (*processorImp)(nil)
 // newProcessor creates a new priority_tagger processor.
 func newProcessor(cfg *Config, settings processor.Settings, nextConsumer consumer.Metrics) (*processorImp, error) {
 	p := &processorImp{
-		config: *cfg,
-		logger: settings.TelemetrySettings.Logger,
-		next:   nextConsumer,
-		rules:  make([]*regexp.Regexp, len(cfg.Rules)),
+		BaseProcessor: base.NewBaseProcessor(settings.TelemetrySettings.Logger, nextConsumer, typeStr, settings.ID),
+		config:        cfg,
+		rules:         make([]*regexp.Regexp, len(cfg.Rules)),
 	}
 
 	// Compile regular expressions
@@ -83,18 +78,17 @@ func newProcessor(cfg *Config, settings processor.Settings, nextConsumer consume
 
 // Start implements the Component interface.
 func (p *processorImp) Start(ctx context.Context, host component.Host) error {
-	// No initialization required for now
-	return nil
+	return p.BaseProcessor.Start(ctx, host)
 }
 
 // Shutdown implements the Component interface.
 func (p *processorImp) Shutdown(ctx context.Context) error {
-	return nil
+	return p.BaseProcessor.Shutdown(ctx)
 }
 
 // Capabilities implements the processor.Metrics interface.
 func (p *processorImp) Capabilities() consumer.Capabilities {
-	return consumer.Capabilities{MutatesData: true}
+	return p.BaseProcessor.Capabilities()
 }
 
 // GetName returns the processor name for identification
@@ -104,12 +98,11 @@ func (p *processorImp) GetName() string {
 
 // ConsumeMetrics implements the consumer.Metrics interface.
 func (p *processorImp) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
+	p.RLock()
+	defer p.RUnlock()
 
 	if !p.config.Enabled || len(p.rules) == 0 {
-		// If disabled or no rules, pass through without modification
-		return p.next.ConsumeMetrics(ctx, md)
+		return p.GetNext().ConsumeMetrics(ctx, md)
 	}
 
 	// Iterate through all resource metrics
@@ -137,13 +130,13 @@ func (p *processorImp) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) e
 	}
 
 	// Pass the modified metrics to the next consumer
-	return p.next.ConsumeMetrics(ctx, md)
+	return p.GetNext().ConsumeMetrics(ctx, md)
 }
 
 // OnConfigPatch implements the UpdateableProcessor interface.
 func (p *processorImp) OnConfigPatch(ctx context.Context, patch interfaces.ConfigPatch) error {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.Lock()
+	defer p.Unlock()
 
 	switch patch.ParameterPath {
 	case "enabled":
@@ -182,8 +175,8 @@ func (p *processorImp) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 
 // GetConfigStatus implements the UpdateableProcessor interface.
 func (p *processorImp) GetConfigStatus(ctx context.Context) (interfaces.ConfigStatus, error) {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
+	p.RLock()
+	defer p.RUnlock()
 
 	return interfaces.ConfigStatus{
 		Parameters: map[string]any{
