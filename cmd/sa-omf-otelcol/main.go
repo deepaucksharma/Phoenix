@@ -15,6 +15,7 @@ import (
 
 	// Import processors that currently exist in the repository
 	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
+	"github.com/deepaucksharma/Phoenix/internal/processor/attr_filter"
 	"github.com/deepaucksharma/Phoenix/internal/processor/cpu_histogram_converter"
 	"github.com/deepaucksharma/Phoenix/internal/processor/histogram_aggregator"
 	"github.com/deepaucksharma/Phoenix/internal/processor/metric_pipeline"
@@ -64,6 +65,7 @@ func components() (otelcol.Factories, error) {
 	processors := []processor.Factory{
 		// Register only processors that exist in this repository
 		metric_pipeline.NewFactory(),
+		attr_filter.NewFactory(),
 		histogram_aggregator.NewFactory(),
 		adaptive_pid.NewFactory(),
 		timeseries_estimator.NewFactory(),
