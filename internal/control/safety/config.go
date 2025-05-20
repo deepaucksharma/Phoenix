@@ -1,8 +1,5 @@
+// Package safety provides monitoring capabilities for system resources
 package safety
-
-import (
-	"go.opentelemetry.io/collector/component"
-)
 
 // Config defines configuration for the safety monitor
 type Config struct {
@@ -14,21 +11,14 @@ type Config struct {
 	MetricsCheckIntervalMs     int     `mapstructure:"metrics_check_interval_ms"`
 }
 
-// NewFactory creates a factory for the safety extension
-func NewFactory() component.Factory {
-	return component.NewFactory(
-		component.MustNewType("safety_monitor"),
-		func() component.Config {
-			return &Config{
-				CPUUsageThresholdMCores:    500,    // 0.5 cores
-				MemoryThresholdMiB:         200,    // 200 MiB
-				SafeModeCooldownSeconds:    30,     // 30 seconds
-				OverrideExpirySeconds:      300,    // 5 minutes
-				OverrideMultiplier:         1.5,    // Increase thresholds by 50%
-				MetricsCheckIntervalMs:     1000,   // Check every second
-			}
-		},
-		nil,
-		component.StabilityLevelDevelopment,
-	)
+// DefaultConfig returns the default configuration for the safety monitor
+func DefaultConfig() *Config {
+	return &Config{
+		CPUUsageThresholdMCores:    500,    // 0.5 cores
+		MemoryThresholdMiB:         200,    // 200 MiB
+		SafeModeCooldownSeconds:    30,     // 30 seconds
+		OverrideExpirySeconds:      300,    // 5 minutes
+		OverrideMultiplier:         1.5,    // Increase thresholds by 50%
+		MetricsCheckIntervalMs:     1000,   // Check every second
+	}
 }

@@ -16,9 +16,10 @@ import (
 
 // MetricsEmitter provides a standardized way to emit self-metrics
 type MetricsEmitter struct {
-	meter       metric.Meter
-	component   string
-	commonAttrs []attribute.KeyValue
+	meter            metric.Meter
+	component        string
+	commonAttrs      []attribute.KeyValue
+	metricsCollector interface{} // Can hold a metrics collector for testing
 }
 
 // NewMetricsEmitter creates a new MetricsEmitter for a component
@@ -30,6 +31,7 @@ func NewMetricsEmitter(meter metric.Meter, componentType string, componentName c
 			attribute.String("component.type", componentType),
 			attribute.String("component.name", componentName.String()),
 		},
+		metricsCollector: nil,
 	}
 }
 
@@ -47,6 +49,20 @@ func (e *MetricsEmitter) RegisterGauge(name string, description string) (metric.
 		"aemf_"+e.component+"_"+name,
 		metric.WithDescription(description),
 	)
+}
+
+// SetMetricsCollector sets the metrics collector for testing
+func (e *MetricsEmitter) SetMetricsCollector(collector interface{}) {
+	e.metricsCollector = collector
+}
+
+// AddMetrics adds metrics to the collector if available
+func (e *MetricsEmitter) AddMetrics(metrics pmetric.Metrics) {
+	if e.metricsCollector != nil {
+		if collector, ok := e.metricsCollector.(*MetricsCollector); ok {
+			collector.AddMetrics(metrics)
+		}
+	}
 }
 
 // CreatePatchMetric creates an OTLP metric for a ConfigPatch

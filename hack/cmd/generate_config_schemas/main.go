@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/invopop/jsonschema"
-	"github.com/xeipuuv/gojsonschema"
 	"gopkg.in/yaml.v3"
 )
 
@@ -289,7 +288,7 @@ func generateRootSchema(outputDir string) {
 
 func writeSchema(schema ConfigSchema, filePath string) {
 	// Convert to JSON
-	reflector := jsonschema.Reflector{
+	_ = jsonschema.Reflector{
 		ExpandedStruct: true,
 	}
 	schemaBytes, err := yaml.Marshal(schema)

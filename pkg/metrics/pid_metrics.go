@@ -3,7 +3,6 @@ package metrics
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
