@@ -1,0 +1,123 @@
+extensions:
+  pic_control:
+    policy_file_path: /etc/sa-omf/process_metrics/policy.yaml
+    max_patches_per_minute: 5
+    patch_cooldown_seconds: 5
+    auto_apply_patches: true  # Enable automatic application of patches
+
+receivers:
+  # Process metrics collection - exclusively focus on process scraper
+  hostmetrics:
+    collection_interval: 15s  # Slightly longer interval for reduced overhead
+    scrapers:
+      process:
+        include:
+          match_type: regexp
+          processes: [".*"]  # Collect metrics for all processes
+        metrics:
+          # Explicitly list only the needed process metrics to minimize overhead
+          process.cpu.time: true
+          process.memory.rss: true
+          process.threads: true
+  
+  # Self-metrics collection
+  prometheus/self:
+    config:
+      scrape_configs:
+        - job_name: 'phoenix-process-metrics'
+          scrape_interval: 5s
+          static_configs:
+            - targets: ['localhost:8888']
+          metrics_path: '/metrics'
+
+processors:
+  # Convert cumulative process.cpu.time to delta for better visualization
+  cumulativetodelta:
+    include:
+      match_type: strict
+      metrics:
+        - process.cpu.time
+    max_stale: 15s
+  
+  # Batch metrics for efficient export
+  batch:
+    send_batch_size: 1000
+    send_batch_max_size: 2000
+    timeout: 5s
+  
+  # Timeseries estimator processor to track active time series
+  timeseries_estimator:
+    enabled: true
+    output_metric_name: "aemf_estimated_active_timeseries"
+    estimator_type: "hll"
+    hll_precision: 10
+    memory_limit_mb: 100
+    refresh_interval: 1h
+
+  # CPU histogram converter processor to generate CPU utilization histograms
+  cpu_histogram_converter:
+    enabled: true
+    input_metric_name: "process.cpu.time"
+    output_metric_name: "process.cpu.utilization.histogram"
+    collection_interval_seconds: 10
+    host_cpu_count: 0  # Auto-detect
+    top_k_only: false
+    histogram_buckets: [0.1, 0.5, 1, 2, 5, 10, 25, 50, 75, 100, 200, 400, 800]
+    state_storage_path: "/var/lib/sa-omf/cpu_histogram_state" # Persistent state
+    state_flush_interval_seconds: 300
+    max_processes_in_memory: 10000
+
+exporters:
+  # Detailed logging for development and debugging
+  logging:
+    verbosity: basic  # Use basic to avoid overwhelming logs
+    sampling_initial: 5  # Only log every 5th metric initially
+    sampling_thereafter: 100  # Then log every 100th
+
+  # Export to New Relic through OTLP
+  otlphttp/newrelic:
+    endpoint: "https://otlp.nr-data.net:4318"  # Use HTTP endpoint (4318) for maximum compatibility
+    headers:
+      api-key: "${env:NEW_RELIC_API_KEY}"
+    timeout: 10s
+    compression: gzip  # Enable compression to reduce bandwidth usage
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+  # Connector for configuration patching
+  pic_connector:
+    # PIC connector forwards config patches to pic_control extension
+
+# Create a pipeline system with our new processors
+service:
+  pipelines:
+    # Main process metrics pipeline
+    metrics/process:
+      receivers: [hostmetrics]
+      # Process flow: Convert CPU counters to delta → Process with both new processors → Batch for efficiency
+      processors: [cumulativetodelta, timeseries_estimator, cpu_histogram_converter, batch]
+      exporters: [logging, otlphttp/newrelic]
+    
+    # Self-metrics pipeline to export Phoenix's own metrics
+    metrics/phoenix_self:
+      receivers: [prometheus/self]
+      processors: [batch]
+      exporters: [otlphttp/newrelic]
+    
+    # Control pipeline for self-regulation
+    control:
+      receivers: [prometheus/self]
+      processors: [adaptive_pid]
+      exporters: [pic_connector]
+  
+  extensions: [pic_control]
+
+# Telemetry for the collector itself
+telemetry:
+  metrics:
+    address: localhost:8888
+  logs:
+    level: info
