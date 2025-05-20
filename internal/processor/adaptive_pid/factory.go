@@ -9,10 +9,10 @@ import (
 	"go.opentelemetry.io/collector/processor"
 )
 
-// processorType is the unique identifier for the pid_decider processor.
+// processorType is the unique identifier for the adaptive_pid processor.
 var processorType = component.MustNewType(typeStr)
 
-// NewFactory creates a factory for the pid_decider processor
+// NewFactory creates a factory for the adaptive_pid processor
 func NewFactory() processor.Factory {
 	return processor.NewFactory(
 		processorType,

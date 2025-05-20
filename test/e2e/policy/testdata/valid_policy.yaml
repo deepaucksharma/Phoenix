@@ -12,6 +12,8 @@ processors_config:
     k_value: 10
     k_min: 5
     k_max: 100
+    resource_field: "process.executable.name"
+    counter_field: "process.cpu.utilization"
   priority_tagger:
     enabled: true
     rules:
@@ -19,16 +21,12 @@ processors_config:
         priority: "high"
       - match: "process.name == 'postgres'"
         priority: "critical"
-  cardinality_guardian:
-    enabled: true
-    max_unique: 1000
-  reservoir_sampler:
-    enabled: true
-    reservoir_size: 100
   others_rollup:
     enabled: true
+    priority_threshold: "low"
+    metric_name_prefix: "others"
 
-pid_decider_config:
+adaptive_pid_config:
   controllers:
     - name: "adaptive_topk_controller"
       enabled: true
@@ -38,6 +36,7 @@ pid_decider_config:
       ki: 0.1
       kd: 0.05
       hysteresis_percent: 2.0
+      integral_windup_limit: 50.0
       output_config_patches:
         - target_processor_name: "adaptive_topk"
           parameter_path: "k_value"
@@ -45,10 +44,7 @@ pid_decider_config:
           min_value: 5.0
           max_value: 100.0
 
-pic_control_config:
-  policy_file_path: "/etc/sa-omf/policy.yaml"
-  max_patches_per_minute: 10
-  patch_cooldown_seconds: 5
+safety_config:
   safe_mode_processor_configs:
     adaptive_topk:
       k_value: 5

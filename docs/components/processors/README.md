@@ -7,8 +7,9 @@ This directory contains documentation for the various processors implemented in 
 | Processor | Description | Status |
 |-----------|-------------|--------|
 | [priority_tagger](./priority_tagger.md) | Tags metrics with priority levels based on rules | Stable |
-| [adaptive_topk](./adaptive_topk.md) | Dynamically adjusts k value for top-k filtering | Beta |
-| [adaptive_pid](./adaptive_pid.md) | PID-based control loop for configuration changes | Beta |
+| [adaptive_topk](./adaptive_topk.md) | Dynamically adjusts k value for top-k filtering | Stable |
+| [others_rollup](./others_rollup.md) | Aggregates low-priority metrics to reduce cardinality | Stable |
+| [adaptive_pid](./adaptive_pid.md) | PID-based control loop for configuration changes | Stable |
 
 ## Processor Concepts
 

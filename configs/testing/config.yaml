@@ -1,15 +1,12 @@
 extensions:
   pic_control:
-    policy_file_path: /etc/sa-omf/policy.yaml # Path inside the container / expected by service
-    max_patches_per_minute: 3
-    patch_cooldown_seconds: 10
-    safe_mode_processor_configs:
-      adaptive_topk:
-        k_value: 10
+    policy_file_path: /etc/sa-omf/policy.yaml
+    max_patches_per_minute: 5  # Higher rate for testing
+    patch_cooldown_seconds: 2  # Shorter cooldown for testing
 
 receivers:
   hostmetrics:
-    collection_interval: 10s
+    collection_interval: 5s  # Faster collection for testing
     scrapers:
       cpu:
       memory:
@@ -21,55 +18,39 @@ receivers:
         include:
           match_type: regexp
           processes: [".*"]
+  
+  prometheus/self:
+    config:
+      scrape_configs:
+        - job_name: 'sa-omf-self'
+          scrape_interval: 2s  # Faster for testing
+          static_configs:
+            - targets: ['localhost:8888']
 
 processors:
-  priority_tagger:
-    enabled: true
-    rules:
-      - match: "process.command_line=~/.*java.*/"
-        priority: high
-      - match: "process.name=~/nginx|httpd/"
-        priority: high
-      - match: "process.name=~/mysql|postgres|mongodb/"
-        priority: critical
-      - match: "process.command_line=~/.*python.*/"
-        priority: medium
-      - match: ".*"
-        priority: low
-  
-  pid_decider:
-    controllers:
-      - name: coverage_controller
-        enabled: true
-        kpi_metric_name: aemf_impact_adaptive_topk_resource_coverage_percent_avg_1m
-        kpi_target_value: 0.90
-        kp: 30
-        ki: 5
-        kd: 0
-        hysteresis_percent: 3
-        output_config_patches:
-          - target_processor_name: adaptive_topk
-            parameter_path: k_value
-            change_scale_factor: -20.0
-            min_value: 10
-            max_value: 60
+  # Processors configured via policy.yaml
 
 exporters:
   logging:
     verbosity: detailed
+  
+  prometheusremotewrite:
+    endpoint: "http://localhost:9090/api/v1/write"
+    timeout: 5s
+  
   pic_connector: {}
 
 service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      processors: [priority_tagger]
-      exporters: [logging]
+      processors: [priority_tagger, adaptive_topk, others_rollup]
+      exporters: [logging, prometheusremotewrite]
     
     control:
-      receivers: [hostmetrics]
-      processors: [pid_decider]
-      exporters: [pic_connector, logging]
+      receivers: [prometheus/self]
+      processors: [adaptive_pid]
+      exporters: [pic_connector]
   
   extensions: [pic_control]
 

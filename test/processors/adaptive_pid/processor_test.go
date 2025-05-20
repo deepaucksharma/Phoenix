@@ -58,7 +58,7 @@ func TestAdaptivePIDProcessor(t *testing.T) {
 		TelemetrySettings: component.TelemetrySettings{
 			Logger: zap.NewNop(),
 		},
-		ID: component.NewIDWithName(component.MustNewType("pid_decider"), ""),
+		ID: component.NewIDWithName(component.MustNewType("adaptive_pid"), ""),
 	}
 
 	proc, err := factory.CreateMetrics(ctx, settings, cfg, sink)

@@ -36,28 +36,38 @@ The architecture consists of:
 
 ## Core Components
 
-- **pid_controller**: Implementation of PID controllers with:
+- **PID Control System**: Core implementation of PID controllers with:
   - Anti-windup protection
-  - Derivative filtering
-  - Circuit breakers to prevent oscillation
+  - Hysteresis for stable adjustments
+  - Min/max bound clamping
+  - Configurable gain parameters
 
-- **pic_control_ext**: Central governance layer for config changes
-  - Manages policy file watching
-  - Handles configuration change requests
+- **PIC Control Extension**: Central governance layer for configuration management
+  - Manages policy file watching and hot reloading
+  - Handles configuration change requests via the PIC connector
   - Enforces rate limiting and safety measures
+  - Maintains registry of UpdateableProcessor components
 
-- **adaptive_pid**: Generates configuration patches using PID control
+- **Adaptive PID Processor**: Generates configuration patches using PID control
   - Monitors KPIs and calculates needed configuration changes
-  - Uses PID controllers for stable parameter adjustments
+  - Provides both PID and Bayesian optimization approaches
+  - Configurable control parameters for each target
 
-- **adaptive_topk**: Dynamically adjusts k parameter based on coverage score
-  - Uses Space-Saving algorithm for top-k tracking
-  - Self-tunes to achieve target coverage with minimal k-value
+- **Adaptive Processors**:
+  - **adaptive_topk**: Dynamically selects top-k resources by importance
+    - Uses Space-Saving algorithm for accurate frequency tracking
+    - Self-tunes to achieve target coverage with minimal k-value
+  - **priority_tagger**: Tags resources with priority levels based on rules
+    - Flexible rule matching with regexp support
+    - Provides basis for priority-based processing
+  - **others_rollup**: Aggregates low-priority metrics to reduce cardinality
+    - Configurable priority threshold
+    - Maintains detailed metrics for important resources
 
-- **Bayesian Optimization**: Advanced parameter tuning
-  - Multi-dimensional optimization for complex parameter spaces
-  - Latin Hypercube Sampling for efficient space exploration
-  - Configurable exploration-exploitation balance
+- **Advanced Optimization**:
+  - Bayesian optimization with Gaussian processes
+  - Multi-dimensional parameter space exploration
+  - Dynamic fallback when PID control stalls
 
 ## Recent Improvements
 

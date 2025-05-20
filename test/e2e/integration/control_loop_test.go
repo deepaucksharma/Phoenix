@@ -61,7 +61,7 @@ func TestControlLoop(t *testing.T) {
 
 	pidProc, err := pidFactory.CreateMetricsProcessor(ctx, processor.CreateSettings{
 		TelemetrySettings: component.TelemetrySettings{Logger: logger},
-		ID:                component.NewID(component.MustNewType("pid_decider")),
+		ID:                component.NewID(component.MustNewType("adaptive_pid")),
 	}, pidCfg, conn)
 	require.NoError(t, err)
 	require.NoError(t, pidProc.Start(ctx, host))

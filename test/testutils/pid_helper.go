@@ -72,7 +72,7 @@ func (h *PIDControlHelper) GenerateConfigPatches(ctx context.Context, controller
 			NewValue:            scaledOutput,
 			Reason:              fmt.Sprintf("PID adjustment from %s controller", name),
 			Severity:            "normal",
-			Source:              "pid_decider",
+			Source:              "adaptive_pid",
 			Timestamp:           time.Now().Unix(),
 			TTLSeconds:          300,
 		}

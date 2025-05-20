@@ -78,7 +78,7 @@ func TestDualPipelineInteraction(t *testing.T) {
 		pidConfig, 
 		component.TelemetrySettings{}, 
 		picControlExt, // Connect to pic_control_ext for patch submission
-		component.NewIDWithName(component.MustNewType("processor"), "pid_decider"),
+		component.NewIDWithName(component.MustNewType("processor"), "adaptive_pid"),
 	)
 	require.NoError(t, err, "Failed to create adaptive_pid processor")
 	
@@ -192,10 +192,10 @@ func TestDualPipelineInteraction(t *testing.T) {
 	}
 	
 	// Verify we emitted the appropriate metrics during this interaction
-	kpiProcessedMetrics := metricsCollector.GetMetricsByName("aemf_pid_decider_kpi_processed_total")
+	kpiProcessedMetrics := metricsCollector.GetMetricsByName("aemf_adaptive_pid_kpi_processed_total")
 	assert.NotEmpty(t, kpiProcessedMetrics, "Should emit KPI processed metrics")
 	
-	patchGeneratedMetrics := metricsCollector.GetMetricsByName("aemf_pid_decider_patch_generated_total")
+	patchGeneratedMetrics := metricsCollector.GetMetricsByName("aemf_adaptive_pid_patch_generated_total")
 	assert.NotEmpty(t, patchGeneratedMetrics, "Should emit patch generated metrics")
 	
 	// Finally, verify that the pic_control extension properly recorded the patches

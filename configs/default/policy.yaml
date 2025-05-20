@@ -4,6 +4,7 @@ global_settings:
   collector_rss_safety_limit_mib: 350
 
 processors_config:
+  # Priority tagging configuration
   priority_tagger:
     enabled: true
     rules:
@@ -18,24 +19,23 @@ processors_config:
       - match: ".*"
         priority: low
   
+  # Adaptive top-k processor configuration 
   adaptive_topk:
     enabled: true
     k_value: 30
     k_min: 10
     k_max: 60
+    resource_field: "process.executable.name"
+    counter_field: "process.cpu.utilization"
   
-  cardinality_guardian:
-    enabled: false
-    max_unique: 1000
-  
-  reservoir_sampler:
-    enabled: false
-    reservoir_size: 100
-  
+  # Others rollup processor for low-priority processes
   others_rollup:
-    enabled: false
+    enabled: true
+    priority_threshold: "low"
+    metric_name_prefix: "others"
 
-pid_decider_config:
+# Adaptive PID controller configuration
+adaptive_pid_config:
   controllers:
     - name: coverage_controller
       enabled: true
@@ -45,6 +45,7 @@ pid_decider_config:
       ki: 5
       kd: 0
       hysteresis_percent: 3
+      integral_windup_limit: 100
       output_config_patches:
         - target_processor_name: adaptive_topk
           parameter_path: k_value
@@ -52,25 +53,11 @@ pid_decider_config:
           min_value: 10
           max_value: 60
 
-pic_control_config:
-  policy_file_path: /etc/sa-omf/policy.yaml
-  max_patches_per_minute: 3
-  patch_cooldown_seconds: 10
+# Safety mode configurations
+safety_config:
   safe_mode_processor_configs:
     adaptive_topk:
       k_value: 10
-    cardinality_guardian:
-      max_unique: 100
-
-service:
-  extensions: [pic_control, health_check]
-  pipelines:
-    metrics:
-      receivers: [hostmetrics]
-      processors: [priority_tagger, adaptive_topk]
-      exporters: [prometheusremotewrite]
-    control:
-      receivers: [prometheus/self]
-      processors: [pid_decider]
-      exporters: [pic_connector]
+    others_rollup:
+      priority_threshold: "critical"
 

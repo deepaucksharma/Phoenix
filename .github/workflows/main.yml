@@ -45,6 +45,8 @@ jobs:
         run: |
           bash scripts/validation/validate_policy_schema.sh
           bash scripts/validation/validate_config_schema.sh
+          echo "Validating updated processor configurations"
+          bash scripts/validation/validate_processors.sh
 
       - name: Upload build artifacts
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

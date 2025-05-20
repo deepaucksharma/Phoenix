@@ -13,6 +13,7 @@ paths-ignore:
   - 'examples/**'
   - 'deploy/**'
   - 'docs/**'
+  - 'vendor/**'
 
 # Focus on security queries only for faster analysis
 query-filters:

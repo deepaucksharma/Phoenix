@@ -58,7 +58,7 @@ func TestMissingSelfMetrics(t *testing.T) {
 
 	// Create the PID processor
 	settings := component.TelemetrySettings{}
-	processor, err := adaptive_pid.NewProcessor(config, settings, nil, component.NewIDWithName(component.MustNewType("processor"), "pid_decider"))
+	processor, err := adaptive_pid.NewProcessor(config, settings, nil, component.NewIDWithName(component.MustNewType("processor"), "adaptive_pid"))
 	require.NoError(t, err, "Failed to create adaptive_pid processor")
 
 	// Create metrics with NO KPI data
@@ -74,8 +74,8 @@ func TestMissingSelfMetrics(t *testing.T) {
 	// Verify the KPI missing metric is emitted
 	time.Sleep(100 * time.Millisecond) // Give time for metrics to be emitted
 	
-	kpiMissingMetrics := metricsCollector.GetMetricsByName("aemf_pid_decider_kpi_missing_total")
-	assert.NotEmpty(t, kpiMissingMetrics, "Should emit aemf_pid_decider_kpi_missing_total metric")
+	kpiMissingMetrics := metricsCollector.GetMetricsByName("aemf_adaptive_pid_kpi_missing_total")
+	assert.NotEmpty(t, kpiMissingMetrics, "Should emit aemf_adaptive_pid_kpi_missing_total metric")
 	
 	// Now test recovery - send metrics with the KPI present
 	metricsWithKPI := createTestMetricsWithKPI(t, "test_kpi", 0.5)
