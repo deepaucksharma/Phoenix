@@ -19,7 +19,8 @@ func TestPIDControllerBasics(t *testing.T) {
 	kd := 0.0
 	setpoint := 100.0
 
-	controller := pid.NewController(kp, ki, kd, setpoint)
+	controller, err := pid.NewController(kp, ki, kd, setpoint)
+	require.NoError(t, err)
 	require.NotNil(t, controller, "Controller should be created")
 
 	// Test P-only control
@@ -35,10 +36,26 @@ func TestPIDControllerBasics(t *testing.T) {
 	assert.Equal(t, 0.0, output, "With zero error, output should be zero")
 }
 
+// TestPIDConstructorValidation ensures invalid gains return an error.
+func TestPIDConstructorValidation(t *testing.T) {
+	_, err := pid.NewController(-1.0, 0.0, 0.0, 0)
+	assert.Error(t, err)
+
+	_, err = pid.NewController(0.0, -0.5, 0.0, 0)
+	assert.Error(t, err)
+
+	_, err = pid.NewController(0.0, 0.0, -0.3, 0)
+	assert.Error(t, err)
+
+	_, err = pid.NewController(1.0, 0.0, 0.0, 0)
+	assert.NoError(t, err)
+}
+
 // TestPIDProportionalControl tests proportional control behavior.
 func TestPIDProportionalControl(t *testing.T) {
 	// Create a controller with P-only tuning
-	controller := pid.NewController(2.0, 0.0, 0.0, 100.0)
+	controller, err := pid.NewController(2.0, 0.0, 0.0, 100.0)
+	require.NoError(t, err)
 
 	// Test proportional control with different Kp values
 	output := controller.Compute(90.0) // Error = 10
@@ -54,7 +71,8 @@ func TestPIDProportionalControl(t *testing.T) {
 // TestPIDIntegralControl tests integral control behavior.
 func TestPIDIntegralControl(t *testing.T) {
 	// Create a controller with I-only tuning
-	controller := pid.NewController(0.0, 0.1, 0.0, 100.0)
+	controller, err := pid.NewController(0.0, 0.1, 0.0, 100.0)
+	require.NoError(t, err)
 
 	// First call, starts accumulating error
 	output := controller.Compute(90.0) // Error = 10
@@ -79,7 +97,8 @@ func TestPIDIntegralControl(t *testing.T) {
 // TestPIDDerivativeControl tests derivative control behavior.
 func TestPIDDerivativeControl(t *testing.T) {
 	// Create a controller with D-only tuning
-	controller := pid.NewController(0.0, 0.0, 0.5, 100.0)
+	controller, err := pid.NewController(0.0, 0.0, 0.5, 100.0)
+	require.NoError(t, err)
 
 	// First call, no derivative effect yet
 	output := controller.Compute(90.0) // Error = 10
@@ -100,7 +119,8 @@ func TestPIDDerivativeControl(t *testing.T) {
 // TestPIDFullControl tests combined P, I, and D control.
 func TestPIDFullControl(t *testing.T) {
 	// Create a controller with PID tuning
-	controller := pid.NewController(1.0, 0.1, 0.05, 100.0)
+	controller, err := pid.NewController(1.0, 0.1, 0.05, 100.0)
+	require.NoError(t, err)
 
 	// Initial value
 	value := 70.0
@@ -122,7 +142,8 @@ func TestPIDFullControl(t *testing.T) {
 
 // TestPIDSetpointChange tests behavior when setpoint changes.
 func TestPIDSetpointChange(t *testing.T) {
-	controller := pid.NewController(1.0, 0.0, 0.0, 100.0)
+	controller, err := pid.NewController(1.0, 0.0, 0.0, 100.0)
+	require.NoError(t, err)
 
 	// Initial output
 	output1 := controller.Compute(90.0) // Error = 10
@@ -138,13 +159,15 @@ func TestPIDSetpointChange(t *testing.T) {
 
 // TestPIDOutputLimits tests output limiting functionality.
 func TestPIDOutputLimits(t *testing.T) {
-	controller := pid.NewController(10.0, 0.0, 0.0, 100.0)
+	controller, err := pid.NewController(10.0, 0.0, 0.0, 100.0)
+	require.NoError(t, err)
 
 	// Set output limits
-	require.NoError(t, controller.SetOutputLimits(-5.0, 5.0))
+	err = controller.SetOutputLimits(-5.0, 5.0)
+	require.NoError(t, err)
 
 	// Invalid limits should return an error
-	err := controller.SetOutputLimits(5.0, -5.0)
+	err = controller.SetOutputLimits(5.0, -5.0)
 	assert.Error(t, err)
 
 	// Test upper limit
@@ -165,7 +188,8 @@ func TestPIDOutputLimits(t *testing.T) {
 
 // TestPIDIntegralWindup tests integral windup prevention using integral limits.
 func TestPIDIntegralWindup(t *testing.T) {
-	controller := pid.NewController(0.0, 1.0, 0.0, 100.0)
+	controller, err := pid.NewController(0.0, 1.0, 0.0, 100.0)
+	require.NoError(t, err)
 
 	// Set integral limit
 	controller.SetIntegralLimit(10.0)
@@ -195,11 +219,15 @@ func TestPIDIntegralWindup(t *testing.T) {
 // TestPIDAntiWindupBackCalculation tests the anti-windup back-calculation mechanism.
 func TestPIDAntiWindupBackCalculation(t *testing.T) {
 	// Create two controllers with same parameters but different anti-windup settings
-	controllerWithAntiWindup := pid.NewController(1.0, 0.5, 0.0, 100.0)
-	require.NoError(t, controllerWithAntiWindup.SetOutputLimits(-5.0, 5.0))
+	controllerWithAntiWindup, err := pid.NewController(1.0, 0.5, 0.0, 100.0)
+	require.NoError(t, err)
+	err = controllerWithAntiWindup.SetOutputLimits(-5.0, 5.0)
+	require.NoError(t, err)
 
-	controllerNoAntiWindup := pid.NewController(1.0, 0.5, 0.0, 100.0)
-	require.NoError(t, controllerNoAntiWindup.SetOutputLimits(-5.0, 5.0))
+	controllerNoAntiWindup, err := pid.NewController(1.0, 0.5, 0.0, 100.0)
+	require.NoError(t, err)
+	err = controllerNoAntiWindup.SetOutputLimits(-5.0, 5.0)
+	require.NoError(t, err)
 	controllerNoAntiWindup.SetAntiWindupEnabled(false)
 
 	// Apply large error to both controllers to cause saturation
@@ -257,7 +285,8 @@ func TestPIDAntiWindupBackCalculation(t *testing.T) {
 
 // TestPIDAntiWindupGainConfiguration tests the configuration of anti-windup gain.
 func TestPIDAntiWindupGainConfiguration(t *testing.T) {
-	controller := pid.NewController(1.0, 0.5, 0.0, 100.0)
+	controller, err := pid.NewController(1.0, 0.5, 0.0, 100.0)
+	require.NoError(t, err)
 
 	// Default settings check
 	enabled, gain := controller.GetAntiWindupSettings()
@@ -266,14 +295,15 @@ func TestPIDAntiWindupGainConfiguration(t *testing.T) {
 
 	// Test changing settings
 	controller.SetAntiWindupEnabled(false)
-	require.NoError(t, controller.SetAntiWindupGain(2.5))
+	err = controller.SetAntiWindupGain(2.5)
+	require.NoError(t, err)
 
 	enabled, gain = controller.GetAntiWindupSettings()
 	assert.False(t, enabled, "Anti-windup should be disabled after SetAntiWindupEnabled(false)")
 	assert.Equal(t, 2.5, gain, "Anti-windup gain should be 2.5 after SetAntiWindupGain(2.5)")
 
 	// Test invalid gain (negative)
-	err := controller.SetAntiWindupGain(-1.0)
+	err = controller.SetAntiWindupGain(-1.0)
 	assert.Error(t, err)
 	_, gain = controller.GetAntiWindupSettings()
 	assert.Equal(t, 2.5, gain, "Anti-windup gain should still be 2.5 after setting invalid value")
@@ -281,8 +311,10 @@ func TestPIDAntiWindupGainConfiguration(t *testing.T) {
 
 // TestPIDTimeIndependence tests behavior with different time intervals.
 func TestPIDTimeIndependence(t *testing.T) {
-	controller1 := pid.NewController(1.0, 0.1, 0.0, 100.0)
-	controller2 := pid.NewController(1.0, 0.1, 0.0, 100.0)
+	controller1, err := pid.NewController(1.0, 0.1, 0.0, 100.0)
+	require.NoError(t, err)
+	controller2, err := pid.NewController(1.0, 0.1, 0.0, 100.0)
+	require.NoError(t, err)
 
 	// Controller 1: rapid calls
 	var output1 float64

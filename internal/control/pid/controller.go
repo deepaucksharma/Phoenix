@@ -32,8 +32,19 @@ type Controller struct {
 	lock sync.Mutex // For thread safety
 }
 
-// NewController creates a new PID controller with the specified gains
-func NewController(kp, ki, kd, setpoint float64) *Controller {
+// NewController creates a new PID controller with the specified gains.
+// It validates that the gain values are non-negative.
+func NewController(kp, ki, kd, setpoint float64) (*Controller, error) {
+	if kp < 0 {
+		return nil, fmt.Errorf("invalid Kp: %v", kp)
+	}
+	if ki < 0 {
+		return nil, fmt.Errorf("invalid Ki: %v", ki)
+	}
+	if kd < 0 {
+		return nil, fmt.Errorf("invalid Kd: %v", kd)
+	}
+
 	return &Controller{
 		kp:                kp,
 		ki:                ki,
@@ -47,7 +58,18 @@ func NewController(kp, ki, kd, setpoint float64) *Controller {
 		outputMax:         1000,
 		antiWindupEnabled: true, // Enable anti-windup by default
 		antiWindupGain:    1.0,  // Default gain for anti-windup
+	}, nil
+}
+
+// NewControllerCompat provides backwards compatibility by returning a controller
+// without exposing validation errors. Invalid gains will result in zeroed gains.
+func NewControllerCompat(kp, ki, kd, setpoint float64) *Controller {
+	c, _ := NewController(kp, ki, kd, setpoint)
+	if c == nil {
+		// Fall back to a controller with zeroed gains if validation failed
+		c, _ = NewController(0, 0, 0, setpoint)
 	}
+	return c
 }
 
 // SetIntegralLimit sets the maximum absolute value for the integral term

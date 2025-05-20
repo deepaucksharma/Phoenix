@@ -41,7 +41,10 @@ We've implemented an advanced anti-windup mechanism for the PID controller as sp
 
 ```go
 // Create controller with anti-windup enabled (default)
-controller := pid.NewController(1.0, 0.5, 0.1, 100.0)
+controller, err := pid.NewController(1.0, 0.5, 0.1, 100.0)
+if err != nil {
+    log.Fatalf("failed to create controller: %v", err)
+}
 
 // Configure anti-windup behavior
 if err := controller.SetAntiWindupGain(2.0); err != nil {

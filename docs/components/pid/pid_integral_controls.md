@@ -16,13 +16,18 @@ The controller implements two separate but complementary anti-windup mechanisms:
 - **Integral Limits**: A simple approach that prevents excessive buildup but doesn't help with recovery
 - **Back-Calculation**: More sophisticated approach that actively reduces integral term during saturation, leading to faster recovery
 
+> **Note**: `pid.NewController` now returns `(*Controller, error)` to report invalid gain values. Update existing code accordingly.
+
 ## SetIntegralLimit
 
 `SetIntegralLimit(limit float64)` constrains the absolute value of the
 internal integral. Any accumulated error beyond `±limit` will be clipped.
 
 ```go
-controller := pid.NewController(1.0, 0.5, 0.1, 100.0)
+controller, err := pid.NewController(1.0, 0.5, 0.1, 100.0)
+if err != nil {
+    log.Fatalf("controller init: %v", err)
+}
 controller.SetIntegralLimit(10.0)
 ```
 
@@ -52,7 +57,10 @@ integral term when the output saturates. This mechanism is controlled through tw
 Anti-windup is enabled by default.
 
 ```go
-controller := pid.NewController(1.0, 0.5, 0.1, 100.0)
+controller, err := pid.NewController(1.0, 0.5, 0.1, 100.0)
+if err != nil {
+    log.Fatal(err)
+}
 controller.SetAntiWindupEnabled(false) // Disable anti-windup
 ```
 
@@ -63,8 +71,11 @@ Higher values result in faster integral term reduction during saturation, leadin
 The method returns an error if a negative gain value is supplied.
 
 ```go
-controller := pid.NewController(1.0, 0.5, 0.1, 100.0)
-err := controller.SetAntiWindupGain(2.0) // More aggressive anti-windup
+controller, err := pid.NewController(1.0, 0.5, 0.1, 100.0)
+if err != nil {
+    log.Fatal(err)
+}
+err = controller.SetAntiWindupGain(2.0) // More aggressive anti-windup
 if err != nil {
     // handle invalid gain
 }
@@ -92,4 +103,3 @@ Resetting helps the controller react quickly to new conditions.
 enabled, gain := controller.GetAntiWindupSettings()
 fmt.Printf("Anti-windup: enabled=%v, gain=%.2f\n", enabled, gain)
 ```
-

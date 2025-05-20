@@ -71,7 +71,10 @@ func newProcessor(config *Config, settings component.TelemetrySettings, nextCons
 		}
 
 		// Create PID controller
-		pidController := pid.NewController(cfg.KP, cfg.KI, cfg.KD, cfg.KPITargetValue)
+		pidController, err := pid.NewController(cfg.KP, cfg.KI, cfg.KD, cfg.KPITargetValue)
+		if err != nil {
+			return nil, fmt.Errorf("create PID controller: %w", err)
+		}
 
 		// Set integral windup limit if specified
 		if cfg.IntegralWindupLimit > 0 {

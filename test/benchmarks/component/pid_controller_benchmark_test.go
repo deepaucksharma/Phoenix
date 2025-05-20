@@ -25,7 +25,10 @@ func startCPUProfile(b *testing.B, name string) func() {
 }
 
 func BenchmarkPIDControllerCompute(b *testing.B) {
-	ctrl := pid.NewController(0.1, 0.01, 0.05, 10)
+	ctrl, err := pid.NewController(0.1, 0.01, 0.05, 10)
+	if err != nil {
+		b.Fatalf("controller init failed: %v", err)
+	}
 	stop := startCPUProfile(b, "pid_cpu.prof")
 	defer stop()
 	b.ReportAllocs()
