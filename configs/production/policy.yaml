@@ -4,35 +4,34 @@ global_settings:
   collector_rss_safety_limit_mib: 350
 
 processors_config:
-  # Priority tagging configuration
-  priority_tagger:
-    enabled: true
-    rules:
-      - match: "process.command_line=~/.*java.*/"
-        priority: high
-      - match: "process.name=~/nginx|httpd/"
-        priority: high
-      - match: "process.name=~/mysql|postgres|mongodb/"
-        priority: critical
-      - match: "process.command_line=~/.*python.*/"
-        priority: medium
-      - match: ".*"
-        priority: low
-  
-  # Adaptive top-k processor configuration
-  adaptive_topk:
-    enabled: true
-    k_value: 30
-    k_min: 10
-    k_max: 60
-    resource_field: "process.executable.name"
-    counter_field: "process.cpu.utilization"
-  
-  # Others rollup processor for low-priority processes
-  others_rollup:
-    enabled: true
-    priority_threshold: "low"
-    metric_name_prefix: "others"
+  metric_pipeline:
+    resource_filter:
+      enabled: true
+      filter_strategy: hybrid
+      priority_attribute: "aemf.process.priority"
+      priority_rules:
+        - match: "process.command_line=~/.*java.*/"
+          priority: high
+        - match: "process.name=~/nginx|httpd/"
+          priority: high
+        - match: "process.name=~/mysql|postgres|mongodb/"
+          priority: critical
+        - match: "process.command_line=~/.*python.*/"
+          priority: medium
+        - match: ".*"
+          priority: low
+      topk:
+        k_value: 25
+        k_min: 10
+        k_max: 50
+        resource_field: "process.executable.name"
+        counter_field: "process.cpu.utilization"
+        coverage_target: 0.95
+      rollup:
+        enabled: true
+        priority_threshold: "low"
+        strategy: "sum"
+        name_prefix: "others"
 
 # Adaptive PID controller configuration
 adaptive_pid_config:
@@ -47,8 +46,8 @@ adaptive_pid_config:
       hysteresis_percent: 3
       integral_windup_limit: 100
       output_config_patches:
-        - target_processor_name: adaptive_topk
-          parameter_path: k_value
+        - target_processor_name: metric_pipeline
+          parameter_path: resource_filter.topk.k_value
           change_scale_factor: -20.0
           min_value: 10
           max_value: 60
@@ -56,8 +55,10 @@ adaptive_pid_config:
 # Safety mode configurations
 safety_config:
   safe_mode_processor_configs:
-    adaptive_topk:
-      k_value: 10
-    others_rollup:
-      priority_threshold: "critical"
+    metric_pipeline:
+      resource_filter:
+        topk:
+          k_value: 10
+        rollup:
+          priority_threshold: "critical"
 
