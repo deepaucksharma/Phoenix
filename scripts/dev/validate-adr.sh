@@ -5,7 +5,7 @@ set -e
 
 # Find all ADR files
 
-ADR_FILES=$(find docs/adr -name "*.md")
+ADR_FILES=$(find docs/architecture/adr -name "*.md")
 
 # Check each ADR
 
