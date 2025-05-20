@@ -59,3 +59,4 @@ metrics := metrics.NewMetricsEmitter(meter, "processor_name", id)
 counter, _ := metrics.RegisterCounter("count_name", "Count description")
 gauge, _ := metrics.RegisterGauge("gauge_name", "Gauge description")
 ```
+

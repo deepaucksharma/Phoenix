@@ -30,3 +30,4 @@ When adding new end-to-end tests:
 2. Place integration tests in the `/test/e2e/integration/` directory
 3. Follow the naming convention: `<component_name>_<test_type>_test.go`
 4. Include proper documentation in the test file
+
