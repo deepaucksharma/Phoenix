@@ -102,6 +102,41 @@ func (p *BaseProcessor) RUnlock() {
 	p.lock.RUnlock()
 }
 
+// findField returns the struct field on v corresponding to the given name.
+// It matches exported field names case-insensitively as well as `mapstructure`
+// and `yaml` tag names.
+func findField(v reflect.Value, name string) (reflect.Value, error) {
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return reflect.Value{}, fmt.Errorf("cannot navigate to %s: not a struct", name)
+	}
+
+	// Direct field lookup by name or case-insensitive match
+	if f := v.FieldByName(name); f.IsValid() {
+		return f, nil
+	}
+	t := v.Type()
+	for i := 0; i < t.NumField(); i++ {
+		ft := t.Field(i)
+		if strings.EqualFold(ft.Name, name) {
+			return v.Field(i), nil
+		}
+		tag := ft.Tag.Get("mapstructure")
+		if tag == "" {
+			tag = ft.Tag.Get("yaml")
+		}
+		if tag != "" {
+			tag = strings.Split(tag, ",")[0]
+			if tag == name {
+				return v.Field(i), nil
+			}
+		}
+	}
+	return reflect.Value{}, fmt.Errorf("field not found: %s", name)
+}
+
 // GetConfigByPath returns a configuration value from a struct by dot-separated path.
 func GetConfigByPath(config interface{}, path string) (interface{}, error) {
 	if path == "enabled" {
@@ -134,9 +169,9 @@ func GetConfigByPath(config interface{}, path string) (interface{}, error) {
 				return nil, fmt.Errorf("invalid index: %s", indexStr)
 			}
 
-			field := current.FieldByName(fieldName)
-			if !field.IsValid() {
-				return nil, fmt.Errorf("field not found: %s", fieldName)
+			field, err := findField(current, fieldName)
+			if err != nil {
+				return nil, err
 			}
 
 			if field.Kind() != reflect.Slice && field.Kind() != reflect.Array {
@@ -150,9 +185,9 @@ func GetConfigByPath(config interface{}, path string) (interface{}, error) {
 			current = field.Index(index)
 		} else {
 			// Regular field access
-			field := current.FieldByName(part)
-			if !field.IsValid() {
-				return nil, fmt.Errorf("field not found: %s", part)
+			field, err := findField(current, part)
+			if err != nil {
+				return nil, err
 			}
 			current = field
 		}
@@ -203,9 +238,9 @@ func SetConfigByPath(config interface{}, path string, value interface{}) error {
 				return fmt.Errorf("invalid index: %s", indexStr)
 			}
 
-			field := current.FieldByName(fieldName)
-			if !field.IsValid() {
-				return fmt.Errorf("field not found: %s", fieldName)
+			field, err := findField(current, fieldName)
+			if err != nil {
+				return err
 			}
 
 			if field.Kind() != reflect.Slice && field.Kind() != reflect.Array {
@@ -219,9 +254,9 @@ func SetConfigByPath(config interface{}, path string, value interface{}) error {
 			current = field.Index(index)
 		} else {
 			// Regular field access
-			field := current.FieldByName(part)
-			if !field.IsValid() {
-				return fmt.Errorf("field not found: %s", part)
+			field, err := findField(current, part)
+			if err != nil {
+				return err
 			}
 
 			if field.Kind() == reflect.Ptr {
@@ -247,9 +282,9 @@ func SetConfigByPath(config interface{}, path string, value interface{}) error {
 			return fmt.Errorf("invalid index: %s", indexStr)
 		}
 
-		field := current.FieldByName(fieldName)
-		if !field.IsValid() {
-			return fmt.Errorf("field not found: %s", fieldName)
+		field, err := findField(current, fieldName)
+		if err != nil {
+			return err
 		}
 
 		if field.Kind() != reflect.Slice && field.Kind() != reflect.Array {
@@ -273,9 +308,9 @@ func SetConfigByPath(config interface{}, path string, value interface{}) error {
 		elemField.Set(valueReflect)
 	} else {
 		// Regular field access
-		field := current.FieldByName(lastPart)
-		if !field.IsValid() {
-			return fmt.Errorf("field not found: %s", lastPart)
+		field, err := findField(current, lastPart)
+		if err != nil {
+			return err
 		}
 
 		if !field.CanSet() {
