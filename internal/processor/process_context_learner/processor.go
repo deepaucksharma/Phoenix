@@ -146,6 +146,9 @@ func (p *ProcessorImpl) computeScores() {
 			}
 			share := damping * scores[child] / float64(len(parents))
 			for _, parent := range parents {
+				if parent == 0 {
+					continue
+				}
 				newScores[parent] += share
 			}
 		}

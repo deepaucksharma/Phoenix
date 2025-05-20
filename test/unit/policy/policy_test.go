@@ -11,7 +11,7 @@ import (
 )
 
 func TestLoadPolicyValid(t *testing.T) {
-	policyPath := "../../configs/development/policy.yaml"
+	policyPath := "../../../configs/development/policy.yaml"
 	p, err := policy.LoadPolicy(policyPath)
 	require.NoError(t, err, "expected valid policy to load")
 	require.NotNil(t, p)
@@ -30,7 +30,7 @@ func TestLoadPolicyInvalid(t *testing.T) {
 }
 
 func TestParsePolicyValid(t *testing.T) {
-	data, err := os.ReadFile("../../configs/development/policy.yaml")
+	data, err := os.ReadFile("../../../configs/development/policy.yaml")
 	require.NoError(t, err)
 
 	p, err := policy.ParsePolicy(data)

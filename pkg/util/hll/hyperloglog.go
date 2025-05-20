@@ -7,16 +7,17 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math"
+	"math/bits"
 	"sync"
 )
 
 const (
 	// HLL_MIN_PRECISION is the minimum precision (4 bits to create 16 registers)
 	HLL_MIN_PRECISION = 4
-	
+
 	// HLL_MAX_PRECISION is the maximum precision (16 bits to create 65536 registers)
 	HLL_MAX_PRECISION = 16
-	
+
 	// HLL_DEFAULT_PRECISION is the default precision (10 bits to create 1024 registers)
 	HLL_DEFAULT_PRECISION = 10
 )
@@ -35,9 +36,9 @@ func New(precision uint8) (*HyperLogLog, error) {
 	if precision < HLL_MIN_PRECISION || precision > HLL_MAX_PRECISION {
 		return nil, fmt.Errorf("precision must be between %d and %d", HLL_MIN_PRECISION, HLL_MAX_PRECISION)
 	}
-	
+
 	m := uint32(1) << precision
-	
+
 	// Compute alpha based on precision
 	var alpha float64
 	switch m {
@@ -50,7 +51,7 @@ func New(precision uint8) (*HyperLogLog, error) {
 	default:
 		alpha = 0.7213 / (1.0 + 1.079/float64(m))
 	}
-	
+
 	return &HyperLogLog{
 		registers: make([]uint8, m),
 		m:         m,
@@ -69,16 +70,20 @@ func NewDefault() *HyperLogLog {
 func (h *HyperLogLog) Add(data []byte) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
-	
-       // Compute 32-bit hash
-       hash := computeHash(data)
-	
+
+	// Compute 32-bit hash
+	hash := computeHash(data)
+
 	// Determine register index using first 'precision' bits
 	idx := hash & (h.m - 1)
-	
+
 	// Count leading zeros in the remaining bits (shifted by precision)
-	zeros := countLeadingZeros(hash >> h.precision)
-	
+	w := hash >> h.precision
+	zeros := uint8(bits.LeadingZeros32(w)) + 1 - h.precision
+	if zeros < 1 {
+		zeros = 1
+	}
+
 	// Update register if the new value is larger
 	if zeros > h.registers[idx] {
 		h.registers[idx] = zeros
@@ -94,15 +99,15 @@ func (h *HyperLogLog) AddString(s string) {
 func (h *HyperLogLog) Count() uint64 {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
-	
+
 	// Compute estimate using harmonic mean
 	sum := 0.0
 	for _, val := range h.registers {
 		sum += math.Pow(2.0, -float64(val))
 	}
-	
+
 	estimate := h.alpha * float64(h.m*h.m) / sum
-	
+
 	// Apply correction for small and large ranges
 	if estimate <= 2.5*float64(h.m) {
 		// Small range correction
@@ -112,7 +117,7 @@ func (h *HyperLogLog) Count() uint64 {
 				zeros++
 			}
 		}
-		
+
 		if zeros > 0 {
 			// Linear counting for small ranges
 			return uint64(float64(h.m) * math.Log(float64(h.m)/float64(zeros)))
@@ -121,7 +126,7 @@ func (h *HyperLogLog) Count() uint64 {
 		// Large range correction
 		return uint64(-math.Pow(2.0, 32) * math.Log(1.0-estimate/math.Pow(2.0, 32)))
 	}
-	
+
 	return uint64(estimate)
 }
 
@@ -129,18 +134,18 @@ func (h *HyperLogLog) Count() uint64 {
 func (h *HyperLogLog) Merge(other *HyperLogLog) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
-	
+
 	if h.precision != other.precision {
-		return fmt.Errorf("cannot merge HyperLogLogs with different precision (%d vs %d)", 
+		return fmt.Errorf("cannot merge HyperLogLogs with different precision (%d vs %d)",
 			h.precision, other.precision)
 	}
-	
+
 	for i := uint32(0); i < h.m; i++ {
 		if other.registers[i] > h.registers[i] {
 			h.registers[i] = other.registers[i]
 		}
 	}
-	
+
 	return nil
 }
 
@@ -148,7 +153,7 @@ func (h *HyperLogLog) Merge(other *HyperLogLog) error {
 func (h *HyperLogLog) Reset() {
 	h.lock.Lock()
 	defer h.lock.Unlock()
-	
+
 	for i := range h.registers {
 		h.registers[i] = 0
 	}
@@ -166,27 +171,6 @@ func countLeadingZeros(x uint32) uint8 {
 	if x == 0 {
 		return 32
 	}
-	
-	n := uint8(0)
-	if x&0xFFFF0000 == 0 {
-		n += 16
-		x <<= 16
-	}
-	if x&0xFF000000 == 0 {
-		n += 8
-		x <<= 8
-	}
-	if x&0xF0000000 == 0 {
-		n += 4
-		x <<= 4
-	}
-	if x&0xC0000000 == 0 {
-		n += 2
-		x <<= 2
-	}
-	if x&0x80000000 == 0 {
-		n += 1
-	}
-	
-	return n + 1 // Add 1 for the 1-indexed position
+	n := uint8(bits.LeadingZeros32(x))
+	return n + 1
 }

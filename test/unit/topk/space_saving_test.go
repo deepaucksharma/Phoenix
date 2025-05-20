@@ -28,30 +28,42 @@ func TestSpaceSavingBasic(t *testing.T) {
 	// Get the top-k items
 	items := ss.GetTopK()
 	require.Len(t, items, 3)
-
-	// Basic sanity checks on ordering and counts
+	
+	// Verify items and counts
+	counts := map[string]float64{}
 	topSet := map[string]struct{}{}
 	for _, it := range items {
 		topSet[it.ID] = struct{}{}
+		counts[it.ID] = it.Count
 	}
+	
 	assert.Contains(t, topSet, "item1")
 	assert.Contains(t, topSet, "item2")
 	assert.Contains(t, topSet, "item3")
+	assert.Equal(t, 10.0, counts["item1"])
+	assert.Equal(t, 5.0, counts["item2"])
+	assert.Equal(t, 3.0, counts["item3"])
 
 	// Add another count to item3
 	ss.Add("item3", 8)
 
 	// Get the top-k items again
 	items = ss.GetTopK()
-
-	// Verify ordering after update - item3 should outrank item2
+	
+	// Verify ordering and counts after update
+	counts = map[string]float64{}
 	topSet = map[string]struct{}{}
 	for _, it := range items {
 		topSet[it.ID] = struct{}{}
+		counts[it.ID] = it.Count
 	}
+	
 	assert.Contains(t, topSet, "item1")
 	assert.Contains(t, topSet, "item3")
 	assert.Contains(t, topSet, "item2")
+	assert.Equal(t, 10.0, counts["item1"])
+	assert.Equal(t, 11.0, counts["item3"])
+	assert.Equal(t, 5.0, counts["item2"])
 }
 
 func TestSpaceSavingReplacement(t *testing.T) {

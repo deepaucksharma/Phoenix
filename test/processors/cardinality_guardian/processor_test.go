@@ -71,7 +71,7 @@ func TestCardinalityGuardianProcessor(t *testing.T) {
 					PatchID:             "set-max-unique",
 					TargetProcessorName: component.NewIDWithName(component.MustNewType("cardinality_guardian"), ""),
 					ParameterPath:       "max_unique",
-					NewValue:            10,
+					NewValue:            1,
 				},
 			},
 		},
@@ -129,7 +129,7 @@ func TestOnConfigPatchUpdates(t *testing.T) {
 	sink := new(consumertest.MetricsSink)
 	proc, err := factory.CreateMetrics(ctx, processor.Settings{
 		TelemetrySettings: component.TelemetrySettings{Logger: zap.NewNop()},
-		ID:                component.NewID(factory.Type()),
+		ID:                component.NewID(component.MustNewType("cardinality_guardian")),
 	}, cfg, sink)
 	require.NoError(t, err)
 	up, ok := proc.(interfaces.UpdateableProcessor)
@@ -174,7 +174,7 @@ func TestHLLCountingAndReduction(t *testing.T) {
 
 	proc, err := factory.CreateMetrics(ctx, processor.Settings{
 		TelemetrySettings: component.TelemetrySettings{Logger: zap.NewNop()},
-		ID:                component.NewID(factory.Type()),
+		ID:                component.NewID(component.MustNewType("cardinality_guardian")),
 	}, cfg, sink)
 	require.NoError(t, err)
 	require.NoError(t, proc.Start(ctx, nil))
