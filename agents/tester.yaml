@@ -17,7 +17,7 @@ can_touch:
   - test/testutils/**
   - test/generator/**
   - test/unit/**
-  - test/integration/**
+  - test/e2e/integration/**
   - test/e2e/**
   - test/chaos/**
 must_touch:

@@ -58,7 +58,7 @@ test-unit:
 # Run integration tests only
 test-integration:
 	@echo "Running integration tests..."
-	@$(GO_OFFLINE_ENV) go test $(GO_TEST_FLAGS) ./test/e2e/...
+	@$(GO_OFFLINE_ENV) go test $(GO_TEST_FLAGS) ./test/e2e/integration/...
 
 # Run tests with coverage
 test-coverage:
