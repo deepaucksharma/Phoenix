@@ -1,31 +1,11 @@
-extensions:
-  pic_control:
-    policy_file_path: /etc/sa-omf/policy.yaml
-    max_patches_per_minute: 5  # Higher rate for testing
-    patch_cooldown_seconds: 2  # Shorter cooldown for testing
-
 receivers:
   hostmetrics:
     collection_interval: 5s  # Faster collection for testing
     scrapers:
-      cpu:
-      memory:
-      load:
-      filesystem:
-      network:
-      paging:
       process:
         include:
           match_type: regexp
           processes: [".*"]
-  
-  prometheus/self:
-    config:
-      scrape_configs:
-        - job_name: 'sa-omf-self'
-          scrape_interval: 2s  # Faster for testing
-          static_configs:
-            - targets: ['localhost:8888']
 
 processors:
   # Processors configured via policy.yaml
@@ -33,24 +13,14 @@ processors:
 exporters:
   logging:
     verbosity: detailed
-  
-  prometheusremotewrite:
-    endpoint: "http://localhost:9090/api/v1/write"
-    timeout: 5s
-  
-  pic_connector: {}
+  otlp:
+    endpoint: "${env:NEW_RELIC_OTLP_ENDPOINT}"
+    headers:
+      api-key: "${env:NEW_RELIC_API_KEY}"
 
 service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      processors: [priority_tagger, adaptive_topk, others_rollup]
-      exporters: [logging, prometheusremotewrite]
-    
-    control:
-      receivers: [prometheus/self]
-      processors: [adaptive_pid]
-      exporters: [pic_connector]
-  
-  extensions: [pic_control]
-
+      processors: [metric_pipeline]
+      exporters: [logging, otlp]

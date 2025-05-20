@@ -1,20 +1,12 @@
-extensions:
-  pic_control:
-    policy_file_path: /etc/sa-omf/policy.yaml
-    max_patches_per_minute: 3
-    patch_cooldown_seconds: 10
-
 receivers:
   hostmetrics:
     collection_interval: 10s
     scrapers:
-      # Only include process metrics to reduce cardinality
       process:
         include:
           match_type: regexp
           processes: [".*"]
         resource_attributes:
-          # Include only necessary process attributes
           process.executable.name: true
           process.executable.path: false
           process.command: false
@@ -22,132 +14,21 @@ receivers:
           process.pid: true
           process.parent_pid: false
           process.owner: true
-  
-  # Receiver for self-metrics collection
-  prometheus/self:
-    config:
-      scrape_configs:
-        - job_name: 'sa-omf-self'
-          scrape_interval: 5s
-          static_configs:
-            - targets: ['localhost:8888']
 
 processors:
-  # Processors will be configured from policy.yaml
-  # This separation ensures that dynamic config lives in policy file
-  # while pipeline structure lives here
-  
-  # Unified resource filter processor that combines the functionality of
-  # priority_tagger, adaptive_topk, and others_rollup
-  resource_filter:
-    enabled: true
-    filter_strategy: hybrid
-    priority_attribute: "aemf.process.priority"
-    priority_rules:
-      - match: "process.executable.name=~/java|javaw/"
-        priority: high
-      - match: "process.executable.name=~/nginx|httpd|apache2/"
-        priority: high
-      - match: "process.executable.name=~/mysql|postgres|mongod|redis-server|elasticsearch/"
-        priority: critical
-      - match: "process.executable.name=~/python|python3|node|dotnet|ruby/"
-        priority: medium
-      - match: "process.executable.name=~/otelcol|sa-omf-otelcol|collector/"
-        priority: critical
-      - match: "process.executable.name=~/newrelic-infra|nri-.*/"
-        priority: critical
-      - match: ".*"
-        priority: low
-    topk:
-      k_value: 20
-      k_min: 10
-      k_max: 40
-      resource_field: "process.executable.name"
-      counter_field: "process.cpu.utilization"
-      coverage_target: 0.95
-    rollup:
-      enabled: true
-      priority_threshold: low
-      strategy: sum
-      name_prefix: "others"
-  
-  # Histogram aggregator to optimize histogram metrics for OTLP export
-  histogram_aggregator:
-    enabled: true
-    max_buckets: 10
-    target_processors: []  # Empty means apply to all processes
-    custom_boundaries:
-      process.memory.usage:
-        - 10000000  # 10MB
-        - 50000000  # 50MB  
-        - 100000000 # 100MB
-        - 500000000 # 500MB
-        - 1000000000 # 1GB
-      process.cpu.time:
-        - 0.1
-        - 0.5
-        - 1.0
-        - 5.0
-        - 10.0
-  
-  # Attribute processor to control cardinality by filtering metrics attributes
-  attributes/process:
-    actions:
-      # Include only essential attributes to reduce cardinality
-      - key: process.executable.name
-        action: update
-        value: {{ if eq .Value.String "unknown" }}default{{ else }}{{ .Value.String }}{{ end }}
-      # Remove unnecessary attributes that increase cardinality
-      - key: process.command_line
-        action: delete
-      - key: process.command
-        action: delete
-      - key: process.executable.path
-        action: delete
-      # Add New Relic compatibility attributes
-      - key: collector.name
-        action: insert
-        value: "SA-OMF"
-      - key: service.name
-        action: insert
-        value: {{ .Resource.Attributes.GetString "process.executable.name" "unknown" }}
+  metric_pipeline:
 
 exporters:
   logging:
     verbosity: detailed
-  
-  prometheusremotewrite:
-    endpoint: "http://localhost:9090/api/v1/write"
-    timeout: 5s
-
   otlp:
-    endpoint: "https://otlp.nr-data.net:4317"  # New Relic OTLP endpoint
+    endpoint: "${env:NEW_RELIC_OTLP_ENDPOINT}"
     headers:
-      api-key: "${env:NEW_RELIC_API_KEY}"  # API key from environment variable
-    timeout: 10s
-    sending_queue:
-      enabled: true
-      num_consumers: 4
-      queue_size: 100
-    retry_on_failure:
-      enabled: true
-      initial_interval: 5s
-      max_interval: 30s
-      max_elapsed_time: 300s
-
-  pic_connector:
-    # PIC connector forwards config patches to pic_control extension
+      api-key: "${env:NEW_RELIC_API_KEY}"
 
 service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      processors: [resource_filter, histogram_aggregator, attributes/process]
-      exporters: [logging, prometheusremotewrite, otlp]
-    
-    control:
-      receivers: [prometheus/self]
-      processors: [adaptive_pid]
-      exporters: [pic_connector]
-  
-  extensions: [pic_control]
+      processors: [metric_pipeline]
+      exporters: [logging, otlp]
