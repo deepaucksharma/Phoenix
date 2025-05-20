@@ -320,50 +320,130 @@ func (p *pidProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
+	parts := strings.Split(patch.TargetProcessorName.String(), "/")
+	controllerName := parts[len(parts)-1]
+
+	// Locate controller
+	var (
+		idx  int
+		ctrl *controller
+	)
+	for i, c := range p.controllers {
+		if c.config.Name == controllerName {
+			idx = i
+			ctrl = c
+			break
+		}
+	}
+	if ctrl == nil {
+		return fmt.Errorf("controller not found: %s", patch.TargetProcessorName.String())
+	}
+
 	switch patch.ParameterPath {
 	case "enabled":
-		// Find the controller by name (from Target)
-		parts := strings.Split(patch.TargetProcessorName.String(), "/")
-		if len(parts) > 0 {
-			controllerName := parts[len(parts)-1]
-
-			for i, ctrl := range p.config.Controllers {
-				if ctrl.Name == controllerName {
-					enabled, ok := patch.NewValue.(bool)
-					if !ok {
-						return fmt.Errorf("invalid value type for enabled: %T", patch.NewValue)
-					}
-					p.config.Controllers[i].Enabled = enabled
-					return nil
-				}
-			}
+		enabled, ok := patch.NewValue.(bool)
+		if !ok {
+			return fmt.Errorf("invalid value type for enabled: %T", patch.NewValue)
 		}
-		return fmt.Errorf("controller not found: %s", patch.TargetProcessorName.String())
+		p.config.Controllers[idx].Enabled = enabled
+		ctrl.config.Enabled = enabled
+		return nil
 
 	case "kpi_target_value":
-		// Find the controller by name
-		parts := strings.Split(patch.TargetProcessorName.String(), "/")
-		if len(parts) > 0 {
-			controllerName := parts[len(parts)-1]
-
-			for i, ctrl := range p.controllers {
-				if ctrl.config.Name == controllerName {
-					targetValue, ok := patch.NewValue.(float64)
-					if !ok {
-						return fmt.Errorf("invalid value type for kpi_target_value: %T", patch.NewValue)
-					}
-
-					// Update the controller configuration
-					p.config.Controllers[i].KPITargetValue = targetValue
-
-					// Update the PID controller's setpoint
-					ctrl.pid.SetSetpoint(targetValue)
-
-					return nil
-				}
-			}
+		targetValue, ok := patch.NewValue.(float64)
+		if !ok {
+			return fmt.Errorf("invalid value type for kpi_target_value: %T", patch.NewValue)
 		}
-		return fmt.Errorf("controller not found: %s", patch.TargetProcessorName.String())
+		p.config.Controllers[idx].KPITargetValue = targetValue
+		ctrl.config.KPITargetValue = targetValue
+		ctrl.pid.SetSetpoint(targetValue)
+		return nil
+
+	case "kp":
+		val, ok := patch.NewValue.(float64)
+		if !ok {
+			return fmt.Errorf("invalid value type for kp: %T", patch.NewValue)
+		}
+		p.config.Controllers[idx].KP = val
+		ctrl.config.KP = val
+		ctrl.pid.SetTunings(val, ctrl.config.KI, ctrl.config.KD)
+		return nil
+
+	case "ki":
+		val, ok := patch.NewValue.(float64)
+		if !ok {
+			return fmt.Errorf("invalid value type for ki: %T", patch.NewValue)
+		}
+		p.config.Controllers[idx].KI = val
+		ctrl.config.KI = val
+		ctrl.pid.SetTunings(ctrl.config.KP, val, ctrl.config.KD)
+		return nil
+
+	case "kd":
+		val, ok := patch.NewValue.(float64)
+		if !ok {
+			return fmt.Errorf("invalid value type for kd: %T", patch.NewValue)
+		}
+		p.config.Controllers[idx].KD = val
+		ctrl.config.KD = val
+		ctrl.pid.SetTunings(ctrl.config.KP, ctrl.config.KI, val)
+		return nil
+
+	case "integral_windup_limit":
+		val, ok := patch.NewValue.(float64)
+		if !ok {
+			return fmt.Errorf("invalid value type for integral_windup_limit: %T", patch.NewValue)
+		}
+		p.config.Controllers[idx].IntegralWindupLimit = val
+		ctrl.config.IntegralWindupLimit = val
+		ctrl.pid.SetIntegralLimit(val)
+		return nil
+
+	case "hysteresis_percent":
+		val, ok := patch.NewValue.(float64)
+		if !ok {
+			return fmt.Errorf("invalid value type for hysteresis_percent: %T", patch.NewValue)
+		}
+		p.config.Controllers[idx].HysteresisPercent = val
+		ctrl.config.HysteresisPercent = val
+		return nil
+
+	case "kpi_metric_name":
+		name, ok := patch.NewValue.(string)
+		if !ok {
+			return fmt.Errorf("invalid value type for kpi_metric_name: %T", patch.NewValue)
+		}
+		p.config.Controllers[idx].KPIMetricName = name
+		ctrl.config.KPIMetricName = name
+		return nil
+
+	case "use_bayesian":
+		v, ok := patch.NewValue.(bool)
+		if !ok {
+			return fmt.Errorf("invalid value type for use_bayesian: %T", patch.NewValue)
+		}
+		p.config.Controllers[idx].UseBayesian = v
+		ctrl.config.UseBayesian = v
+		if v && ctrl.optimizer == nil {
+			bounds := make([][2]float64, len(ctrl.config.OutputConfigPatches))
+			for i, pch := range ctrl.config.OutputConfigPatches {
+				bounds[i] = [2]float64{pch.MinValue, pch.MaxValue}
+			}
+			ctrl.optimizer = bayesian.NewOptimizer(bounds)
+		}
+		if !v {
+			ctrl.optimizer = nil
+		}
+		return nil
+
+	case "stall_threshold":
+		v, ok := patch.NewValue.(int)
+		if !ok {
+			return fmt.Errorf("invalid value type for stall_threshold: %T", patch.NewValue)
+		}
+		p.config.Controllers[idx].StallThreshold = v
+		ctrl.config.StallThreshold = v
+		return nil
 	}
 
 	return fmt.Errorf("unsupported parameter: %s", patch.ParameterPath)

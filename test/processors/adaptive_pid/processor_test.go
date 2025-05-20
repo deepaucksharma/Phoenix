@@ -25,7 +25,7 @@ func TestAdaptivePIDProcessor(t *testing.T) {
 
 	// Create a default configuration
 	cfg := factory.CreateDefaultConfig().(*adaptive_pid.Config)
-	
+
 	// Modify config for testing
 	cfg.Controllers = []adaptive_pid.ControllerConfig{
 		{
@@ -75,7 +75,7 @@ func TestAdaptivePIDProcessor(t *testing.T) {
 
 	// Test the interface methods directly
 	// Test the OnConfigPatch method
-	
+
 	// Test modifying controller target - reference the controller by name in the path
 	targetPatch := interfaces.ConfigPatch{
 		PatchID:             "test-modify-target",
@@ -85,15 +85,15 @@ func TestAdaptivePIDProcessor(t *testing.T) {
 	}
 	err = updateableProc.OnConfigPatch(ctx, targetPatch)
 	require.NoError(t, err, "Failed to apply target patch")
-	
-	// Skip PID controller tuning test for now as it's not implemented 
+
+	// Skip PID controller tuning test for now as it's not implemented
 	// in the OnConfigPatch method yet
-	
+
 	// Get config status and verify
 	status, err := updateableProc.GetConfigStatus(ctx)
 	require.NoError(t, err, "Failed to get config status")
 	assert.True(t, status.Enabled, "Processor should be enabled")
-	
+
 	// Test invalid patch - non-existent controller
 	invalidPatch := interfaces.ConfigPatch{
 		PatchID:             "test-invalid-controller",
@@ -108,18 +108,18 @@ func TestAdaptivePIDProcessor(t *testing.T) {
 	t.Run("ProcessMetrics", func(t *testing.T) {
 		// Create test metrics with KPI values
 		metrics := generateTestKPIMetrics()
-		
+
 		// Process metrics
 		err = proc.ConsumeMetrics(ctx, metrics)
 		require.NoError(t, err)
-		
+
 		// Verify output - check that PID controller processes metrics
 		// Note: Since the implementation currently just logs patches and doesn't emit them as metrics,
 		// we'll just verify that processing completes without error
 		processedMetrics := sink.AllMetrics()
 		assert.NotEmpty(t, processedMetrics)
 	})
-	
+
 	// Shutdown the processor
 	err = proc.Shutdown(ctx)
 	require.NoError(t, err)
@@ -128,26 +128,81 @@ func TestAdaptivePIDProcessor(t *testing.T) {
 // generateTestKPIMetrics creates test metrics with values for PID controller
 func generateTestKPIMetrics() pmetric.Metrics {
 	metrics := pmetric.NewMetrics()
-	
+
 	// Create a resource metric
 	rm := metrics.ResourceMetrics().AppendEmpty()
 	rm.Resource().Attributes().PutStr("service.name", "test-service")
-	
+
 	// Add a scope metric
 	sm := rm.ScopeMetrics().AppendEmpty()
 	sm.Scope().SetName("test.scope")
-	
+
 	// Add the KPI metric that will trigger the PID controller
 	kpiMetric := sm.Metrics().AppendEmpty()
 	kpiMetric.SetName("aemf_impact_test_metric")
 	kpiMetric.SetEmptyGauge()
 	dp := kpiMetric.Gauge().DataPoints().AppendEmpty()
 	// Use a value different from the target to trigger PID controller
-	dp.SetDoubleValue(0.60)  // Target is 0.80, so this creates a gap
+	dp.SetDoubleValue(0.60) // Target is 0.80, so this creates a gap
 	dp.SetTimestamp(pcommon.NewTimestampFromTime(testNow))
-	
+
 	return metrics
 }
 
 // Test time value to use for consistency
 var testNow = time.Now()
+
+func TestOnConfigPatchTunings(t *testing.T) {
+	factory := adaptive_pid.NewFactory()
+	cfg := factory.CreateDefaultConfig().(*adaptive_pid.Config)
+	cfg.Controllers = []adaptive_pid.ControllerConfig{
+		{
+			Name:           "test_controller",
+			Enabled:        true,
+			KPIMetricName:  "aemf_impact_test_metric",
+			KPITargetValue: 0.80,
+			KP:             10,
+			KI:             2,
+			KD:             1,
+			OutputConfigPatches: []adaptive_pid.OutputConfigPatch{
+				{
+					TargetProcessorName: "adaptive_topk",
+					ParameterPath:       "k_value",
+					ChangeScaleFactor:   -5,
+					MinValue:            5,
+					MaxValue:            30,
+				},
+			},
+		},
+	}
+
+	ctx := context.Background()
+	sink := new(consumertest.MetricsSink)
+	settings := processor.Settings{
+		TelemetrySettings: component.TelemetrySettings{Logger: zap.NewNop()},
+		ID:                component.NewIDWithName(component.MustNewType("pid_decider"), ""),
+	}
+
+	proc, err := factory.CreateMetrics(ctx, settings, cfg, sink)
+	require.NoError(t, err)
+	up, ok := proc.(interfaces.UpdateableProcessor)
+	require.True(t, ok)
+	require.NoError(t, proc.Start(ctx, nil))
+
+	patches := []interfaces.ConfigPatch{
+		{PatchID: "kp", TargetProcessorName: component.NewIDWithName(component.MustNewType("test_controller"), ""), ParameterPath: "kp", NewValue: 20.0},
+		{PatchID: "ki", TargetProcessorName: component.NewIDWithName(component.MustNewType("test_controller"), ""), ParameterPath: "ki", NewValue: 3.0},
+		{PatchID: "kd", TargetProcessorName: component.NewIDWithName(component.MustNewType("test_controller"), ""), ParameterPath: "kd", NewValue: 2.0},
+		{PatchID: "iwl", TargetProcessorName: component.NewIDWithName(component.MustNewType("test_controller"), ""), ParameterPath: "integral_windup_limit", NewValue: 50.0},
+		{PatchID: "hyst", TargetProcessorName: component.NewIDWithName(component.MustNewType("test_controller"), ""), ParameterPath: "hysteresis_percent", NewValue: 5.0},
+		{PatchID: "metric", TargetProcessorName: component.NewIDWithName(component.MustNewType("test_controller"), ""), ParameterPath: "kpi_metric_name", NewValue: "another_metric"},
+		{PatchID: "bayesian", TargetProcessorName: component.NewIDWithName(component.MustNewType("test_controller"), ""), ParameterPath: "use_bayesian", NewValue: true},
+		{PatchID: "stall", TargetProcessorName: component.NewIDWithName(component.MustNewType("test_controller"), ""), ParameterPath: "stall_threshold", NewValue: 5},
+	}
+
+	for _, pch := range patches {
+		require.NoError(t, up.OnConfigPatch(ctx, pch))
+	}
+
+	require.NoError(t, proc.Shutdown(ctx))
+}
