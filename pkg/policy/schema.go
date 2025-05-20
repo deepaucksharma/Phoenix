@@ -37,34 +37,14 @@ const Schema = `{
     },
     "processors_config": {
       "type": "object",
-      "required": ["priority_tagger", "adaptive_topk", "cardinality_guardian", "reservoir_sampler", "others_rollup"],
+      "required": ["metric_pipeline", "cardinality_guardian", "reservoir_sampler"],
       "properties": {
-        "priority_tagger": {
+        "metric_pipeline": {
           "type": "object",
-          "required": ["enabled"],
+          "required": ["resource_filter", "transformation"],
           "properties": {
-            "enabled": { "type": "boolean" },
-            "rules": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": ["match"],
-                "properties": {
-                  "match": { "type": "string" },
-                  "priority": { "type": "string", "enum": ["critical", "high", "medium", "low"] }
-                }
-              }
-            }
-          }
-        },
-        "adaptive_topk": {
-          "type": "object",
-          "required": ["enabled", "k_value"],
-          "properties": {
-            "enabled": { "type": "boolean" },
-            "k_value": { "type": "integer", "minimum": 1 },
-            "k_min": { "type": "integer", "minimum": 1 },
-            "k_max": { "type": "integer", "minimum": 1 }
+            "resource_filter": { "type": "object" },
+            "transformation": { "type": "object" }
           }
         },
         "cardinality_guardian": {
@@ -81,13 +61,6 @@ const Schema = `{
           "properties": {
             "enabled": { "type": "boolean" },
             "reservoir_size": { "type": "integer", "minimum": 10 }
-          }
-        },
-        "others_rollup": {
-          "type": "object",
-          "required": ["enabled"],
-          "properties": {
-            "enabled": { "type": "boolean" }
           }
         }
       }
