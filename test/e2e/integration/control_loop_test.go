@@ -3,132 +3,118 @@ package e2e
 
 import (
 	"context"
+	"reflect"
 	"testing"
-	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/config/configtelemetry"
-	"go.opentelemetry.io/collector/consumer/consumertest"
+	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/pdata/pmetric"
-	"go.uber.org/zap"
+	"go.opentelemetry.io/collector/processor"
 	"go.uber.org/zap/zaptest"
 
-	"github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
+	"github.com/deepaucksharma/Phoenix/internal/connector/pic_connector"
+	pic_control_ext "github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
-	"github.com/deepaucksharma/Phoenix/pkg/metrics"
+	"github.com/deepaucksharma/Phoenix/test/testutils"
 )
 
 // TestControlLoop verifies the basic closed-loop operation of the SA-OMF system.
 func TestControlLoop(t *testing.T) {
-	// Create components
 	logger := zaptest.NewLogger(t)
 	ctx := context.Background()
 
-	// Create mock components
-	mockHost := componenttest.NewNopHost()
-	mockMetricsSink := new(consumertest.MetricsSink)
-	mockPICControl := newMockPICControl(t)
+	host := testutils.NewTestHost()
 
-	// Create processors
-	factory := adaptive_pid.NewFactory()
-	cfg := factory.CreateDefaultConfig().(*adaptive_pid.Config)
-
-	// Set up a controller targeting a specific KPI
-	cfg.Controllers[0].KPIMetricName = "aemf_impact_adaptive_topk_resource_coverage_percent"
-	cfg.Controllers[0].KPITargetValue = 0.9
-
-	processor, err := factory.CreateMetricsProcessor(
-		ctx,
-		processor.CreateSettings{
-			TelemetrySettings: component.TelemetrySettings{
-				Logger:         logger,
-				TracerProvider: nil,
-				MeterProvider:  nil,
-				MetricsLevel:   configtelemetry.LevelNone,
-			},
-			BuildInfo: component.BuildInfo{},
-		},
-		cfg,
-		mockMetricsSink,
-	)
+	// Create pic_control extension
+	extCfg := &pic_control_ext.Config{MaxPatchesPerMinute: 10, PatchCooldownSeconds: 0, SafeModeConfigs: map[string]any{}}
+	ext, err := pic_control_ext.NewExtension(extCfg, logger)
 	require.NoError(t, err)
+	host.AddExtension(component.NewID(component.MustNewType("pic_control")), ext)
+	require.NoError(t, ext.Start(ctx, host))
+	defer func() { _ = ext.Shutdown(ctx) }()
 
-	// Start processor
-	err = processor.Start(ctx, mockHost)
+	// Create mock adaptive processor and register with extension
+	targetID := component.NewID(component.MustNewType("adaptive_topk"))
+	mockProc := newMockProcessor()
+	registerProcessor(ext, targetID, mockProc)
+
+	// Create pic_connector exporter and start it
+	connFactory := pic_connector.NewFactory()
+	connCfg := connFactory.CreateDefaultConfig()
+	conn, err := connFactory.CreateMetricsExporter(ctx, exporter.CreateSettings{
+		ID:                component.NewID(component.MustNewType("pic_connector")),
+		TelemetrySettings: component.TelemetrySettings{Logger: logger},
+	}, connCfg)
 	require.NoError(t, err)
+	require.NoError(t, conn.Start(ctx, host))
+	defer func() { _ = conn.Shutdown(ctx) }()
 
-	// Create test metrics with a coverage value that's below target
-	metrics := createTestMetricsWithCoverage(0.7) // Well below target of 0.9
+	// Create adaptive_pid processor with the connector as next consumer
+	pidFactory := adaptive_pid.NewFactory()
+	pidCfg := pidFactory.CreateDefaultConfig().(*adaptive_pid.Config)
+	pidCfg.Controllers[0].KPIMetricName = "aemf_impact_adaptive_topk_resource_coverage_percent"
+	pidCfg.Controllers[0].KPITargetValue = 0.9
 
-	// Process metrics
-	err = processor.ConsumeMetrics(ctx, metrics)
+	pidProc, err := pidFactory.CreateMetricsProcessor(ctx, processor.CreateSettings{
+		TelemetrySettings: component.TelemetrySettings{Logger: logger},
+		ID:                component.NewID(component.MustNewType("pid_decider")),
+	}, pidCfg, conn)
 	require.NoError(t, err)
+	require.NoError(t, pidProc.Start(ctx, host))
+	defer func() { _ = pidProc.Shutdown(ctx) }()
 
-	// Verify a ConfigPatch was generated and passed to pic_control
-	require.NotEmpty(t, mockPICControl.patches, "No patches were generated")
+	// Send metrics below the KPI target
+	metrics := createTestMetricsWithCoverage(0.7)
+	require.NoError(t, pidProc.ConsumeMetrics(ctx, metrics))
 
-	// Find a patch for k_value
-	var kValuePatch *interfaces.ConfigPatch
-	for i := range mockPICControl.patches {
-		if mockPICControl.patches[i].ParameterPath == "k_value" {
-			kValuePatch = &mockPICControl.patches[i]
-			break
-		}
-	}
-
-	require.NotNil(t, kValuePatch, "No patch for k_value was generated")
-
-	// Verify the patch details
-	assert.Equal(t, "adaptive_topk", kValuePatch.TargetProcessorName.String(), "Unexpected target processor")
-
-	// Since coverage is too low, k_value should increase
-	newValue, ok := kValuePatch.NewValue.(float64)
-	require.True(t, ok, "New value should be a float64")
-	assert.Greater(t, newValue, float64(30), "k_value should increase when coverage is below target")
-
-	// Shutdown processor
-	err = processor.Shutdown(ctx)
+	// Verify a patch was applied through the extension
+	status, err := mockProc.GetConfigStatus(ctx)
 	require.NoError(t, err)
+	val, ok := status.Parameters["k_value"].(float64)
+	require.True(t, ok)
+	assert.Greater(t, val, float64(30))
 }
 
-// mockPICControl is a mock implementation of the PicControl interface
-type mockPICControl struct {
-	t       *testing.T
-	patches []interfaces.ConfigPatch
+// registerProcessor adds a processor to the extension's internal map using reflection
+func registerProcessor(ext *pic_control_ext.Extension, id component.ID, proc interfaces.UpdateableProcessor) {
+	v := reflect.ValueOf(ext).Elem().FieldByName("processors")
+	m := reflect.NewAt(v.Type(), unsafe.Pointer(v.UnsafeAddr())).Elem()
+	m.SetMapIndex(reflect.ValueOf(id), reflect.ValueOf(proc))
 }
 
-func newMockPICControl(t *testing.T) *mockPICControl {
-	return &mockPICControl{
-		t:       t,
-		patches: []interfaces.ConfigPatch{},
-	}
+// mockProcessor implements interfaces.UpdateableProcessor for testing
+type mockProcessor struct {
+	params map[string]any
 }
 
-func (m *mockPICControl) SubmitConfigPatch(ctx context.Context, patch interfaces.ConfigPatch) error {
-	m.patches = append(m.patches, patch)
-	m.t.Logf("Received patch: %s -> %s = %v", patch.TargetProcessorName, patch.ParameterPath, patch.NewValue)
+func newMockProcessor() *mockProcessor {
+	return &mockProcessor{params: make(map[string]any)}
+}
+
+func (m *mockProcessor) Start(context.Context, component.Host) error { return nil }
+func (m *mockProcessor) Shutdown(context.Context) error              { return nil }
+
+func (m *mockProcessor) OnConfigPatch(ctx context.Context, patch interfaces.ConfigPatch) error {
+	m.params[patch.ParameterPath] = patch.NewValue
 	return nil
 }
 
-// createTestMetricsWithCoverage creates test metrics with a specified coverage value
+func (m *mockProcessor) GetConfigStatus(ctx context.Context) (interfaces.ConfigStatus, error) {
+	return interfaces.ConfigStatus{Parameters: m.params, Enabled: true}, nil
+}
+
+// createTestMetricsWithCoverage creates a metric with the specified coverage value
 func createTestMetricsWithCoverage(coverage float64) pmetric.Metrics {
 	md := pmetric.NewMetrics()
-
-	// Add resource metrics
 	rm := md.ResourceMetrics().AppendEmpty()
-
-	// Add scope metrics
 	sm := rm.ScopeMetrics().AppendEmpty()
 	sm.Scope().SetName("adaptive_topk")
-
-	// Add coverage metric
-	coverageMetric := sm.Metrics().AppendEmpty()
-	coverageMetric.SetName("aemf_impact_adaptive_topk_resource_coverage_percent")
-	coverageMetric.SetEmptyGauge().DataPoints().AppendEmpty().SetDoubleValue(coverage)
-
+	m := sm.Metrics().AppendEmpty()
+	m.SetName("aemf_impact_adaptive_topk_resource_coverage_percent")
+	m.SetEmptyGauge().DataPoints().AppendEmpty().SetDoubleValue(coverage)
 	return md
 }
