@@ -9,10 +9,10 @@ import (
 
 // Item represents a counter in the Space-Saving algorithm
 type Item struct {
-	ID        string  // Identifier for this item
-	Count     float64 // Estimated count for this item
-	Error     float64 // Maximum error in the count estimate
-	index     int     // Index in the heap, used by heap.Interface
+	ID    string  // Identifier for this item
+	Count float64 // Estimated count for this item
+	Error float64 // Maximum error in the count estimate
+	index int     // Index in the heap, used by heap.Interface
 }
 
 // minHeap implements a min-heap of Items based on Count
@@ -20,11 +20,11 @@ type minHeap []*Item
 
 // SpaceSaving implements the Space-Saving algorithm for streaming top-k
 type SpaceSaving struct {
-	k           int               // Maximum number of items to track
-	items       map[string]*Item  // Map of item ID to item
-	heap        minHeap           // Min-heap of items
-	totalCount  float64           // Total count of all items seen
-	lock        sync.RWMutex      // For thread safety
+	k          int              // Maximum number of items to track
+	items      map[string]*Item // Map of item ID to item
+	heap       minHeap          // Min-heap of items
+	totalCount float64          // Total count of all items seen
+	lock       sync.RWMutex     // For thread safety
 }
 
 // NewSpaceSaving creates a new Space-Saving instance with the specified k
@@ -72,15 +72,15 @@ func (ss *SpaceSaving) Add(id string, count float64) {
 	// Otherwise, replace the minimum item
 	minItem := ss.heap[0]
 	error := minItem.Count
-	
+
 	// Remove the minimum item
 	delete(ss.items, minItem.ID)
-	
+
 	// Replace with the new item
 	minItem.ID = id
 	minItem.Count = minItem.Count + count
 	minItem.Error = error
-	
+
 	// Update the map and fix the heap
 	ss.items[id] = minItem
 	heap.Fix(&ss.heap, 0)

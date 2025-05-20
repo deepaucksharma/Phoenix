@@ -52,9 +52,9 @@ func (cfg *Config) Validate() error {
 		}
 
 		for j, patch := range controller.OutputConfigPatches {
-				// Check if target processor name is empty
-				if patch.TargetProcessorName == "" {
-							return fmt.Errorf("controllers[%d].output_config_patches[%d]: target_processor_name cannot be empty", i, j)
+			// Check if target processor name is empty
+			if patch.TargetProcessorName == "" {
+				return fmt.Errorf("controllers[%d].output_config_patches[%d]: target_processor_name cannot be empty", i, j)
 			}
 			if patch.ParameterPath == "" {
 				return fmt.Errorf("controllers[%d].output_config_patches[%d]: parameter_path cannot be empty", i, j)
