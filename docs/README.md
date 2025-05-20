@@ -2,55 +2,55 @@
 
 Welcome to the Phoenix (SA-OMF) documentation. This directory contains comprehensive guides and reference material to help you understand, configure, and use Phoenix effectively.
 
-## Documentation Structure
+## Core Documentation
 
-### Guides
+| Document | Description |
+|----------|-------------|
+| [Quick Start Guide](quick-start.md) | Get up and running quickly |
+| [Architecture Overview](architecture.md) | Understanding Phoenix's design |
+| [Adaptive Processing](adaptive-processing.md) | How Phoenix adapts automatically |
+| [PID Controllers](pid-controllers.md) | Details on the PID control implementation |
+| [Configuration Reference](configuration-reference.md) | Complete configuration options |
 
-The [guides](./guides/) directory contains step-by-step instructions for common tasks:
+## Architecture
 
-- [Quick Start Guide](guides/quick-start-guide.md) - Get up and running quickly
-- [Build Process Guide](guides/build-process.md) - Understand the build system
-- [Configuration Guide](guides/configuration-guide.md) - Configure Phoenix for your needs
-- [Monitoring Guide](guides/monitoring-guide.md) - Monitor Phoenix's behavior
-- [Troubleshooting Guide](guides/troubleshooting-guide.md) - Solve common issues
+The Phoenix architecture has evolved to a streamlined design where adaptation happens directly within processors. For details, see:
 
-### Architecture
+- [Architecture Overview](architecture.md) - Current architecture explanation
+- [Architecture Decision Records](architecture/adr/) - Key design decisions and rationale
 
-The [architecture](./architecture/) directory explains the system design:
+## Components
 
-- [Current Architecture](architecture/CURRENT_STATE.md) - Current architecture overview
-- [Architecture Decisions Records](architecture/adr/) - Key design decisions and rationale
+Phoenix includes several specialized components:
 
-### Concepts
+### Processors
 
-The [concepts](./concepts/) directory covers core ideas and principles:
+- **adaptive_topk**: Dynamically adjusts k parameter to maintain coverage
+- **others_rollup**: Aggregates low-priority resources to reduce cardinality
+- **priority_tagger**: Tags resources with priority levels
+- **adaptive_pid**: Provides monitoring and insights on system KPIs
+- **cardinality_guardian**: Controls metrics cardinality
 
-- [Adaptive Processing](concepts/adaptive-processing.md) - How Phoenix adapts automatically
-- [Modern Adaptive Architecture](concepts/modern-adaptive-architecture.md) - Current architectural approach
+### Control Components
 
-### Components
+- **PID Controller**: The core feedback control algorithm
+- **Safety Monitor**: Provides safeguards against resource exhaustion
 
-The [components](./components/) directory provides details on specific components:
+## Additional Resources
 
-- [Processors](components/processors/) - Documentation for each processor
-- [PID Controllers](components/pid/) - How PID controllers work
-
-### Reference
-
-Reference documentation includes:
-
-- [Configuration Reference](configuration-reference.md) - All configuration options
 - [Development Guide](development-guide.md) - Guide for Phoenix developers
+- [Improvements](improvements/stability-improvements.md) - Recent improvements and stability fixes
+- [Configuration Examples](../configs/) - Example configurations for different environments
 
 ## Getting Started
 
 If you're new to Phoenix, we recommend the following reading order:
 
-1. [Quick Start Guide](guides/quick-start-guide.md) - Get a working system quickly
-2. [Current Architecture](architecture/CURRENT_STATE.md) - Understand the current design
-3. [Adaptive Processing Concepts](concepts/adaptive-processing.md) - Learn the core concepts
-4. [Configuration Guide](guides/configuration-guide.md) - Configure for your use case
-5. [Monitoring Guide](guides/monitoring-guide.md) - Set up proper monitoring
+1. [Quick Start Guide](quick-start.md) - Get a working system quickly
+2. [Architecture Overview](architecture.md) - Understand the design
+3. [Adaptive Processing](adaptive-processing.md) - Learn the core concepts
+4. [PID Controllers](pid-controllers.md) - Understand the control mechanism
+5. [Configuration Reference](configuration-reference.md) - Configure for your use case
 
 ## Contributing to Documentation
 
@@ -61,7 +61,3 @@ To contribute improvements to this documentation:
 3. Submit a pull request with a clear description of the improvements
 
 We welcome corrections, clarifications, and additions that make the documentation more useful.
-
-## License
-
-This documentation is licensed under the same license as the Phoenix project. See the [LICENSE](../LICENSE) file for details.

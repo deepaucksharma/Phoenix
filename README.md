@@ -95,7 +95,7 @@ The PID controller is a key component that provides feedback-based control:
 - Includes configurable integral windup protection
 - Handles hysteresis to prevent oscillation
 - Features circuit breaker for oscillation detection and mitigation
-- See [PID Controller Tuning Guide](docs/components/pid/pid_controller_tuning.md) for details
+- See [PID Controllers](docs/pid-controllers.md) for details
 
 ## Quick Start
 
@@ -147,12 +147,11 @@ docker-compose up
 ## Documentation
 
 For more information, see:
-- [Current Architecture State](docs/architecture/CURRENT_STATE.md) 👈 Start here to understand Phoenix's current architecture
-- [Architecture Documentation](docs/architecture/README.md)
-- [Component Documentation](docs/components/README.md)
-- [Development Guide](docs/development-guide.md)
-- [Configuration Reference](docs/configuration-reference.md)
-- [Adaptive Processing Concepts](docs/concepts/adaptive-processing.md)
+- [Quick Start Guide](docs/quick-start.md) 👈 Start here to get up and running
+- [Architecture Overview](docs/architecture.md)
+- [Adaptive Processing](docs/adaptive-processing.md)
+- [PID Controllers](docs/pid-controllers.md)
+- [Documentation Home](docs/README.md)
 
 ## Recent Improvements
 
