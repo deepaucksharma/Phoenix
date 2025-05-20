@@ -14,9 +14,7 @@ This processor:
 
 ## Current Implementation
 
-> **Important Note**: This processor has evolved from its original design. In the current implementation, it functions as a self-contained adaptive component rather than generating configuration patches for other processors.
-
-Each adaptive processor (like adaptive_topk, others_rollup) now implements its own adaptation mechanisms internally, making the system more modular and simpler to maintain.
+> **Important Note**: This processor has evolved from its original design. It now functions as a self-contained adaptive component rather than generating configuration patches for other processors.
 
 ## Configuration
 

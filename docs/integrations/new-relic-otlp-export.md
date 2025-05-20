@@ -10,6 +10,16 @@ The configuration optimizes for:
 3. **Adaptive filtering**: Prioritizes important processes using PID control
 4. **Histogram optimization**: Ensures histograms are formatted optimally for New Relic
 
+## Process-Metrics OTLP Model
+
+Phoenix exports process metrics using a streamlined OTLP schema tailored for New Relic. Metrics are emitted from the `metric_pipeline` processor with a minimal set of attributes:
+
+- `service.name` identifies the host or service
+- `phoenix.priority` records the assigned priority level
+- `collector.name` is set to `phoenix-sa-omf`
+
+Low-priority processes are aggregated into rollup metrics prefixed with `phoenix.others.process`. CPU and memory metrics are converted to histograms so New Relic can render them effectively.
+
 ## Prerequisites
 
 1. A New Relic account with Metrics API access

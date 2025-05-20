@@ -28,11 +28,7 @@ All processors implement the `UpdateableProcessor` interface which allows them t
 
 ### Extensions
 
-Extensions provide additional functionality outside the data path:
-
-| Extension | Description | Status |
-|-----------|-------------|--------|
-| [pic_control_ext](./extensions/pic_control_ext.md) | Central governance layer for config changes | Implemented |
+There are currently no extensions shipped with Phoenix. This section is reserved for future components that may operate outside the data pipeline.
 
 ### Connectors
 
@@ -80,15 +76,8 @@ Phoenix implements a dual pipeline architecture that separates data processing f
         │                          │
         ▼                          ▼
 ┌───────────────┐          ┌───────────────┐
-│  Exporters    │          │ pic_control   │
-└───────────────┘          │   extension   │
-                           └───────┬───────┘
-                                   │
-                                   ▼
-                           ┌───────────────┐
-                           │ Configuration │
-                           │    Patches    │
-                           └───────┬───────┘
+│  Exporters    │          │ ConfigPatch   │
+└───────────────┘          └───────┬───────┘
                                    │
                                    ▼
                            ┌───────────────┐
