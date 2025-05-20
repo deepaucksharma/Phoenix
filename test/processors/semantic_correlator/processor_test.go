@@ -14,10 +14,16 @@ import (
 
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 	"github.com/deepaucksharma/Phoenix/internal/processor/semantic_correlator"
+	processors "github.com/deepaucksharma/Phoenix/test/processors/templates"
 )
 
 func TestSemanticCorrelatorConfigValidate(t *testing.T) {
 	cfg := &semantic_correlator.Config{}
+	assert.NoError(t, cfg.Validate())
+}
+
+func TestValidate(t *testing.T) {
+	cfg := &semantic_correlator.Config{Enabled: true, Method: "granger", Lag: 1, Bins: 5}
 	assert.NoError(t, cfg.Validate())
 }
 
@@ -42,6 +48,23 @@ func TestSemanticCorrelatorProcessor(t *testing.T) {
 	require.Len(t, processed, 1)
 	assert.Equal(t, metrics.ResourceMetrics().Len(), processed[0].ResourceMetrics().Len())
 	require.NoError(t, proc.Shutdown(ctx))
+}
+
+func TestSemanticCorrelatorWithTemplate(t *testing.T) {
+	factory := semantic_correlator.NewFactory()
+	cfg := factory.CreateDefaultConfig().(*semantic_correlator.Config)
+
+	testCases := []processors.ProcessorTestCase{
+		{
+			Name:         "Basic",
+			InputMetrics: processors.GenerateTestMetrics([]string{"p1"}),
+			ExpectedOutput: func(md pmetric.Metrics) bool {
+				return md.ResourceMetrics().Len() == 1
+			},
+		},
+	}
+
+	processors.RunProcessorTests(t, factory, cfg, testCases)
 }
 
 func generateTestMetrics() pmetric.Metrics {
