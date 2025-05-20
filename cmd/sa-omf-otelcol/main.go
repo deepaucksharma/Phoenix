@@ -15,8 +15,10 @@ import (
 
 	// Import processors that currently exist in the repository
 	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
+	"github.com/deepaucksharma/Phoenix/internal/processor/cpu_histogram_converter"
 	"github.com/deepaucksharma/Phoenix/internal/processor/histogram_aggregator"
 	"github.com/deepaucksharma/Phoenix/internal/processor/metric_pipeline"
+	"github.com/deepaucksharma/Phoenix/internal/processor/timeseries_estimator"
 )
 
 const (
@@ -64,6 +66,8 @@ func components() (otelcol.Factories, error) {
 		metric_pipeline.NewFactory(),
 		histogram_aggregator.NewFactory(),
 		adaptive_pid.NewFactory(),
+		timeseries_estimator.NewFactory(),
+		cpu_histogram_converter.NewFactory(),
 	}
 	factories.Processors = make(map[component.Type]processor.Factory)
 	for _, proc := range processors {
