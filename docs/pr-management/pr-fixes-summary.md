@@ -12,7 +12,7 @@ We've implemented an advanced anti-windup mechanism for the PID controller as sp
 
 2. **New API Methods**
    - `SetAntiWindupEnabled(enabled bool)` - Toggle anti-windup protection
-   - `SetAntiWindupGain(gain float64)` - Configure anti-windup aggressiveness
+   - `SetAntiWindupGain(gain float64) error` - Configure anti-windup aggressiveness
    - `GetAntiWindupSettings()` - Retrieve current anti-windup configuration
 
 3. **Improved Compute Method**
@@ -44,8 +44,12 @@ We've implemented an advanced anti-windup mechanism for the PID controller as sp
 controller := pid.NewController(1.0, 0.5, 0.1, 100.0)
 
 // Configure anti-windup behavior
-controller.SetAntiWindupGain(2.0) // More aggressive anti-windup
-controller.SetOutputLimits(-10.0, 10.0) // Define saturation points
+if err := controller.SetAntiWindupGain(2.0); err != nil {
+    // handle invalid gain
+}
+if err := controller.SetOutputLimits(-10.0, 10.0); err != nil {
+    // handle invalid limits
+}
 
 // Use controller as normal
 output := controller.Compute(currentValue)
