@@ -13,12 +13,11 @@ import (
 	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/receiver"
 
-	// Import processors that currently exist in the repository
+	// Import processors and extensions that exist in the repository
+	"github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
 	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
-	"github.com/deepaucksharma/Phoenix/internal/processor/cpu_histogram_converter"
 	"github.com/deepaucksharma/Phoenix/internal/processor/histogram_aggregator"
 	"github.com/deepaucksharma/Phoenix/internal/processor/metric_pipeline"
-	"github.com/deepaucksharma/Phoenix/internal/processor/timeseries_estimator"
 )
 
 const (
@@ -48,7 +47,8 @@ func components() (otelcol.Factories, error) {
 
 	// Extensions
 	extensions := []extension.Factory{
-		// Add more extensions as needed
+		// Register extension factories
+		pic_control_ext.NewFactory(),
 	}
 	factories.Extensions = make(map[component.Type]extension.Factory)
 	for _, ext := range extensions {
@@ -66,8 +66,6 @@ func components() (otelcol.Factories, error) {
 		metric_pipeline.NewFactory(),
 		histogram_aggregator.NewFactory(),
 		adaptive_pid.NewFactory(),
-		timeseries_estimator.NewFactory(),
-		cpu_histogram_converter.NewFactory(),
 	}
 	factories.Processors = make(map[component.Type]processor.Factory)
 	for _, proc := range processors {
