@@ -18,6 +18,19 @@ type TestConfig struct {
 	SliceParam []string `mapstructure:"slice_param"`
 }
 
+// Nested slice/struct configuration for advanced path tests
+type PatchCfg struct {
+	MaxValue int `mapstructure:"max_value"`
+}
+
+type ControllerCfg struct {
+	OutputConfigPatches []PatchCfg `mapstructure:"output_config_patches"`
+}
+
+type ComplexConfig struct {
+	Controllers []ControllerCfg `mapstructure:"controllers"`
+}
+
 func TestGetConfigByPath(t *testing.T) {
 	cfg := &TestConfig{
 		BaseConfig:  BaseConfig{Enabled: true},
@@ -203,4 +216,18 @@ func TestGetDefaultConfigStatus(t *testing.T) {
 
 	assert.Contains(t, status.Parameters, "intparam")
 	assert.Equal(t, 42, status.Parameters["intparam"])
+}
+
+func TestSetConfigByPathNestedSlices(t *testing.T) {
+	cfg := &ComplexConfig{
+		Controllers: []ControllerCfg{
+			{
+				OutputConfigPatches: []PatchCfg{{MaxValue: 1}, {MaxValue: 2}},
+			},
+		},
+	}
+
+	err := SetConfigByPath(cfg, "controllers[0].output_config_patches[1].max_value", 10)
+	require.NoError(t, err)
+	assert.Equal(t, 10, cfg.Controllers[0].OutputConfigPatches[1].MaxValue)
 }
