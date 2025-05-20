@@ -3,7 +3,6 @@ package metrics
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -14,7 +13,7 @@ import (
 type PIDMetrics struct {
 	// The name of the controller for identification in metrics
 	ControllerName string
-	
+
 	// Raw metric values
 	Error       float64
 	PValue      float64
@@ -24,11 +23,11 @@ type PIDMetrics struct {
 	RawOutput   float64
 	Setpoint    float64
 	Measurement float64
-	
+
 	// State tracking
 	LastEmission time.Time
 	EmitInterval time.Duration
-	
+
 	// Optional parent metrics emitter
 	Parent *MetricsEmitter
 }
@@ -37,7 +36,7 @@ type PIDMetrics struct {
 func NewPIDMetrics(controllerName string, parent *MetricsEmitter) *PIDMetrics {
 	return &PIDMetrics{
 		ControllerName: controllerName,
-		LastEmission:   time.Time{}, // Zero time
+		LastEmission:   time.Time{},      // Zero time
 		EmitInterval:   time.Second * 10, // Default interval
 		Parent:         parent,
 	}
@@ -71,33 +70,33 @@ func (p *PIDMetrics) EmitMetrics(ctx context.Context) pmetric.Metrics {
 	// Create metrics
 	metrics := pmetric.NewMetrics()
 	resourceMetrics := metrics.ResourceMetrics().AppendEmpty()
-	
+
 	// Add resource attributes
 	resourceMetrics.Resource().Attributes().PutStr("controller.name", p.ControllerName)
 	resourceMetrics.Resource().Attributes().PutStr("controller.type", "pid")
-	
+
 	// Create scope metrics
 	scopeMetrics := resourceMetrics.ScopeMetrics().AppendEmpty()
 	scopeMetrics.Scope().SetName("aemf.controller.pid")
-	
+
 	// Create metrics
 	createPIDMetrics(scopeMetrics.Metrics(), p)
-	
+
 	// Update last emission time
 	p.LastEmission = time.Now()
-	
+
 	// If parent emitter exists, add these metrics to its queue
 	if p.Parent != nil {
 		p.Parent.AddMetrics(metrics)
 	}
-	
+
 	return metrics
 }
 
 // createPIDMetrics adds PID controller metrics to the metrics collection.
 func createPIDMetrics(metrics pmetric.MetricSlice, p *PIDMetrics) {
 	now := pcommon.NewTimestampFromTime(time.Now())
-	
+
 	// Error metric
 	errorMetric := metrics.AppendEmpty()
 	errorMetric.SetName("aemf.controller.pid.error")
@@ -105,7 +104,7 @@ func createPIDMetrics(metrics pmetric.MetricSlice, p *PIDMetrics) {
 	dp := errorMetric.Gauge().DataPoints().AppendEmpty()
 	dp.SetTimestamp(now)
 	dp.SetDoubleValue(p.Error)
-	
+
 	// P term metric
 	pTermMetric := metrics.AppendEmpty()
 	pTermMetric.SetName("aemf.controller.pid.p_term")
@@ -113,7 +112,7 @@ func createPIDMetrics(metrics pmetric.MetricSlice, p *PIDMetrics) {
 	dp = pTermMetric.Gauge().DataPoints().AppendEmpty()
 	dp.SetTimestamp(now)
 	dp.SetDoubleValue(p.PValue)
-	
+
 	// I term metric
 	iTermMetric := metrics.AppendEmpty()
 	iTermMetric.SetName("aemf.controller.pid.i_term")
@@ -121,7 +120,7 @@ func createPIDMetrics(metrics pmetric.MetricSlice, p *PIDMetrics) {
 	dp = iTermMetric.Gauge().DataPoints().AppendEmpty()
 	dp.SetTimestamp(now)
 	dp.SetDoubleValue(p.IValue)
-	
+
 	// D term metric
 	dTermMetric := metrics.AppendEmpty()
 	dTermMetric.SetName("aemf.controller.pid.d_term")
@@ -129,7 +128,7 @@ func createPIDMetrics(metrics pmetric.MetricSlice, p *PIDMetrics) {
 	dp = dTermMetric.Gauge().DataPoints().AppendEmpty()
 	dp.SetTimestamp(now)
 	dp.SetDoubleValue(p.DValue)
-	
+
 	// Raw output metric
 	rawOutputMetric := metrics.AppendEmpty()
 	rawOutputMetric.SetName("aemf.controller.pid.raw_output")
@@ -137,7 +136,7 @@ func createPIDMetrics(metrics pmetric.MetricSlice, p *PIDMetrics) {
 	dp = rawOutputMetric.Gauge().DataPoints().AppendEmpty()
 	dp.SetTimestamp(now)
 	dp.SetDoubleValue(p.RawOutput)
-	
+
 	// Final output metric
 	outputMetric := metrics.AppendEmpty()
 	outputMetric.SetName("aemf.controller.pid.output")
@@ -145,7 +144,7 @@ func createPIDMetrics(metrics pmetric.MetricSlice, p *PIDMetrics) {
 	dp = outputMetric.Gauge().DataPoints().AppendEmpty()
 	dp.SetTimestamp(now)
 	dp.SetDoubleValue(p.Output)
-	
+
 	// Setpoint metric
 	setpointMetric := metrics.AppendEmpty()
 	setpointMetric.SetName("aemf.controller.pid.setpoint")
@@ -153,7 +152,7 @@ func createPIDMetrics(metrics pmetric.MetricSlice, p *PIDMetrics) {
 	dp = setpointMetric.Gauge().DataPoints().AppendEmpty()
 	dp.SetTimestamp(now)
 	dp.SetDoubleValue(p.Setpoint)
-	
+
 	// Measurement metric
 	measurementMetric := metrics.AppendEmpty()
 	measurementMetric.SetName("aemf.controller.pid.measurement")

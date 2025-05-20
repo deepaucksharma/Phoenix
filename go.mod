@@ -5,11 +5,16 @@ go 1.23
 toolchain go1.23.4
 
 require (
-	github.com/fsnotify/fsnotify v1.9.0
-	github.com/google/uuid v1.6.0
-	github.com/stretchr/testify v1.10.0
-	github.com/xeipuuv/gojsonschema v1.2.0
-	go.opentelemetry.io/collector/component v1.32.0
+        github.com/fsnotify/fsnotify v1.9.0
+        github.com/google/uuid v1.6.0
+        github.com/stretchr/testify v1.10.0
+        github.com/xeipuuv/gojsonschema v1.2.0
+        github.com/bahlo/generic-list-go v0.2.0 // indirect
+        github.com/buger/jsonparser v1.1.1 // indirect
+        github.com/invopop/jsonschema v0.13.0 // indirect
+        github.com/mailru/easyjson v0.7.7 // indirect
+        github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
+        go.opentelemetry.io/collector/component v1.32.0
 	go.opentelemetry.io/collector/consumer v1.32.0
 	go.opentelemetry.io/collector/consumer/consumertest v0.126.0
 	go.opentelemetry.io/collector/exporter v0.126.0
