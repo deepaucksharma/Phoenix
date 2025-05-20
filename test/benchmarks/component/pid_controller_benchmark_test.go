@@ -1,4 +1,4 @@
-package benchmark
+package component
 
 import (
 	"os"
