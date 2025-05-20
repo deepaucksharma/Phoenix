@@ -1,4 +1,4 @@
-// Package adaptive_topk implements a processor that dynamically selects top-k resources 
+// Package adaptive_topk implements a processor that dynamically selects top-k resources
 // based on self-tuning mechanisms.
 package adaptive_topk
 
@@ -8,7 +8,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/processor"
-	
+
 	"github.com/deepaucksharma/Phoenix/internal/processor/base"
 )
 
@@ -27,12 +27,12 @@ func NewFactory() processor.Factory {
 // createDefaultConfig creates the default configuration for the processor.
 func createDefaultConfig() component.Config {
 	return &Config{
-		BaseConfig:     base.WithEnabled(true),
-		KValue:         30,
-		KMin:           10,
-		KMax:           60,
-		ResourceField:  "process.name",
-		CounterField:   "process.cpu_seconds_total",
+		BaseConfig:    base.WithEnabled(true),
+		KValue:        30,
+		KMin:          10,
+		KMax:          60,
+		ResourceField: "process.name",
+		CounterField:  "process.cpu_seconds_total",
 	}
 }
 

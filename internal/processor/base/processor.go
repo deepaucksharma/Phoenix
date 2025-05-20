@@ -223,21 +223,21 @@ func SetConfigByPath(config interface{}, path string, value interface{}) error {
 			if !field.IsValid() {
 				return fmt.Errorf("field not found: %s", part)
 			}
-			
+
 			if field.Kind() == reflect.Ptr {
 				if field.IsNil() {
 					return fmt.Errorf("field is nil: %s", part)
 				}
 				field = field.Elem()
 			}
-			
+
 			current = field
 		}
 	}
 
 	// Update the target field
 	lastPart := parts[len(parts)-1]
-	
+
 	// Handle array access in the final field
 	if strings.Contains(lastPart, "[") && strings.Contains(lastPart, "]") {
 		fieldName := lastPart[:strings.Index(lastPart, "[")]
@@ -299,34 +299,34 @@ func GetDefaultConfigStatus(config interface{}) (interfaces.ConfigStatus, error)
 	if configVal.Kind() == reflect.Ptr {
 		configVal = configVal.Elem()
 	}
-	
+
 	if configVal.Kind() != reflect.Struct {
 		return interfaces.ConfigStatus{}, errors.New("config must be a struct")
 	}
-	
+
 	// Get all exported fields as parameters
 	params := make(map[string]any)
 	configType := configVal.Type()
-	
+
 	for i := 0; i < configVal.NumField(); i++ {
 		field := configVal.Field(i)
 		fieldType := configType.Field(i)
-		
+
 		// Skip unexported fields
 		if !fieldType.IsExported() {
 			continue
 		}
-		
+
 		// Add field to parameters
 		params[strings.ToLower(fieldType.Name)] = field.Interface()
 	}
-	
+
 	// Check if config implements EnabledConfig
 	var enabled bool
 	if enabledConfig, ok := config.(EnabledConfig); ok {
 		enabled = enabledConfig.IsEnabled()
 	}
-	
+
 	return interfaces.ConfigStatus{
 		Parameters: params,
 		Enabled:    enabled,
