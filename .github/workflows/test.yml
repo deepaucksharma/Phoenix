@@ -37,7 +37,7 @@ jobs:
       - name: Run integration tests
         if: github.event_name != 'pull_request'
         run: |
-          go test -mod=vendor -race -v ./test/integration/...
+          go test -mod=vendor -race -v ./test/e2e/...
 
       # Check for code consistency
       - name: Drift check
@@ -76,6 +76,37 @@ jobs:
       - name: Run benchmarks
         run: go test -mod=vendor -run=^$ -bench=. -benchmem ./...
         continue-on-error: true
+
+  scenario-tests:
+    name: Scenario ${{ matrix.scenario }}
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      matrix:
+        scenario: [BOOT-01, PIPE-03, CHAOS-CPU]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Run scenario tests
+        run: |
+          case "${{ matrix.scenario }}" in
+            BOOT-01)
+              go test -mod=vendor -run TestBoot01 ./test/e2e/integration
+              ;;
+            PIPE-03)
+              go test -mod=vendor -run TestPipe03 ./test/e2e/integration
+              ;;
+            CHAOS-CPU)
+              go test -mod=vendor -run TestChaosCPU ./test/e2e/benchmarks
+              ;;
+          esac
 
   # Security scanning with CodeQL
   security:
