@@ -1,68 +1,81 @@
-# Phoenix Project Cleanup Summary
+# Phoenix Codebase Cleanup Summary
 
-This document summarizes the cleanup actions performed on the Phoenix (SA-OMF) repository structure to improve organization, eliminate duplication, and enhance maintainability.
+This document summarizes the cleanup performed on the Phoenix (SA-OMF) codebase to remove unused, stubbed, and incomplete components.
 
-## Actions Completed
+## Components Removed
 
-### 1. Eliminated Deprecated Documentation
+### Processors
 
-- **Removed `/docs/agents/` Directory**: This directory was deprecated as its content had been migrated to the top-level `/agents/` directory.
-  - Deleted files: `AGENT_WORKFLOWS.md`, `AGENT_DECISIONS.md`, `AGENT_ONBOARDING.md`, and `README.md`
-  - All content was already consolidated in the `/agents/` directory files
+1. **Process Context Learner** (`internal/processor/process_context_learner/`)
+   - Stub processor that was incomplete and not used in production pipelines
+   - Removed implementation files and associated tests
 
-### 2. Consolidated Benchmark Directories
+2. **Multi-Temporal Adaptive Engine** (`internal/processor/multi_temporal_adaptive_engine/`)
+   - Placeholder processor that was never fully implemented
+   - Removed implementation files and associated tests
 
-- **Merged `/test/benchmark/` into `/test/benchmarks/`**: Eliminated duplicate benchmark directories by consolidating all benchmark-related code into a single location.
-  - Moved files: 
-    - `cache.go`
-    - `resource_profiler.go`
-    - `component/pid_controller_benchmark_test.go`
-    - `e2e/priority_tagger_benchmark_test.go`
-  - Removed redundant directory structure
+3. **Cardinality Guardian** (`internal/processor/cardinality_guardian/`)
+   - Incomplete processor that was superseded by the Reservoir Sampler
+   - Removed implementation files and associated tests
 
-### 3. Documented Docker Compose File Relationships
+### Extensions
 
-- **Created `/deploy/compose/README.md`**: Added documentation to explain the relationship between multiple docker-compose files in the repository.
-  - Documented purpose and usage of each docker-compose file
-  - Provided clear examples for different deployment scenarios
-  - Explained environment variable customization options
+1. **PIC Control Extension** (`internal/extension/pic_control_ext/`)
+   - Control extension that was not used in production configurations
+   - Removed implementation files and associated tests
 
-### 4. Organized Root-Level Documentation
+### Connectors
 
-- **Moved Planning Documents to `/docs/project-planning/`**:
-  - `implementation-plan.md`
-  - `audit-plan.md`
-  - `project-setup-review.md`
+1. **PIC Connector** (`internal/connector/pic_connector/`)
+   - Connector that was only used in tests, not in production pipelines
+   - Removed implementation files and associated tests
 
-- **Moved PR-Related Documents to `/docs/pr-management/`**:
-  - `pr-fixes-summary.md`
-  - `pr-merge-plan.md`
+### Interfaces
 
-- **Created Documentation Index**: Added `/docs/INDEX.md` to provide a comprehensive index of all documentation in the repository.
+1. **UpdateableProcessor Interface** (`internal/interfaces/updateable_processor.go`)
+   - Interface for dynamic processor configuration that was superseded by simpler mechanisms
+   - Removed the interface definition and associated tests
+   - Also removed the `ConfigPatch` type which was tightly coupled to this interface
 
-### 5. Enhanced Audit Framework Documentation
+### Control Components
 
-- **Added `/audit/README.md`**: Created a README file for the audit directory to explain its purpose, structure, and usage.
-  - Documented directory organization
-  - Listed key documents and their purposes
-  - Provided instructions for using audit tools
-  - Explained report format and contribution guidelines
+1. **Config Patch Validator** (`internal/control/configpatch/validator.go`)
+   - Test-only utility for validating config patches
+   - Removed implementation file and associated tests
 
-## Benefits
+## Documentation Updates
 
-These cleanup actions provide several benefits:
+Documentation was updated to reflect the removal of these components:
 
-1. **Reduced Duplication**: Eliminated redundant code and documentation
-2. **Improved Navigation**: Better organization makes it easier to find relevant files
-3. **Enhanced Documentation**: Added context to explain directory structures and relationships
-4. **Better Maintainability**: Cleaner structure makes the codebase easier to maintain
-5. **Clearer Guidance**: New README files help orient developers to the project structure
+1. Updated processor documentation to remove references to the `UpdateableProcessor` interface
+2. Updated extension documentation to remove references to `pic_control_ext`
+3. Updated connector documentation to remove references to `pic_connector`
+4. Updated configuration reference documentation to remove unused components
+5. Updated test documentation to reflect removed components
+
+## Configuration Updates
+
+Configuration files were updated to remove references to the removed components:
+
+1. Updated `configs/default/config.yaml` to remove references to `pic_control_ext` and `pic_connector`
+2. Updated imports and component registration in `cmd/sa-omf-otelcol/main.go`
+
+## Impact and Benefits
+
+The cleanup resulted in:
+
+1. **Codebase Reduction**: Removed approximately 3,400 lines of unused code
+2. **Simplified Architecture**: Reduced the number of unused abstractions
+3. **Improved Maintainability**: Removed technical debt and stubbed implementations
+4. **Cleaner Documentation**: Documentation now accurately reflects the current state of the system
 
 ## Next Steps
 
-While the current cleanup focused on structural organization, additional improvements could include:
+While this cleanup significantly improved the codebase, there are still areas that could be enhanced:
 
-1. Code quality enhancements (already addressed in previous cleanup tasks)
-2. Further consolidation of configuration files
-3. Implementation of more consistent naming conventions
-4. Review of test organization for additional consolidation opportunities
+1. **Test Refactoring**: Some tests may need further updates to fully adapt to the removal of the `UpdateableProcessor` interface
+2. **Build Files**: Ensure all build scripts and CI/CD pipelines are updated to reflect the removed components
+3. **Documentation Alignment**: Continue updating documentation to ensure consistency throughout
+4. **Performance Optimization**: With simplified architecture, focus on optimizing the remaining core components
+
+*Last updated: May 20, 2025*

@@ -30,7 +30,6 @@ type processorImpl struct {
 
 // Ensure processorImpl implements the required interfaces.
 var _ processor.Metrics = (*processorImpl)(nil)
-var _ interfaces.UpdateableProcessor = (*processorImpl)(nil)
 
 // newProcessor creates a new adaptive_topk processor.
 func newProcessor(cfg *Config, settings component.TelemetrySettings, nextConsumer consumer.Metrics, id component.ID) (*processorImpl, error) {

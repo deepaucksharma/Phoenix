@@ -12,19 +12,11 @@ This directory contains documentation for the various processors implemented in 
 
 ## Processor Concepts
 
-Processors are components that operate on metrics as they flow through the OpenTelemetry Collector pipeline. In SA-OMF, processors are extended with self-adapting capabilities through the UpdateableProcessor interface.
+Processors are components that operate on metrics as they flow through the OpenTelemetry Collector pipeline. In SA-OMF, processors can have self-adapting capabilities.
 
-### UpdateableProcessor Interface
+### Dynamic Configuration
 
-All SA-OMF processors implement the UpdateableProcessor interface, which allows their configuration to be dynamically adjusted at runtime. This is a core concept for enabling self-adaptation.
-
-```go
-type UpdateableProcessor interface {
-    component.Component
-    OnConfigPatch(ctx context.Context, patch ConfigPatch) error
-    GetConfigStatus(ctx context.Context) (ConfigStatus, error)
-}
-```
+Some SA-OMF processors support dynamic configuration adjustments at runtime. This is a core concept for enabling self-adaptation. The mechanism for this has been refactored in the latest version to use a more standardized approach.
 
 ## Common Processor Structure
 

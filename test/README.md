@@ -22,18 +22,15 @@ This directory contains a comprehensive testing framework for the SA-OMF (Phoeni
   - `integration/` - Integration tests for component interactions
   - `benchmarks/` - End-to-end performance benchmarks
 
-- `interfaces/` - Interface contract tests (e.g., UpdateableProcessor)
+- `interfaces/` - Interface contract tests
 
 - `processors/` - Tests for specific metric processors
   - `adaptive_pid/` - Tests for the PID decision processor
   - `priority_tagger/` - Tests for the priority tagging processor
-  - `process_context_learner/` - Tests for the context learning processor
   - `others_rollup/` - Tests for the others rollup processor
-  - `cardinality_guardian/` - Tests for the cardinality guardian processor
   - `templates/` - Shared test templates for processors
 
 - `extensions/` - Tests for custom extensions
-  - `pic_control_ext/` - Tests for the PIC control extension
 
 - `testutils/` - Shared testing utilities
   - `metrics_generator.go` - Generates test metrics
@@ -98,16 +95,16 @@ make test-coverage
 3. **Comprehensive**: Cover normal, edge, and error cases
 4. **Performance-Aware**: Include benchmarks for performance-critical components
 
-### Testing UpdateableProcessor Components
+### Testing Dynamic Configuration
 
-All processors implementing the UpdateableProcessor interface should use the common test utilities in the `interfaces` package:
+All processors supporting dynamic configuration should use the appropriate test utilities:
 
 ```go
 import "github.com/yourorg/sa-omf/test/interfaces"
 
 func TestMyProcessor(t *testing.T) {
     processor := createTestProcessor(t)
-    interfaces.TestUpdateableProcessor(t, processor)
+    // Test dynamic configuration
 }
 ```
 
