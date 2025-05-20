@@ -38,7 +38,7 @@ func TestMissingSelfMetrics(t *testing.T) {
 			{
 				Name:           "test_controller",
 				Enabled:        true,
-				KPIMetricName:  "test_kpi",  // This KPI won't be present
+				KPIMetricName:  "test_kpi", // This KPI won't be present
 				KPITargetValue: 0.9,
 				KP:             30,
 				KI:             5,
@@ -63,30 +63,30 @@ func TestMissingSelfMetrics(t *testing.T) {
 
 	// Create metrics with NO KPI data
 	emptyMetrics := createEmptyMetrics(t)
-	
+
 	// Process the metrics - this should detect missing KPI
 	patches, err := processor.ProcessMetricsForTest(ctx, emptyMetrics)
 	require.NoError(t, err, "Should not error with missing KPI metrics")
-	
+
 	// No patches should be generated when KPI is missing
 	assert.Empty(t, patches, "No patches should be generated with missing KPI")
 
 	// Verify the KPI missing metric is emitted
 	time.Sleep(100 * time.Millisecond) // Give time for metrics to be emitted
-	
+
 	kpiMissingMetrics := metricsCollector.GetMetricsByName("aemf_adaptive_pid_kpi_missing_total")
 	assert.NotEmpty(t, kpiMissingMetrics, "Should emit aemf_adaptive_pid_kpi_missing_total metric")
-	
+
 	// Now test recovery - send metrics with the KPI present
 	metricsWithKPI := createTestMetricsWithKPI(t, "test_kpi", 0.5)
-	
+
 	// Process the metrics again
 	patches, err = processor.ProcessMetricsForTest(ctx, metricsWithKPI)
 	require.NoError(t, err, "Failed to process metrics with KPI")
-	
+
 	// Should have generated patches with KPI present
 	assert.NotEmpty(t, patches, "Should generate patches when KPI is present")
-	
+
 	// Verify patches target the right parameter
 	for _, patch := range patches {
 		if patch.ParameterPath == "k_value" {
@@ -94,9 +94,9 @@ func TestMissingSelfMetrics(t *testing.T) {
 			return
 		}
 	}
-	
+
 	t.Fail()
-		t.Log("Expected to find patch for k_value parameter")
+	t.Log("Expected to find patch for k_value parameter")
 }
 
 // createEmptyMetrics creates metrics with no KPI data.
@@ -105,7 +105,7 @@ func createEmptyMetrics(t *testing.T) pmetric.Metrics {
 	// Add a resource metrics section with no relevant KPIs
 	resourceMetrics := metrics.ResourceMetrics().AppendEmpty()
 	scopeMetrics := resourceMetrics.ScopeMetrics().AppendEmpty()
-	
+
 	// Add some irrelevant metric
 	metric := scopeMetrics.Metrics().AppendEmpty()
 	metric.SetName("irrelevant_metric")
@@ -113,7 +113,7 @@ func createEmptyMetrics(t *testing.T) pmetric.Metrics {
 	dataPoint := gauge.DataPoints().AppendEmpty()
 	dataPoint.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 	dataPoint.SetDoubleValue(123.45)
-	
+
 	return metrics
 }
 
@@ -122,7 +122,7 @@ func createTestMetricsWithKPI(t *testing.T, kpiName string, value float64) pmetr
 	metrics := pmetric.NewMetrics()
 	resourceMetrics := metrics.ResourceMetrics().AppendEmpty()
 	scopeMetrics := resourceMetrics.ScopeMetrics().AppendEmpty()
-	
+
 	// Add KPI metric
 	metric := scopeMetrics.Metrics().AppendEmpty()
 	metric.SetName(kpiName)
@@ -130,6 +130,6 @@ func createTestMetricsWithKPI(t *testing.T, kpiName string, value float64) pmetr
 	dataPoint := gauge.DataPoints().AppendEmpty()
 	dataPoint.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 	dataPoint.SetDoubleValue(value)
-	
+
 	return metrics
 }

@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/pdata/pmetric"
 
 	"github.com/deepaucksharma/Phoenix/internal/control/safety"
 	"github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
@@ -37,11 +36,11 @@ func TestOverrideThresholds(t *testing.T) {
 
 	// Set up the safety monitor with standard thresholds
 	safetyConfig := &safety.Config{
-		CPUUsageThresholdMCores: 500,        // 0.5 cores
-		MemoryThresholdMiB:      200,        // 200 MiB
-		SafeModeCooldownSeconds: 5,          // Short for testing
-		OverrideExpirySeconds:   10,         // Override expiry after 10 seconds
-		MetricsCheckIntervalMs:  100,        // Check frequently for testing
+		CPUUsageThresholdMCores: 500, // 0.5 cores
+		MemoryThresholdMiB:      200, // 200 MiB
+		SafeModeCooldownSeconds: 5,   // Short for testing
+		OverrideExpirySeconds:   10,  // Override expiry after 10 seconds
+		MetricsCheckIntervalMs:  100, // Check frequently for testing
 	}
 
 	safetyMonitor := safety.NewMonitor(safetyConfig, component.TelemetrySettings{})
@@ -49,8 +48,8 @@ func TestOverrideThresholds(t *testing.T) {
 
 	// Mock the safety monitor's metrics readings for testing
 	mockMetricsProvider := &testutils.MockMetricsProvider{
-		CPUUsageMCores: 300,    // Below threshold
-		MemoryUsageMiB: 150,    // Below threshold
+		CPUUsageMCores: 300, // Below threshold
+		MemoryUsageMiB: 150, // Below threshold
 	}
 	safetyMonitor.SetMetricsProvider(mockMetricsProvider)
 
@@ -64,23 +63,23 @@ func TestOverrideThresholds(t *testing.T) {
 	picControlConfig.PolicyFile = "../policy/testdata/valid_policy.yaml"
 	picControlConfig.WatchPolicy = false // Disable watching for the test
 	picControlConfig.MetricsEmitter = metricsCollector
-	
+
 	picControlExt, err := pic_control_ext.NewPICControlExtension(picControlConfig, component.TelemetrySettings{})
 	require.NoError(t, err, "Failed to create pic_control extension")
-	
+
 	// Start the pic_control extension
 	mockHost := testutils.NewMockHost()
 	err = picControlExt.Start(ctx, mockHost)
 	require.NoError(t, err, "Failed to start pic_control extension")
 	defer picControlExt.Shutdown(ctx)
-	
+
 	// Register the safety monitor with pic_control
 	picControlExt.RegisterSafetyMonitor(safetyMonitor)
 
 	// Create a processor to test with
 	mockProcessor := testutils.NewMockUpdateableProcessor("test_processor")
 	mockProcessor.SetParameter("value", 10)
-	
+
 	err = picControlExt.RegisterUpdateableProcessor(mockProcessor)
 	require.NoError(t, err, "Failed to register mock processor")
 
@@ -105,19 +104,19 @@ func TestOverrideThresholds(t *testing.T) {
 	assert.Equal(t, 20, value, "Parameter should be updated")
 
 	// Now simulate resource exhaustion
-	mockMetricsProvider.CPUUsageMCores = 600    // Above threshold
-	mockMetricsProvider.MemoryUsageMiB = 150    // Still below memory threshold
-	
+	mockMetricsProvider.CPUUsageMCores = 600 // Above threshold
+	mockMetricsProvider.MemoryUsageMiB = 150 // Still below memory threshold
+
 	// Wait for safety monitor to detect high usage
 	time.Sleep(500 * time.Millisecond)
-	
+
 	// Verify safe mode is activated
 	assert.True(t, safetyMonitor.IsInSafeMode(), "Safe mode should be active")
-	
+
 	// Manually set safe mode in the pic_control extension for testing
 	// In a real system, this would happen via the safety monitor's callback
 	picControlExt.SetSafeMode(true)
-	
+
 	// Try to apply a normal patch - should be rejected
 	validPatch.PatchID = "rejected-patch"
 	validPatch.NewValue = 30
@@ -126,7 +125,7 @@ func TestOverrideThresholds(t *testing.T) {
 	value, exists = mockProcessor.GetParameter("value")
 	assert.True(t, exists, "value parameter should exist")
 	assert.Equal(t, 20, value, "Parameter should not be updated in safe mode")
-	
+
 	// Now create an urgent patch with override safety flag
 	urgentPatch := interfaces.ConfigPatch{
 		PatchID:             "urgent-override-patch",
@@ -138,33 +137,33 @@ func TestOverrideThresholds(t *testing.T) {
 		Source:              "test",
 		Timestamp:           time.Now().Unix(),
 		TTLSeconds:          300,
-		SafetyOverride:      true,  // Critical flag to override safety
+		SafetyOverride:      true, // Critical flag to override safety
 	}
-	
+
 	// Apply the urgent patch with safety override
 	err = picControlExt.ApplyConfigPatch(ctx, urgentPatch)
 	assert.NoError(t, err, "Urgent patch with safety override should be accepted")
 	value, exists = mockProcessor.GetParameter("value")
 	assert.True(t, exists, "value parameter should exist")
 	assert.Equal(t, 40, value, "Parameter should be updated")
-	
+
 	// Verify threshold values were temporarily increased
 	assert.Greater(t, safetyMonitor.GetCurrentCPUThreshold(), safetyConfig.CPUUsageThresholdMCores,
 		"CPU threshold should be temporarily increased")
-	
+
 	// Set usage back to normal levels and wait for override to expire
 	mockMetricsProvider.CPUUsageMCores = 300
-	
+
 	// Wait for override to expire
 	time.Sleep(12 * time.Second)
-	
+
 	// Verify thresholds returned to normal
 	assert.Equal(t, safetyConfig.CPUUsageThresholdMCores, safetyMonitor.GetCurrentCPUThreshold(),
 		"CPU threshold should return to normal after expiry")
-	
+
 	// Verify safe mode is deactivated after cooldown
 	assert.False(t, safetyMonitor.IsInSafeMode(), "Safe mode should be inactive")
-	
+
 	// Verify normal patches work again
 	validPatch.PatchID = "normal-again-patch"
 	validPatch.NewValue = 50

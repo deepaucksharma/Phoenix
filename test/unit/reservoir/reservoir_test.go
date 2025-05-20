@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 	"testing"
-	
+
 	"github.com/deepaucksharma/Phoenix/pkg/util/reservoir"
 )
 
@@ -39,7 +39,7 @@ func TestReservoirSampler(t *testing.T) {
 			if tt.items < tt.capacity {
 				expectedSize = tt.items
 			}
-			
+
 			if len(samples) != expectedSize {
 				t.Errorf("Reservoir size = %d, want %d", len(samples), expectedSize)
 			}
@@ -49,7 +49,7 @@ func TestReservoirSampler(t *testing.T) {
 			for _, item := range samples {
 				uniqueItems[item] = struct{}{}
 			}
-			
+
 			if len(uniqueItems) != len(samples) {
 				t.Errorf("Found %d unique items, but reservoir size is %d", len(uniqueItems), len(samples))
 			}
@@ -62,10 +62,10 @@ func TestReservoirSamplerDistribution(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping distribution test in short mode")
 	}
-	
+
 	capacity := 1000
 	itemCount := 100000
-	
+
 	rs := reservoir.NewReservoirSampler(capacity)
 
 	// Add items
@@ -75,11 +75,11 @@ func TestReservoirSamplerDistribution(t *testing.T) {
 
 	// Get samples
 	samples := rs.GetSamples()
-	
+
 	// Check distribution
 	buckets := 10
 	histogram := make([]int, buckets)
-	
+
 	for _, item := range samples {
 		val := item.(int)
 		bucket := (val * buckets) / itemCount
@@ -88,16 +88,16 @@ func TestReservoirSamplerDistribution(t *testing.T) {
 		}
 		histogram[bucket]++
 	}
-	
+
 	// Expected number per bucket is capacity / buckets
 	expected := float64(capacity) / float64(buckets)
 	for i, count := range histogram {
 		// Allow 20% error (chi-squared would be better but this is simple)
 		error := math.Abs(float64(count)-expected) / expected
 		t.Logf("Bucket %d: %d items (%.2f%% error)", i, count, error*100)
-		
+
 		if error > 0.2 {
-			t.Errorf("Bucket %d has %d items, expected around %.1f (error: %.2f%%)", 
+			t.Errorf("Bucket %d has %d items, expected around %.1f (error: %.2f%%)",
 				i, count, expected, error*100)
 		}
 	}
@@ -105,7 +105,7 @@ func TestReservoirSamplerDistribution(t *testing.T) {
 
 func TestStratifiedReservoirSampler(t *testing.T) {
 	srs := reservoir.NewStratifiedReservoirSampler()
-	
+
 	// Add items to different strata
 	strata := []string{"low", "medium", "high"}
 	capacities := map[string]int{
@@ -113,30 +113,30 @@ func TestStratifiedReservoirSampler(t *testing.T) {
 		"medium": 20,
 		"high":   30,
 	}
-	
+
 	itemsPerStratum := 100
-	
+
 	for _, stratum := range strata {
 		for i := 0; i < itemsPerStratum; i++ {
 			srs.Add(stratum, fmt.Sprintf("%s-item-%d", stratum, i), capacities[stratum])
 		}
 	}
-	
+
 	// Check total count
 	expectedCount := int64(itemsPerStratum * len(strata))
 	if srs.Count() != expectedCount {
 		t.Errorf("Total count = %d, want %d", srs.Count(), expectedCount)
 	}
-	
+
 	// Check individual strata
 	for _, stratum := range strata {
 		capacity := capacities[stratum]
 		samples := srs.GetStratumSamples(stratum)
-		
+
 		if len(samples) != capacity {
 			t.Errorf("Stratum %s: reservoir size = %d, want %d", stratum, len(samples), capacity)
 		}
-		
+
 		// Check all items belong to this stratum
 		for _, item := range samples {
 			s := item.(string)
@@ -145,16 +145,16 @@ func TestStratifiedReservoirSampler(t *testing.T) {
 			}
 		}
 	}
-	
+
 	// Test capacity change
 	newCapacity := 5
 	srs.SetCapacity("low", newCapacity)
 	samples := srs.GetStratumSamples("low")
 	if len(samples) != newCapacity {
-		t.Errorf("After capacity change, stratum 'low': reservoir size = %d, want %d", 
+		t.Errorf("After capacity change, stratum 'low': reservoir size = %d, want %d",
 			len(samples), newCapacity)
 	}
-	
+
 	// Test reset
 	srs.Reset()
 	for _, stratum := range strata {

@@ -12,21 +12,21 @@ import (
 
 // Monitor monitors system resources and activates/deactivates safe mode
 type Monitor struct {
-	config      *Config
-	telemetry   component.TelemetrySettings
-	inSafeMode  bool
-	lock        sync.RWMutex
-	stopCh      chan struct{}
+	config          *Config
+	telemetry       component.TelemetrySettings
+	inSafeMode      bool
+	lock            sync.RWMutex
+	stopCh          chan struct{}
 	metricsProvider MetricsProvider
 
 	// Threshold values
 	cpuThreshold int
 	memThreshold int
-	
+
 	// Threshold override
 	overrideActive bool
 	overrideExpiry time.Time
-	
+
 	// Safe mode cooldown
 	safeModeEnd time.Time
 }
@@ -34,15 +34,15 @@ type Monitor struct {
 // NewMonitor creates a new safety monitor
 func NewMonitor(config *Config, telemetry component.TelemetrySettings) *Monitor {
 	monitor := &Monitor{
-		config:      config,
-		telemetry:   telemetry,
-		inSafeMode:  false,
-		stopCh:      make(chan struct{}),
+		config:          config,
+		telemetry:       telemetry,
+		inSafeMode:      false,
+		stopCh:          make(chan struct{}),
 		metricsProvider: &DefaultMetricsProvider{},
-		cpuThreshold: config.CPUUsageThresholdMCores,
-		memThreshold: config.MemoryThresholdMiB,
+		cpuThreshold:    config.CPUUsageThresholdMCores,
+		memThreshold:    config.MemoryThresholdMiB,
 	}
-	
+
 	return monitor
 }
 
@@ -77,11 +77,11 @@ func (m *Monitor) IsInSafeMode() bool {
 func (m *Monitor) TemporarilyOverrideThresholds(seconds int) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	
+
 	// Increase thresholds by the configured multiplier
 	m.cpuThreshold = int(float64(m.config.CPUUsageThresholdMCores) * m.config.OverrideMultiplier)
 	m.memThreshold = int(float64(m.config.MemoryThresholdMiB) * m.config.OverrideMultiplier)
-	
+
 	// Set expiry time
 	expirySeconds := seconds
 	if expirySeconds <= 0 {
@@ -110,7 +110,7 @@ func (m *Monitor) checkMetrics(ctx context.Context) {
 	interval := time.Duration(m.config.MetricsCheckIntervalMs) * time.Millisecond
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
@@ -127,7 +127,7 @@ func (m *Monitor) checkMetrics(ctx context.Context) {
 func (m *Monitor) checkAndUpdateState() {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	
+
 	// Check if threshold override has expired
 	if m.overrideActive && time.Now().After(m.overrideExpiry) {
 		// Reset to normal thresholds
@@ -135,17 +135,17 @@ func (m *Monitor) checkAndUpdateState() {
 		m.memThreshold = m.config.MemoryThresholdMiB
 		m.overrideActive = false
 	}
-	
+
 	// Check if safe mode cooldown has ended
 	if m.inSafeMode && !m.safeModeEnd.IsZero() && time.Now().After(m.safeModeEnd) {
 		m.inSafeMode = false
 		m.safeModeEnd = time.Time{}
 	}
-	
+
 	// Get current metrics
 	cpuUsage := m.metricsProvider.GetCPUUsage()
 	memUsage := m.metricsProvider.GetMemoryUsage()
-	
+
 	// Check if thresholds are exceeded
 	if cpuUsage > m.cpuThreshold || memUsage > m.memThreshold {
 		// Enter safe mode

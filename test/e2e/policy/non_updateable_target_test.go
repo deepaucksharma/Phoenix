@@ -35,16 +35,16 @@ func TestNonUpdateableTarget(t *testing.T) {
 	// Create the pic_control extension with test configuration
 	extensionFactory := pic_control_ext.NewFactory()
 	defaultConfig := extensionFactory.CreateDefaultConfig().(*pic_control_ext.Config)
-	
+
 	// Configure with test settings
 	defaultConfig.PolicyFile = "testdata/valid_policy.yaml"
 	defaultConfig.WatchPolicy = false // Disable watching to avoid file system dependencies
 	defaultConfig.MetricsEmitter = metricsCollector
-	
+
 	// Create the extension
 	extension, err := pic_control_ext.NewPICControlExtension(defaultConfig, component.TelemetrySettings{})
 	require.NoError(t, err, "Failed to create pic_control extension")
-	
+
 	// Start the extension
 	mockHost := testutils.NewMockHost()
 	err = extension.Start(ctx, mockHost)
@@ -54,7 +54,7 @@ func TestNonUpdateableTarget(t *testing.T) {
 	// Register a standard updateable processor (for comparison)
 	mockTopK := testutils.NewMockUpdateableProcessor("adaptive_topk")
 	mockTopK.SetParameter("k_value", 10)
-	
+
 	err = extension.RegisterUpdateableProcessor(mockTopK)
 	require.NoError(t, err, "Failed to register mock processor")
 
@@ -73,7 +73,7 @@ func TestNonUpdateableTarget(t *testing.T) {
 
 	// Apply the patch targeting non-updateable component
 	err = extension.ApplyConfigPatch(ctx, nonUpdateablePatch)
-	
+
 	// Verify it was rejected with appropriate error
 	assert.Error(t, err, "Patch targeting non-updateable component should be rejected")
 	assert.Contains(t, err.Error(), "not registered", "Error should mention component not being registered")
@@ -81,14 +81,14 @@ func TestNonUpdateableTarget(t *testing.T) {
 	// Verify the proper metric was emitted
 	metrics := metricsCollector.GetMetrics()
 	foundTargetError := false
-	
+
 	for _, metric := range metrics {
 		if metric.Name == "aemf_patch_target_not_found_total" {
 			foundTargetError = true
 			break
 		}
 	}
-	
+
 	assert.True(t, foundTargetError, "patch_target_not_found_total metric should be emitted")
 
 	// Verify the updateable processor is still properly registered
@@ -103,11 +103,11 @@ func TestNonUpdateableTarget(t *testing.T) {
 		Timestamp:           time.Now().Unix(),
 		TTLSeconds:          300,
 	}
-	
+
 	// Apply the valid patch
 	err = extension.ApplyConfigPatch(ctx, validPatch)
 	assert.NoError(t, err, "Valid patch should be accepted")
-	
+
 	// Verify the parameter was updated on the valid target
 	value, exists := mockTopK.GetParameter("k_value")
 	assert.True(t, exists, "k_value parameter should exist")
@@ -128,7 +128,7 @@ func TestNonUpdateableTarget(t *testing.T) {
 
 	// Apply the patch targeting unregistered processor
 	err = extension.ApplyConfigPatch(ctx, unregisteredPatch)
-	
+
 	// Verify it was rejected with appropriate error
 	assert.Error(t, err, "Patch targeting unregistered processor should be rejected")
 	assert.Contains(t, err.Error(), "not registered", "Error should mention processor not being registered")

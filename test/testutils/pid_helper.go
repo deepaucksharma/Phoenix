@@ -85,12 +85,12 @@ func (h *PIDControlHelper) GenerateConfigPatches(ctx context.Context, controller
 
 // ControllerMapping defines how a controller maps to processors and parameters
 type ControllerMapping struct {
-	KPIMetricName    string
-	TargetProcessor  string
-	ParameterPath    string
-	ScaleFactor      float64
-	MinValue         float64
-	MaxValue         float64
+	KPIMetricName   string
+	TargetProcessor string
+	ParameterPath   string
+	ScaleFactor     float64
+	MinValue        float64
+	MaxValue        float64
 }
 
 // SimulateSystem simulates a system response to a control action
@@ -104,8 +104,8 @@ type SimulationResponse struct {
 // approaches the target based on the controller's output
 func SimpleExponentialResponse(controllerName string, currentValue, targetValue, rate float64) SimulationResponse {
 	// Calculate new value that moves toward target at the given rate
-	newValue := currentValue + (targetValue - currentValue) * rate
-	
+	newValue := currentValue + (targetValue-currentValue)*rate
+
 	return SimulationResponse{
 		KPIResponse: map[string]float64{
 			controllerName: newValue,

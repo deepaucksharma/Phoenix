@@ -72,17 +72,30 @@ For more detailed instructions, see the [Development Guide](docs/development-gui
     - Provides both PID and Bayesian optimization approaches
     - Configurable control parameters for each target
 
-- **PID Controllers**: Embedded control systems in adaptive processors
-  - Anti-windup protection
-  - Hysteresis for stable adjustments
-  - Min/max bound clamping
-  - Configurable gain parameters
-  - Oscillation detection and circuit breaking
+- **PID Controllers**: Self-regulating feedback control systems
+  - Proportional-Integral-Derivative terms for precise control
+  - Anti-windup protection to prevent integral term saturation
+  - Low-pass derivative filtering for noise reduction
+  - Oscillation detection and circuit breaking for stability
+  - Thread-safe implementation for concurrent access
+  - Configurable limits and bounds for all parameters
 
 - **Advanced Optimization**:
   - Bayesian optimization with Gaussian processes
   - Multi-dimensional parameter space exploration
   - Dynamic exploration/exploitation balance
+  - Latin Hypercube Sampling for efficient parameter space exploration
+
+## PID Control System
+
+The PID controller is a key component that provides feedback-based control:
+- Computes error between target value and measured value
+- Applies proportional, integral, and derivative terms to compute corrections
+- Generates stable control signals for processor reconfiguration
+- Includes configurable integral windup protection
+- Handles hysteresis to prevent oscillation
+- Features circuit breaker for oscillation detection and mitigation
+- See [PID Controller Tuning Guide](docs/components/pid/pid_controller_tuning.md) for details
 
 ## Quick Start
 

@@ -2,7 +2,7 @@ package safety
 
 // MetricsProvider defines the interface for components that provide resource usage metrics
 type MetricsProvider interface {
-	GetCPUUsage() int // Returns CPU usage in millicores (1000 = 1 core)
+	GetCPUUsage() int    // Returns CPU usage in millicores (1000 = 1 core)
 	GetMemoryUsage() int // Returns memory usage in MiB
 }
 

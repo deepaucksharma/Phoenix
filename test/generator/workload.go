@@ -3,13 +3,13 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"math/rand"
-	"time"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 // Process represents a simulated process with metrics
@@ -24,13 +24,13 @@ type Process struct {
 
 // Generator holds the workload generation state
 type Generator struct {
-	Processes       map[int]*Process
-	ProcessCount    int
-	Cardinality     int
-	SpikeFrequency  float64
-	StablePatterns  int
-	CurrentTick     int
-	ExitChan        chan struct{}
+	Processes      map[int]*Process
+	ProcessCount   int
+	Cardinality    int
+	SpikeFrequency float64
+	StablePatterns int
+	CurrentTick    int
+	ExitChan       chan struct{}
 }
 
 func main() {
@@ -66,7 +66,7 @@ func main() {
 	// Run the generator
 	log.Printf("Starting workload generator with %d processes and %d cardinality", *processCount, *cardinality)
 	tickerDone := make(chan struct{})
-	
+
 	go func() {
 		ticker := time.NewTicker(*tickInterval)
 		defer ticker.Stop()
@@ -110,11 +110,11 @@ func (g *Generator) initialize() {
 	for i := 0; i < g.ProcessCount; i++ {
 		pid := 1000 + i
 		g.Processes[pid] = &Process{
-			Name:    getRandomProcessName(),
-			PID:     pid,
-			CPU:     rand.Float64() * 0.2, // Initial CPU usage between 0-20%
-			Memory:  rand.Float64() * 500,  // Initial memory usage 0-500MB
-			Labels:  generateLabels(g.Cardinality, 5), // 5 labels per process
+			Name:   getRandomProcessName(),
+			PID:    pid,
+			CPU:    rand.Float64() * 0.2,             // Initial CPU usage between 0-20%
+			Memory: rand.Float64() * 500,             // Initial memory usage 0-500MB
+			Labels: generateLabels(g.Cardinality, 5), // 5 labels per process
 		}
 	}
 
@@ -191,11 +191,11 @@ func (g *Generator) tick() {
 			for i := 0; i < g.ProcessCount-currentCount; i++ {
 				pid := 10000 + g.CurrentTick*1000 + i
 				g.Processes[pid] = &Process{
-					Name:    getRandomProcessName(),
-					PID:     pid,
-					CPU:     rand.Float64() * 0.2,
-					Memory:  rand.Float64() * 500,
-					Labels:  generateLabels(g.Cardinality, 5),
+					Name:   getRandomProcessName(),
+					PID:    pid,
+					CPU:    rand.Float64() * 0.2,
+					Memory: rand.Float64() * 500,
+					Labels: generateLabels(g.Cardinality, 5),
 				}
 			}
 		}
@@ -203,16 +203,16 @@ func (g *Generator) tick() {
 
 	// Simulate metric output (in real implementation, this would emit to a file or endpoint)
 	// For now, just print summary
-	fmt.Printf("Processes: %d, Avg CPU: %.1f%%, Avg Memory: %.1f MB\n", 
-		len(g.Processes), 
-		calculateAverageCPU(g.Processes)*100, 
+	fmt.Printf("Processes: %d, Avg CPU: %.1f%%, Avg Memory: %.1f MB\n",
+		len(g.Processes),
+		calculateAverageCPU(g.Processes)*100,
 		calculateAverageMemory(g.Processes))
 }
 
 // Helper functions
 func getRandomProcessName() string {
 	processes := []string{
-		"node", "java", "python", "go", "ruby", "postgres", 
+		"node", "java", "python", "go", "ruby", "postgres",
 		"mysql", "redis", "nginx", "apache", "elasticsearch",
 		"kafka", "zookeeper", "mongodb", "cassandra", "prometheus",
 		"grafana", "kibana", "logstash", "fluentd", "consul",
@@ -224,20 +224,20 @@ func getRandomProcessName() string {
 
 func generateLabels(cardinality, count int) map[string]string {
 	labels := make(map[string]string)
-	
+
 	// Common label keys
 	keys := []string{
 		"environment", "region", "zone", "service", "team",
 		"version", "deployment", "cluster", "instance", "shard",
 	}
-	
+
 	// Generate random labels
 	for i := 0; i < count; i++ {
 		key := keys[rand.Intn(len(keys))]
 		value := fmt.Sprintf("val-%d", rand.Intn(cardinality))
 		labels[key] = value
 	}
-	
+
 	return labels
 }
 
@@ -245,7 +245,7 @@ func calculateAverageCPU(processes map[int]*Process) float64 {
 	if len(processes) == 0 {
 		return 0
 	}
-	
+
 	sum := 0.0
 	for _, proc := range processes {
 		sum += proc.CPU
@@ -257,7 +257,7 @@ func calculateAverageMemory(processes map[int]*Process) float64 {
 	if len(processes) == 0 {
 		return 0
 	}
-	
+
 	sum := 0.0
 	for _, proc := range processes {
 		sum += proc.Memory

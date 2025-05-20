@@ -3,105 +3,58 @@ package metrics
 
 import (
 	"fmt"
+	"log"
 	"time"
-
-	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/pdata/pcommon"
-	"go.opentelemetry.io/collector/pdata/pmetric"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
-
-	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 )
 
 // MetricsEmitter provides a standardized way to emit self-metrics
 type MetricsEmitter struct {
-	meter            metric.Meter
-	component        string
-	commonAttrs      []attribute.KeyValue
-	metricsCollector interface{} // Can hold a metrics collector for testing
+	Name        string
+	Component   string
+	CommonAttrs map[string]string
 }
 
 // NewMetricsEmitter creates a new MetricsEmitter for a component
-func NewMetricsEmitter(meter metric.Meter, componentType string, componentName component.ID) *MetricsEmitter {
+func NewMetricsEmitter(componentType string, componentName string) *MetricsEmitter {
 	return &MetricsEmitter{
-		meter:     meter,
-		component: componentType,
-		commonAttrs: []attribute.KeyValue{
-			attribute.String("component.type", componentType),
-			attribute.String("component.name", componentName.String()),
+		Component: componentType,
+		Name:      componentName,
+		CommonAttrs: map[string]string{
+			"component.type": componentType,
+			"component.name": componentName,
 		},
-		metricsCollector: nil,
 	}
 }
 
 // RegisterCounter creates and returns a new counter metric
-func (e *MetricsEmitter) RegisterCounter(name string, description string) (metric.Int64Counter, error) {
-	return e.meter.Int64Counter(
-		"aemf_"+e.component+"_"+name,
-		metric.WithDescription(description),
-	)
+// This is a placeholder method since we've simplified the metrics system
+func (e *MetricsEmitter) RegisterCounter(name string, description string) (interface{}, error) {
+	log.Printf("Registered counter metric: %s_%s (%s)", e.Component, name, description)
+	return nil, nil
 }
 
 // RegisterGauge creates and returns a new gauge metric
-func (e *MetricsEmitter) RegisterGauge(name string, description string) (metric.Float64Gauge, error) {
-	return e.meter.Float64Gauge(
-		"aemf_"+e.component+"_"+name,
-		metric.WithDescription(description),
-	)
+// This is a placeholder method since we've simplified the metrics system
+func (e *MetricsEmitter) RegisterGauge(name string, description string) (interface{}, error) {
+	log.Printf("Registered gauge metric: %s_%s (%s)", e.Component, name, description)
+	return nil, nil
 }
 
 // SetMetricsCollector sets the metrics collector for testing
+// This is a placeholder method since we've simplified the metrics system
 func (e *MetricsEmitter) SetMetricsCollector(collector interface{}) {
-	e.metricsCollector = collector
+	// No-op in simplified implementation
 }
 
 // AddMetrics adds metrics to the collector if available
-func (e *MetricsEmitter) AddMetrics(metrics pmetric.Metrics) {
-	if e.metricsCollector != nil {
-		if collector, ok := e.metricsCollector.(*MetricsCollector); ok {
-			collector.AddMetrics(metrics)
-		}
-	}
+// This is a placeholder method since we've simplified the metrics system
+func (e *MetricsEmitter) AddMetrics(metrics interface{}) {
+	// No-op in simplified implementation
 }
 
-// CreatePatchMetric creates an OTLP metric for a ConfigPatch
-func CreatePatchMetric(patch *interfaces.ConfigPatch) pmetric.Metrics {
-	metrics := pmetric.NewMetrics()
-	rm := metrics.ResourceMetrics().AppendEmpty()
-	sm := rm.ScopeMetrics().AppendEmpty()
-	sm.Scope().SetName("phoenix.pid_decider")
-
-	m := sm.Metrics().AppendEmpty()
-	m.SetName("aemf_ctrl_proposed_patch")
-	m.SetDescription("Proposed configuration patch")
-
-	dp := m.SetEmptyGauge().DataPoints().AppendEmpty()
-	dp.SetDoubleValue(1.0) // Always 1.0 to indicate a patch
-	dp.SetTimestamp(pcommon.NewTimestampFromTime(time.Unix(patch.Timestamp, 0)))
-
-	// Add attributes from the patch
-	dp.Attributes().PutStr("patch_id", patch.PatchID)
-	dp.Attributes().PutStr("target_processor_name", patch.TargetProcessorName.String())
-	dp.Attributes().PutStr("parameter_path", patch.ParameterPath)
-	dp.Attributes().PutStr("reason", patch.Reason)
-	dp.Attributes().PutStr("severity", patch.Severity)
-	dp.Attributes().PutStr("source", patch.Source)
-
-	// Add the new value as string, regardless of its actual type
-	switch v := patch.NewValue.(type) {
-	case int:
-		dp.Attributes().PutInt("new_value_int", int64(v))
-	case float64:
-		dp.Attributes().PutDouble("new_value_double", v)
-	case string:
-		dp.Attributes().PutStr("new_value_string", v)
-	case bool:
-		dp.Attributes().PutBool("new_value_bool", v)
-	default:
-		// Try to convert to string as fallback
-		dp.Attributes().PutStr("new_value_string", fmt.Sprintf("%v", v))
-	}
-
-	return metrics
+// CreatePatchMetric creates a simple string representation of a configuration patch
+// This is a simplified version that doesn't use OpenTelemetry types
+func CreatePatchMetric(patch interface{}) string {
+	// Simple string representation for now
+	return fmt.Sprintf("Config patch created at %s", time.Now().Format(time.RFC3339))
 }

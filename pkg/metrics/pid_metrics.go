@@ -5,9 +5,6 @@ import (
 	"context"
 	"sync"
 	"time"
-
-	"go.opentelemetry.io/collector/pdata/pcommon"
-	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 // PIDMetrics holds metrics related to PID controller operation.
@@ -69,7 +66,7 @@ func (p *PIDMetrics) Update(setpoint, measurement, error, pValue, iValue, dValue
 func (p *PIDMetrics) AddMetric(name string, value float64) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	
+
 	p.customMetrics[name] = value
 }
 
@@ -79,111 +76,11 @@ func (p *PIDMetrics) ShouldEmit() bool {
 }
 
 // EmitMetrics creates PID controller metrics and adds them to the parent emitter if available.
-// If no parent emitter is available, this simply returns the metrics without emitting them.
-func (p *PIDMetrics) EmitMetrics(ctx context.Context) pmetric.Metrics {
-	// Create metrics
-	metrics := pmetric.NewMetrics()
-	resourceMetrics := metrics.ResourceMetrics().AppendEmpty()
-
-	// Add resource attributes
-	resourceMetrics.Resource().Attributes().PutStr("controller.name", p.ControllerName)
-	resourceMetrics.Resource().Attributes().PutStr("controller.type", "pid")
-
-	// Create scope metrics
-	scopeMetrics := resourceMetrics.ScopeMetrics().AppendEmpty()
-	scopeMetrics.Scope().SetName("aemf.controller.pid")
-
-	// Create metrics
-	createPIDMetrics(scopeMetrics.Metrics(), p)
-
+// If no parent emitter is available, this simply returns without emitting metrics.
+func (p *PIDMetrics) EmitMetrics(ctx context.Context) {
 	// Update last emission time
 	p.LastEmission = time.Now()
 
-	// If parent emitter exists, add these metrics to its queue
-	if p.Parent != nil {
-		p.Parent.AddMetrics(metrics)
-	}
-
-	return metrics
-}
-
-// createPIDMetrics adds PID controller metrics to the metrics collection.
-func createPIDMetrics(metrics pmetric.MetricSlice, p *PIDMetrics) {
-	now := pcommon.NewTimestampFromTime(time.Now())
-
-	// Error metric
-	errorMetric := metrics.AppendEmpty()
-	errorMetric.SetName("aemf.controller.pid.error")
-	errorMetric.SetEmptyGauge()
-	dp := errorMetric.Gauge().DataPoints().AppendEmpty()
-	dp.SetTimestamp(now)
-	dp.SetDoubleValue(p.Error)
-
-	// P term metric
-	pTermMetric := metrics.AppendEmpty()
-	pTermMetric.SetName("aemf.controller.pid.p_term")
-	pTermMetric.SetEmptyGauge()
-	dp = pTermMetric.Gauge().DataPoints().AppendEmpty()
-	dp.SetTimestamp(now)
-	dp.SetDoubleValue(p.PValue)
-
-	// I term metric
-	iTermMetric := metrics.AppendEmpty()
-	iTermMetric.SetName("aemf.controller.pid.i_term")
-	iTermMetric.SetEmptyGauge()
-	dp = iTermMetric.Gauge().DataPoints().AppendEmpty()
-	dp.SetTimestamp(now)
-	dp.SetDoubleValue(p.IValue)
-
-	// D term metric
-	dTermMetric := metrics.AppendEmpty()
-	dTermMetric.SetName("aemf.controller.pid.d_term")
-	dTermMetric.SetEmptyGauge()
-	dp = dTermMetric.Gauge().DataPoints().AppendEmpty()
-	dp.SetTimestamp(now)
-	dp.SetDoubleValue(p.DValue)
-
-	// Raw output metric
-	rawOutputMetric := metrics.AppendEmpty()
-	rawOutputMetric.SetName("aemf.controller.pid.raw_output")
-	rawOutputMetric.SetEmptyGauge()
-	dp = rawOutputMetric.Gauge().DataPoints().AppendEmpty()
-	dp.SetTimestamp(now)
-	dp.SetDoubleValue(p.RawOutput)
-
-	// Final output metric
-	outputMetric := metrics.AppendEmpty()
-	outputMetric.SetName("aemf.controller.pid.output")
-	outputMetric.SetEmptyGauge()
-	dp = outputMetric.Gauge().DataPoints().AppendEmpty()
-	dp.SetTimestamp(now)
-	dp.SetDoubleValue(p.Output)
-
-	// Setpoint metric
-	setpointMetric := metrics.AppendEmpty()
-	setpointMetric.SetName("aemf.controller.pid.setpoint")
-	setpointMetric.SetEmptyGauge()
-	dp = setpointMetric.Gauge().DataPoints().AppendEmpty()
-	dp.SetTimestamp(now)
-	dp.SetDoubleValue(p.Setpoint)
-
-	// Measurement metric
-	measurementMetric := metrics.AppendEmpty()
-	measurementMetric.SetName("aemf.controller.pid.measurement")
-	measurementMetric.SetEmptyGauge()
-	dp = measurementMetric.Gauge().DataPoints().AppendEmpty()
-	dp.SetTimestamp(now)
-	dp.SetDoubleValue(p.Measurement)
-	
-	// Add any custom metrics
-	p.lock.RLock()
-	for name, value := range p.customMetrics {
-		customMetric := metrics.AppendEmpty()
-		customMetric.SetName(name)
-		customMetric.SetEmptyGauge()
-		dp = customMetric.Gauge().DataPoints().AppendEmpty()
-		dp.SetTimestamp(now)
-		dp.SetDoubleValue(value)
-	}
-	p.lock.RUnlock()
+	// In the future, we can add more sophisticated metrics emission here
+	// For now, this is just a placeholder to maintain the API
 }

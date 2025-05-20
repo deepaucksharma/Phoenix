@@ -14,10 +14,10 @@ import (
 	"go.opentelemetry.io/collector/receiver"
 
 	// Import your components here
-       "github.com/deepaucksharma/Phoenix/internal/processor/priority_tagger"
-       "github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
-       "github.com/deepaucksharma/Phoenix/internal/processor/adaptive_topk"
-       "github.com/deepaucksharma/Phoenix/internal/processor/reservoir_sampler"
+	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
+	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_topk"
+	"github.com/deepaucksharma/Phoenix/internal/processor/priority_tagger"
+	"github.com/deepaucksharma/Phoenix/internal/processor/reservoir_sampler"
 	// Add more component imports as they are implemented
 )
 

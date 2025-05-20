@@ -1,0 +1,30 @@
+task_id: "PID-003"
+title: "Implement Policy-In-Code (PIC) Control Extension"
+description: |
+  Implement the Policy-In-Code (PIC) Control Extension that serves as the central
+  governance layer for all configuration changes in the system. This extension will
+  manage the application of configuration patches from adaptive controllers to
+  target processors, enforce policy constraints, and provide safety mechanisms.
+assignee: "deepak"
+status: "open"
+priority: "high"
+tags:
+  - "core"
+  - "control-system"
+  - "extension"
+dependencies:
+  - "PID-001"
+acceptance_criteria:
+  - "Implementation of pic_control_ext extension with configuration management"
+  - "Support for registering UpdateableProcessor instances"
+  - "Policy enforcement for configuration patches"
+  - "Rate limiting for configuration changes"
+  - "Safety overrides for emergency conditions"
+  - "Thread-safety for concurrent operations"
+  - "Integration with PID controllers from adaptive_pid processor"
+  - "Metrics and telemetry for monitoring configuration changes"
+  - "Comprehensive unit and integration tests"
+  - "Documentation of extension capabilities and interfaces"
+estimated_time: "4d"
+created_at: "2025-05-19"
+updated_at: "2025-05-19"

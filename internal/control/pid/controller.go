@@ -6,7 +6,9 @@ import (
 	"sync"
 	"time"
 
+
 	"github.com/deepaucksharma/Phoenix/pkg/metrics"
+
 )
 
 // Controller implements a PID (Proportional-Integral-Derivative) controller
@@ -37,8 +39,8 @@ type Controller struct {
 	derivativeFilterCoeff float64 // Coefficient for derivative low-pass filter (between 0 and 1)
 
 	// Circuit Breaker for oscillation detection
-	circuitBreaker   *OscillationDetector // Detects and prevents oscillations
-	circuitBreakerEnabled bool            // Whether circuit breaker is enabled
+	circuitBreaker        *OscillationDetector // Detects and prevents oscillations
+	circuitBreakerEnabled bool                 // Whether circuit breaker is enabled
 
 	// Metrics
 	name             string              // Controller name for metrics
@@ -50,25 +52,25 @@ type Controller struct {
 // NewController creates a new PID controller with the specified gains
 func NewController(kp, ki, kd, setpoint float64) *Controller {
 	return &Controller{
-		kp:                  kp,
-		ki:                  ki,
-		kd:                  kd,
-		setpoint:            setpoint,
-		lastError:           0,
-		prevError:           0,
-		integral:            0,
-		lastTime:            time.Now(),
-		lastDeltaTime:       0.1, // Default initial time step
-		integralLimit:       1000, // Default, can be changed with SetIntegralLimit
-		outputMin:           -1000,
-		outputMax:           1000,
-		antiWindupEnabled:   true,  // Enable anti-windup by default
-		antiWindupGain:      1.0,   // Default gain for anti-windup
-		derivativeFilterCoeff: 0.2, // Default filter coefficient (0.2 = moderate filtering)
-		circuitBreaker:      NewOscillationDetector(), // Initialize circuit breaker
-		circuitBreakerEnabled: true, // Enable circuit breaker by default
-		name:                "pid_controller", // Default name
-		metricsCollector:    nil,     // No metrics collection by default
+		kp:                    kp,
+		ki:                    ki,
+		kd:                    kd,
+		setpoint:              setpoint,
+		lastError:             0,
+		prevError:             0,
+		integral:              0,
+		lastTime:              time.Now(),
+		lastDeltaTime:         0.1,  // Default initial time step
+		integralLimit:         1000, // Default, can be changed with SetIntegralLimit
+		outputMin:             -1000,
+		outputMax:             1000,
+		antiWindupEnabled:     true,                     // Enable anti-windup by default
+		antiWindupGain:        1.0,                      // Default gain for anti-windup
+		derivativeFilterCoeff: 0.2,                      // Default filter coefficient (0.2 = moderate filtering)
+		circuitBreaker:        NewOscillationDetector(), // Initialize circuit breaker
+		circuitBreakerEnabled: true,                     // Enable circuit breaker by default
+		name:                  "pid_controller",         // Default name
+		metricsCollector:      nil,                      // No metrics collection by default
 	}
 }
 
@@ -171,15 +173,15 @@ func (c *Controller) Compute(currentValue float64) float64 {
 		// Filtered derivative = α * current_derivative + (1-α) * previous_derivative
 		currentDerivative := (error - c.lastError) / dt
 		previousDerivative := (c.lastError - c.prevError) / c.lastDeltaTime
-		
+
 		// If this is the first or second iteration, use current derivative only
 		if c.prevError == 0 && c.lastError == 0 {
 			dTerm = c.kd * currentDerivative
 		} else {
 			// Apply low-pass filter to derivative term
-			filteredDerivative := c.derivativeFilterCoeff * currentDerivative + 
-				(1.0 - c.derivativeFilterCoeff) * previousDerivative
-			
+			filteredDerivative := c.derivativeFilterCoeff*currentDerivative +
+				(1.0-c.derivativeFilterCoeff)*previousDerivative
+
 			dTerm = c.kd * filteredDerivative
 		}
 	}
@@ -194,24 +196,24 @@ func (c *Controller) Compute(currentValue float64) float64 {
 	if c.circuitBreakerEnabled && c.circuitBreaker != nil {
 		// Add sample to circuit breaker
 		oscillating := c.circuitBreaker.AddSample(output, currentValue)
-		
+
 		// If circuit breaker is tripped, output zero
 		if oscillating && c.circuitBreaker.IsTripped() {
 			// When oscillating, use proportional term only with reduced gain
 			// This helps stabilize the system while still providing some control
 			safeKp := c.kp * 0.1 // Use 10% of normal P gain when in safe mode
 			output = safeKp * error
-			
+
 			// Reset integral to prevent windup
 			c.integral = 0
-			
+
 			// Add additional safeguard limits
-			if output > c.outputMax * 0.5 {
+			if output > c.outputMax*0.5 {
 				output = c.outputMax * 0.5
-			} else if output < c.outputMin * 0.5 {
+			} else if output < c.outputMin*0.5 {
 				output = c.outputMin * 0.5
 			}
-			
+
 			// Update metrics if enabled
 			if c.metricsCollector != nil {
 				c.metricsCollector.AddMetric("aemf.controller.pid.circuit_breaker_trips_total", 1)
@@ -315,14 +317,14 @@ func (c *Controller) GetState() (float64, float64, float64) {
 func (c *Controller) SetDerivativeFilterCoefficient(coefficient float64) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	
+
 	// Clamp coefficient to valid range
 	if coefficient < 0.0 {
 		coefficient = 0.0
 	} else if coefficient > 1.0 {
 		coefficient = 1.0
 	}
-	
+
 	c.derivativeFilterCoeff = coefficient
 }
 
@@ -330,7 +332,7 @@ func (c *Controller) SetDerivativeFilterCoefficient(coefficient float64) {
 func (c *Controller) GetDerivativeFilterCoefficient() float64 {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	
+
 	return c.derivativeFilterCoeff
 }
 
@@ -338,16 +340,16 @@ func (c *Controller) GetDerivativeFilterCoefficient() float64 {
 func (c *Controller) EnableCircuitBreaker(enabled bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	
+
 	c.circuitBreakerEnabled = enabled
 }
 
 // ConfigureCircuitBreaker configures the oscillation detector parameters
-func (c *Controller) ConfigureCircuitBreaker(sampleWindow int, thresholdPercent, minMagnitude float64, 
-                                           minDuration, resetDuration time.Duration) {
+func (c *Controller) ConfigureCircuitBreaker(sampleWindow int, thresholdPercent, minMagnitude float64,
+	minDuration, resetDuration time.Duration) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	
+
 	if c.circuitBreaker != nil {
 		c.circuitBreaker.Configure(sampleWindow, thresholdPercent, minMagnitude, minDuration, resetDuration)
 	}
@@ -357,7 +359,7 @@ func (c *Controller) ConfigureCircuitBreaker(sampleWindow int, thresholdPercent,
 func (c *Controller) ResetCircuitBreaker() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	
+
 	if c.circuitBreaker != nil {
 		c.circuitBreaker.Reset()
 	}
@@ -368,7 +370,7 @@ func (c *Controller) ResetCircuitBreaker() {
 func (c *Controller) TemporaryOverrideCircuitBreaker(duration time.Duration) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	
+
 	if c.circuitBreaker != nil {
 		c.circuitBreaker.TemporaryOverride(duration)
 	}
@@ -378,15 +380,15 @@ func (c *Controller) TemporaryOverrideCircuitBreaker(duration time.Duration) {
 func (c *Controller) GetCircuitBreakerStatus() map[string]interface{} {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	
+
 	if c.circuitBreaker != nil {
 		status := c.circuitBreaker.GetStatus()
 		status["enabled"] = c.circuitBreakerEnabled
 		return status
 	}
-	
+
 	return map[string]interface{}{
-		"enabled": c.circuitBreakerEnabled,
+		"enabled":   c.circuitBreakerEnabled,
 		"available": false,
 	}
 }

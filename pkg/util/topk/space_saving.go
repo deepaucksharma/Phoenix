@@ -72,7 +72,7 @@ func (ss *SpaceSaving) Add(id string, count float64) {
 
 	// Otherwise, replace the minimum item
 	minItem := ss.heap[0]
-	
+
 	// The true error bound is the minimum item's count
 	// This is the maximum possible error in our estimate for the new item
 	errorBound := minItem.Count
@@ -85,7 +85,7 @@ func (ss *SpaceSaving) Add(id string, count float64) {
 	// This ensures the new item will have a higher count than the minimum
 	minItem.ID = id
 	minItem.Count = minItem.Count + count
-	
+
 	// Store the error bound - this is the maximum overestimation possible
 	// due to replacing the minimum item
 	minItem.Error = errorBound
@@ -160,7 +160,7 @@ func (ss *SpaceSaving) SetK(newK int) {
 			heap.Push(&ss.heap, newItem)
 			ss.items[item.ID] = newItem
 		}
-		
+
 		// Update total count to account for discarded items
 		// This ensures GetCoverage() remains accurate
 		newTotalCount := 0.0
@@ -185,7 +185,7 @@ func (ss *SpaceSaving) GetCoverage() float64 {
 
 	topKCount := 0.0
 	totalError := 0.0
-	
+
 	// Sum all counts and errors
 	for _, item := range ss.items {
 		topKCount += item.Count
@@ -195,7 +195,7 @@ func (ss *SpaceSaving) GetCoverage() float64 {
 	// Adjust for potential overestimation
 	// The true count could be as low as (topKCount - totalError)
 	adjustedCoverage := (topKCount - totalError) / ss.totalCount
-	
+
 	// Ensure the coverage is between 0 and 1
 	if adjustedCoverage < 0 {
 		adjustedCoverage = 0

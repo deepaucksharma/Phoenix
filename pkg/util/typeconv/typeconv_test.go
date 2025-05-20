@@ -42,7 +42,7 @@ func TestToFloat64(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				
+
 				// Use InDelta for floating point comparisons to handle precision issues
 				// especially with float32 to float64 conversions
 				if tt.name == "float32" {
