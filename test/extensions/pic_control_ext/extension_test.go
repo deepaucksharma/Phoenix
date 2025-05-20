@@ -352,7 +352,7 @@ func TestPicControlExtension(t *testing.T) {
 
 	assert.NoError(t, conn.Shutdown(ctx))
 }
-
+< merge-all-prs
 // TestPicControlExtensionWithDefaultPolicy starts the extension using the default policy file
 func TestPicControlExtensionWithDefaultPolicy(t *testing.T) {
 	// Create temporary policy file from example policy
@@ -397,6 +397,7 @@ func TestPicControlExtensionWithDefaultPolicy(t *testing.T) {
 	require.NoError(t, ext.Shutdown(context.Background()))
 }
 
+> main
 func TestPicControlExtensionComprehensive(t *testing.T) {
 	t.Skip("Test temporarily disabled until API compatibility issues are fixed")
 	
