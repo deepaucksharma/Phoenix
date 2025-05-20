@@ -36,3 +36,5 @@ To implement a new connector:
 3. Add tests in `test/connectors/{connector_name}`
 4. Register your connector in `cmd/sa-omf-otelcol/main.go`
 5. Document in this directory
+
+For details on the built-in pic_connector see [internal/connector/pic_connector/README.md](../../internal/connector/pic_connector/README.md).

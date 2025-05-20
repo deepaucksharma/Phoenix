@@ -37,3 +37,5 @@ To implement a new extension:
 3. Add tests in `test/extensions/{extension_name}`
 4. Register your extension in `cmd/sa-omf-otelcol/main.go`
 5. Document in this directory
+
+For setup details see [internal/extension/pic_control_ext/README.md](../../internal/extension/pic_control_ext/README.md).

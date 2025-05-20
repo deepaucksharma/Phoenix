@@ -17,6 +17,8 @@ This ultra-detailed testing framework provides a comprehensive approach to valid
 
 ```bash
 # Create test environments with Docker Compose
+# Example compose files are provided in `test-environments/*`.
+# Run the following commands if you need to recreate them manually.
 mkdir -p test-environments/{bare,prometheus,full}
 
 # Bare Environment (just the collector)

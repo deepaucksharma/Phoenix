@@ -1,0 +1,29 @@
+version: '3'
+services:
+  sa-omf-collector:
+    image: yourorg/sa-omf-collector:latest
+    build: ../../
+    volumes:
+      - ./config.yaml:/etc/sa-omf/config.yaml
+      - ./policy.yaml:/etc/sa-omf/policy.yaml
+      - /proc:/proc:ro
+      - /sys:/sys:ro
+    ports:
+      - "8888:8888"
+      - "13133:13133"
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+  grafana:
+    image: grafana/grafana:10.2.0
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ../../dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"

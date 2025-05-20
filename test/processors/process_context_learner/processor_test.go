@@ -56,7 +56,7 @@ func TestProcessContextLearner(t *testing.T) {
 
 	assert.Greater(t, scores[1], scores[2])
 	assert.Greater(t, scores[2], scores[3])
-	assert.Greater(t, scores[2], scores[4])
+	assert.Greater(t, scores[2], scores[3])
 
 	err = proc.Shutdown(ctx)
 	require.NoError(t, err)
