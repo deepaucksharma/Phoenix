@@ -128,6 +128,24 @@ func TestPriorityTaggerProcessor(t *testing.T) {
 	err = updateableProc.OnConfigPatch(ctx, invalidPatch)
 	assert.Error(t, err, "Should fail with invalid regex")
 
+	// Invalid type for enabled
+	badEnable := interfaces.ConfigPatch{
+		PatchID:             "bad-enable",
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("priority_tagger"), ""),
+		ParameterPath:       "enabled",
+		NewValue:            "true",
+	}
+	assert.Error(t, updateableProc.OnConfigPatch(ctx, badEnable))
+
+	// Invalid type for rules
+	badRules := interfaces.ConfigPatch{
+		PatchID:             "bad-rules",
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("priority_tagger"), ""),
+		ParameterPath:       "rules",
+		NewValue:            "not-a-slice",
+	}
+	assert.Error(t, updateableProc.OnConfigPatch(ctx, badRules))
+
 	// Test actual metric processing functionality
 	t.Run("ProcessMetrics", func(t *testing.T) {
 		// Create test metrics
