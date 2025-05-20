@@ -1,4 +1,4 @@
-#\!/bin/bash
+#!/bin/bash
 # This script has been moved to scripts/setup/setup-offline-build.sh
 # Redirecting to the new location for backwards compatibility
 # This file will be removed in a future release
