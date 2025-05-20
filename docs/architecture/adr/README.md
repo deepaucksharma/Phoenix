@@ -15,9 +15,7 @@ Architecture Decision Records are documents that capture important architectural
 
 Use the script in the repository to create a new ADR:
 
-```bash
-scripts/dev/new-adr.sh "Title of the ADR"
-```
+./scripts/dev/new-adr.sh "Title of the ADR"
 
 This will create a new ADR with the correct format and naming convention. The
 generated file will be placed in `docs/architecture/adr/`.
