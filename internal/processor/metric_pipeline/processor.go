@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"sort"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
@@ -21,6 +22,12 @@ import (
 	"github.com/deepaucksharma/Phoenix/internal/processor/resource_filter"
 	"github.com/deepaucksharma/Phoenix/pkg/util/topk"
 )
+
+// cpuState holds the last observed CPU time for a process
+type cpuState struct {
+	lastCPUTime   float64
+	lastTimestamp pcommon.Timestamp
+}
 
 // processorImpl is the implementation of the metric_pipeline processor
 type processorImpl struct {
@@ -39,6 +46,9 @@ type processorImpl struct {
 	priorityCounts   map[string]int
 	rollupResources  int
 	histogramCount   int
+
+	// State for CPU time delta calculations
+	lastCPUTimeByProcess map[string]cpuState
 }
 
 // Ensure the processor implements required interfaces
@@ -75,10 +85,11 @@ func newProcessor(cfg *Config, settings processor.Settings, nextConsumer consume
 		histogramBuckets:    histogramBuckets,
 
 		// Initialize self-metrics related fields
-		metricsCollector: metrics.NewUnifiedMetricsCollector(settings.TelemetrySettings.Logger),
-		priorityCounts:   make(map[string]int),
-		rollupResources:  0,
-		histogramCount:   0,
+		metricsCollector:     metrics.NewUnifiedMetricsCollector(settings.TelemetrySettings.Logger),
+		priorityCounts:       make(map[string]int),
+		rollupResources:      0,
+		histogramCount:       0,
+		lastCPUTimeByProcess: make(map[string]cpuState),
 	}
 
 	// Create configuration manager
@@ -542,6 +553,10 @@ func (p *processorImpl) applyHistograms(md pmetric.Metrics) pmetric.Metrics {
 	// Reset histogram count
 	p.histogramCount = 0
 
+	// Track CPU time deltas across processes
+	var cpuDeltas []float64
+	cpuBoundaries, hasCPUBounds := p.histogramBuckets["process.cpu.time"]
+
 	// Create a new metrics collection
 	result := pmetric.NewMetrics()
 
@@ -576,6 +591,18 @@ func (p *processorImpl) applyHistograms(md pmetric.Metrics) pmetric.Metrics {
 
 				// Check if this metric should be converted to histogram
 				if _, needsHistogram := histogramMetrics[metric.Name()]; needsHistogram {
+					if metric.Name() == "process.cpu.time" && hasCPUBounds {
+						delta := p.recordCPUDelta(rm.Resource().Attributes(), metric)
+						if delta >= 0 {
+							cpuDeltas = append(cpuDeltas, delta)
+						}
+
+						// Keep original metric
+						newOrig := newSM.Metrics().AppendEmpty()
+						metric.CopyTo(newOrig)
+						continue
+					}
+
 					// Count histogram conversions for metrics
 					p.histogramCount++
 
@@ -676,6 +703,11 @@ func (p *processorImpl) applyHistograms(md pmetric.Metrics) pmetric.Metrics {
 		}
 	}
 
+	// After processing all resources, add aggregated CPU time histogram if any
+	if hasCPUBounds && len(cpuDeltas) > 0 {
+		p.addCPUTimeHistogram(result, cpuDeltas, cpuBoundaries)
+	}
+
 	return result
 }
 
@@ -722,6 +754,135 @@ func setAttributeValue(attrs pcommon.Map, key string, value interface{}) {
 	case bool:
 		attrs.PutBool(key, v)
 	}
+}
+
+// recordCPUDelta calculates CPU time delta for a process and stores state
+func (p *processorImpl) recordCPUDelta(attrs pcommon.Map, metric pmetric.Metric) float64 {
+	var val float64
+	var ts pcommon.Timestamp
+
+	switch metric.Type() {
+	case pmetric.MetricTypeGauge:
+		if metric.Gauge().DataPoints().Len() > 0 {
+			dp := metric.Gauge().DataPoints().At(0)
+			val = dp.DoubleValue()
+			ts = dp.Timestamp()
+		}
+	case pmetric.MetricTypeSum:
+		if metric.Sum().DataPoints().Len() > 0 {
+			dp := metric.Sum().DataPoints().At(0)
+			val = dp.DoubleValue()
+			ts = dp.Timestamp()
+		}
+	}
+
+	id := p.getProcessIdentifier(attrs)
+	state, ok := p.lastCPUTimeByProcess[id]
+	p.lastCPUTimeByProcess[id] = cpuState{lastCPUTime: val, lastTimestamp: ts}
+
+	if ok && ts > state.lastTimestamp {
+		delta := val - state.lastCPUTime
+		if delta >= 0 {
+			return delta
+		}
+	}
+	return -1
+}
+
+// getProcessIdentifier builds a stable identifier for a process
+func (p *processorImpl) getProcessIdentifier(attributes pcommon.Map) string {
+	var processName, processID string
+
+	attributes.Range(func(k string, v pcommon.Value) bool {
+		if k == "process.executable.name" || k == "process.name" {
+			if v.Type() == pcommon.ValueTypeStr {
+				processName = v.Str()
+			}
+			return false
+		}
+		return true
+	})
+
+	attributes.Range(func(k string, v pcommon.Value) bool {
+		if k == "process.pid" {
+			if v.Type() == pcommon.ValueTypeInt {
+				processID = fmt.Sprintf("%d", v.Int())
+			} else if v.Type() == pcommon.ValueTypeStr {
+				processID = v.Str()
+			}
+			return false
+		}
+		return true
+	})
+
+	if processName != "" && processID != "" {
+		return processName + ":" + processID
+	} else if processName != "" {
+		return processName
+	} else if processID != "" {
+		return "pid:" + processID
+	}
+
+	return "unknown"
+}
+
+// addCPUTimeHistogram creates a histogram metric from CPU time deltas
+func (p *processorImpl) addCPUTimeHistogram(md pmetric.Metrics, deltas []float64, boundaries []float64) {
+	sort.Float64s(deltas)
+
+	var rm pmetric.ResourceMetrics
+	if md.ResourceMetrics().Len() == 0 {
+		rm = md.ResourceMetrics().AppendEmpty()
+		rm.Resource().Attributes().PutStr("service.name", "phoenix")
+		rm.Resource().Attributes().PutStr("processor", Type)
+	} else {
+		rm = md.ResourceMetrics().At(0)
+	}
+
+	var sm pmetric.ScopeMetrics
+	if rm.ScopeMetrics().Len() == 0 {
+		sm = rm.ScopeMetrics().AppendEmpty()
+		sm.Scope().SetName("phoenix")
+	} else {
+		sm = rm.ScopeMetrics().At(0)
+	}
+
+	metric := sm.Metrics().AppendEmpty()
+	metric.SetName("process.cpu.time_histogram")
+	metric.SetDescription("Distribution of CPU time deltas across processes")
+	metric.SetUnit("s")
+
+	hist := metric.SetEmptyHistogram()
+	hist.SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
+
+	dp := hist.DataPoints().AppendEmpty()
+	now := pcommon.NewTimestampFromTime(time.Now())
+	dp.SetTimestamp(now)
+	dp.SetStartTimestamp(now)
+	dp.ExplicitBounds().FromRaw(boundaries)
+
+	counts := make([]uint64, len(boundaries)+1)
+	for _, v := range deltas {
+		idx := 0
+		for idx < len(boundaries) && v > boundaries[idx] {
+			idx++
+		}
+		counts[idx]++
+	}
+
+	var sum float64
+	for _, v := range deltas {
+		sum += v
+	}
+
+	dp.BucketCounts().FromRaw(counts)
+	dp.SetCount(uint64(len(deltas)))
+	dp.SetSum(sum)
+
+	p.histogramCount++
+	p.metricsCollector.AddCounter("phoenix.histogram.conversions", "", "").
+		WithValue(1.0).
+		WithAttributes(map[string]string{"metric_name": "process.cpu.time"})
 }
 
 // Start initializes the processor and sets up metrics collection
