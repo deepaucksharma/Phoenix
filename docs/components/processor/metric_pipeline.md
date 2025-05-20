@@ -1,6 +1,6 @@
 # Metric Pipeline Processor
 
-The `metric_pipeline` processor is a unified processor that combines resource filtering and metric transformation into a single processing step. It replaces multiple separate processors (priority_tagger, adaptive_topk, others_rollup, and attribute processors) to improve performance and simplify configuration.
+The `metric_pipeline` processor combines resource filtering and metric transformation into a single processing step. This unified design improves performance and simplifies configuration.
 
 ## Architecture
 
@@ -142,7 +142,7 @@ The processor implements the `UpdateableProcessor` interface, allowing its confi
 - Threshold adjustments for prioritization
 - On-the-fly changes to attribute handling and histogram configuration
 
-Configuration patches can be applied programmatically or through the pic_control extension.
+Configuration patches can be applied programmatically through the collector API.
 
 ## Performance Considerations
 
@@ -220,23 +220,3 @@ processors:
             action: "insert"
             value: {{ .Resource.Attributes.GetString "aemf.process.priority" "unknown" }}
 ```
-
-## Comparison with Individual Processors
-
-The `metric_pipeline` processor replaces and consolidates the following processors:
-
-1. **priority_tagger**: 
-   - *Before*: Tagged resources with priority levels based on regex patterns.
-   - *Now*: Handled by the `resource_filter` with `priority_rules`.
-
-2. **adaptive_topk**:
-   - *Before*: Selected top K resources based on a metric value.
-   - *Now*: Handled by the `resource_filter` with `topk` configuration, with K values adjustable via adaptive_pid.
-
-3. **others_rollup**:
-   - *Before*: Aggregated metrics for non-priority processes.
-   - *Now*: Handled by the `resource_filter` with `rollup` configuration.
-
-4. **attributes** processor and **histogram_aggregator**:
-   - *Before*: Separate processors for attribute manipulation and histogram generation.
-   - *Now*: Integrated into the `transformation` section of the metric_pipeline.
