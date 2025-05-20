@@ -100,7 +100,7 @@ func newPicControlExtension(config *Config, settings component.TelemetrySettings
 		processors:     make(map[string]interfaces.UpdateableProcessor),
 		config:         config,
 		logger:         settings.Logger,
-		metricsEmitter: metrics.NewMetricsEmitter("pic_control_ext", nil),
+		metricsEmitter: metrics.NewMetricsEmitter("pic_control_ext", "extension"),
 		safeMode:       false,
 		safetyMonitors: make([]interfaces.SafetyMonitor, 0),
 		patchHistory:   make([]patchRecord, 0, config.HistorySize),

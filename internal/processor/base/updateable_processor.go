@@ -33,27 +33,27 @@ func NewUpdateableProcessor(
 	config config.EnabledConfig,
 ) *UpdateableProcessor {
 	base := NewBaseProcessor(logger, next, name, id)
-	
+
 	up := &UpdateableProcessor{
 		BaseProcessor: base,
 		config:        config,
 		name:          name,
 	}
-	
+
 	// Create the configuration manager
 	up.configManager = config.NewManager(logger, up, config)
-	
+
 	return up
 }
 
 // Start initializes the processor.
 func (p *UpdateableProcessor) Start(ctx context.Context, host component.Host) error {
 	// Initialize metrics emitter if available
-	metricsEmitter := metrics.NewMetricsEmitter()
-	
+	metricsEmitter := metrics.NewMetricsEmitter("processor", p.name)
+
 	// Set metrics emitter field in base processor
 	p.metricsEmitter = metricsEmitter
-	
+
 	return nil
 }
 
@@ -66,7 +66,7 @@ func (p *UpdateableProcessor) GetName() string {
 func (p *UpdateableProcessor) OnConfigPatch(ctx context.Context, patch interfaces.ConfigPatch) error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	
+
 	// Use the standardized configuration manager
 	return p.configManager.HandleConfigPatch(ctx, patch)
 }
@@ -75,7 +75,7 @@ func (p *UpdateableProcessor) OnConfigPatch(ctx context.Context, patch interface
 func (p *UpdateableProcessor) GetConfigStatus(ctx context.Context) (interfaces.ConfigStatus, error) {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
-	
+
 	// Use the standardized configuration manager
 	return p.configManager.GetConfigStatus(ctx)
 }
