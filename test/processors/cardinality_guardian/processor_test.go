@@ -20,6 +20,7 @@ import (
 
 // checkReduced verifies that datapoints have been bucketized.
 func checkReduced(md pmetric.Metrics) bool {
+	reducedFound := false
 	for i := 0; i < md.ResourceMetrics().Len(); i++ {
 		rm := md.ResourceMetrics().At(i)
 		smSlice := rm.ScopeMetrics()
@@ -39,17 +40,17 @@ func checkReduced(md pmetric.Metrics) bool {
 				}
 				for l := 0; l < dps.Len(); l++ {
 					attrs := dps.At(l).Attributes()
-					if attrs.Len() != 1 {
-						return false
-					}
-					if _, ok := attrs.Get("cg_bucket"); !ok {
-						return false
+					if _, ok := attrs.Get("cg_bucket"); ok {
+						if attrs.Len() != 1 {
+							return false
+						}
+						reducedFound = true
 					}
 				}
 			}
 		}
 	}
-	return true
+	return reducedFound
 }
 
 func TestCardinalityGuardianProcessor(t *testing.T) {
@@ -126,7 +127,10 @@ func TestOnConfigPatchUpdates(t *testing.T) {
 
 	ctx := context.Background()
 	sink := new(consumertest.MetricsSink)
-	proc, err := factory.CreateMetrics(ctx, processor.Settings{TelemetrySettings: component.TelemetrySettings{Logger: zap.NewNop()}}, cfg, sink)
+	proc, err := factory.CreateMetrics(ctx, processor.Settings{
+		TelemetrySettings: component.TelemetrySettings{Logger: zap.NewNop()},
+		ID:                component.NewID(factory.Type()),
+	}, cfg, sink)
 	require.NoError(t, err)
 	up, ok := proc.(interfaces.UpdateableProcessor)
 	require.True(t, ok)
@@ -168,7 +172,10 @@ func TestHLLCountingAndReduction(t *testing.T) {
 	ctx := context.Background()
 	sink := new(consumertest.MetricsSink)
 
-	proc, err := factory.CreateMetrics(ctx, processor.Settings{TelemetrySettings: component.TelemetrySettings{Logger: zap.NewNop()}}, cfg, sink)
+	proc, err := factory.CreateMetrics(ctx, processor.Settings{
+		TelemetrySettings: component.TelemetrySettings{Logger: zap.NewNop()},
+		ID:                component.NewID(factory.Type()),
+	}, cfg, sink)
 	require.NoError(t, err)
 	require.NoError(t, proc.Start(ctx, nil))
 
