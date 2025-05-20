@@ -16,6 +16,12 @@ func TestForecastEMA(t *testing.T) {
 
 func TestDetectZScore(t *testing.T) {
 	data := []float64{1, 2, 3, 100}
-	idx := timeseries.DetectZScore(data, 2)
+	// Use a lower threshold to detect anomalies
+	idx := timeseries.DetectZScore(data, 1)
+	assert.Equal(t, 1, len(idx))
+	assert.Equal(t, 3, idx[0])
+	
+	// Use a higher threshold that shouldn't detect anomalies
+	idx = timeseries.DetectZScore(data, 2)
 	assert.Equal(t, 0, len(idx))
 }

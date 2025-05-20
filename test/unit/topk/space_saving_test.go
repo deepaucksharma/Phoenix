@@ -49,6 +49,7 @@ func TestSpaceSavingBasic(t *testing.T) {
 
 	// Get the top-k items again
 	items = ss.GetTopK()
+<<<<<<< HEAD
 	
 	// Verify ordering and counts after update
 	counts = map[string]float64{}
@@ -64,6 +65,18 @@ func TestSpaceSavingBasic(t *testing.T) {
 	assert.Equal(t, 10.0, counts["item1"])
 	assert.Equal(t, 11.0, counts["item3"])
 	assert.Equal(t, 5.0, counts["item2"])
+=======
+
+	// Verify the new order
+	assert.Equal(t, "item3", items[0].ID) // item3 should now be first
+	assert.Equal(t, "item1", items[1].ID)
+	assert.Equal(t, "item2", items[2].ID)
+
+	// Verify the counts
+	assert.Equal(t, 11.0, items[0].Count) // 3 + 8
+	assert.Equal(t, 10.0, items[1].Count)
+	assert.Equal(t, 5.0, items[2].Count)
+>>>>>>> origin/codex/implement-missing-directory-and-tests-for-adaptive-topk
 }
 
 func TestSpaceSavingReplacement(t *testing.T) {
@@ -241,6 +254,7 @@ func TestSpaceSavingSkewedDistribution(t *testing.T) {
 		topItemSet[actualTop[i].item] = true
 	}
 
+<<<<<<< HEAD
 	// Verify that majority of the returned items are part of the actual top set
 	matchCount := 0
 	for i := 0; i < 5 && i < len(items); i++ {
@@ -249,6 +263,17 @@ func TestSpaceSavingSkewedDistribution(t *testing.T) {
 		}
 	}
 	assert.GreaterOrEqual(t, matchCount, 3, "at least 3 of the top items should match")
+=======
+	// Instead of checking exact ordering, verify that all our top 5 items
+	// are among the actual top items
+	found := 0
+	for i := 0; i < 5 && i < len(items); i++ {
+		if topItemSet[items[i].ID] {
+			found++
+		}
+	}
+	assert.GreaterOrEqual(t, found, 3, "at least three items should match")
+>>>>>>> origin/codex/implement-missing-directory-and-tests-for-adaptive-topk
 
 	// Calculate the actual coverage
 	var topkSum int
