@@ -13,12 +13,10 @@ import (
 	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/receiver"
 
-	// Import your components here
+	// Import processors that currently exist in the repository
 	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
-	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_topk"
-	"github.com/deepaucksharma/Phoenix/internal/processor/priority_tagger"
-	"github.com/deepaucksharma/Phoenix/internal/processor/reservoir_sampler"
-	// Add more component imports as they are implemented
+	"github.com/deepaucksharma/Phoenix/internal/processor/histogram_aggregator"
+	"github.com/deepaucksharma/Phoenix/internal/processor/metric_pipeline"
 )
 
 const (
@@ -62,12 +60,10 @@ func components() (otelcol.Factories, error) {
 
 	// Processors
 	processors := []processor.Factory{
-		// Add custom processors as they are implemented:
-		priority_tagger.NewFactory(),
+		// Register only processors that exist in this repository
+		metric_pipeline.NewFactory(),
+		histogram_aggregator.NewFactory(),
 		adaptive_pid.NewFactory(),
-		adaptive_topk.NewFactory(),
-		reservoir_sampler.NewFactory(),
-		// etc.
 	}
 	factories.Processors = make(map[component.Type]processor.Factory)
 	for _, proc := range processors {
