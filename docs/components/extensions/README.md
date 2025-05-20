@@ -6,7 +6,9 @@ This directory contains documentation for the extensions implemented in SA-OMF.
 
 | Extension | Description | Status |
 |-----------|-------------|--------|
-| [pic_control_ext](./pic_control_ext.md) | Central governance layer for configuration changes | Stable |
+| None currently in production | - | - |
+
+*Note: The previously documented `pic_control_ext` has been removed as part of the codebase cleanup.*
 
 ## Extension Concepts
 

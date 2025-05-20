@@ -6,7 +6,9 @@ This directory contains documentation for the connectors implemented in SA-OMF.
 
 | Connector | Description | Status |
 |-----------|-------------|--------|
-| [pic_connector](./pic_connector.md) | Connects the PID decider to the PIC control extension | Stable |
+| None currently in production | - | - |
+
+*Note: The previously documented `pic_connector` has been removed as part of the codebase cleanup.*
 
 ## Connector Concepts
 

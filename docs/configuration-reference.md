@@ -21,13 +21,7 @@ The `config.yaml` file follows the standard OpenTelemetry Collector configuratio
 
 ```yaml
 extensions:
-  pic_control:
-    policy_file_path: /etc/sa-omf/policy.yaml
-    max_patches_per_minute: 3
-    patch_cooldown_seconds: 10
-    safe_mode_processor_configs:
-      adaptive_topk:
-        k_value: 10
+  # No extensions currently in production
 
 receivers:
   hostmetrics:
@@ -79,7 +73,6 @@ processors:
 exporters:
   logging:
     verbosity: detailed
-  pic_connector: {}
 
 service:
   pipelines:
@@ -87,13 +80,8 @@ service:
       receivers: [hostmetrics]
       processors: [priority_tagger]
       exporters: [logging]
-    
-    control:
-      receivers: [hostmetrics]
-      processors: [pid_decider]
-      exporters: [pic_connector, logging]
   
-  extensions: [pic_control]
+  extensions: []
 ```
 
 ## policy.yaml Reference
@@ -166,16 +154,11 @@ pic_control_config:
       max_unique: 100
 
 service:
-  extensions: [pic_control, health_check]
   pipelines:
     metrics:
       receivers: [hostmetrics]
       processors: [priority_tagger, adaptive_topk]
       exporters: [prometheusremotewrite]
-    control:
-      receivers: [prometheus/self]
-      processors: [pid_decider]
-      exporters: [pic_connector]
 ```
 
 ## Configuration Options
@@ -223,14 +206,7 @@ Each processor has its own configuration section:
 
 ### Extension Configuration
 
-#### pic_control
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `policy_file_path` | string | Path to policy file | - |
-| `max_patches_per_minute` | int | Rate limit for patches | 3 |
-| `patch_cooldown_seconds` | int | Cooldown between patches | 10 |
-| `safe_mode_processor_configs` | object | Safe mode configurations | - |
+*Note: The previously documented `pic_control` extension has been removed as part of the codebase cleanup.*
 
 ## Environment Variables
 
