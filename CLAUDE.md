@@ -343,7 +343,7 @@ The system includes several safety mechanisms:
 
 ### Prerequisites
 
-- Go 1.24 or higher
+- Go 1.22 or higher
 - OpenTelemetry Collector Contrib
 - Docker (for containerized testing)
 - Kubernetes (optional, for orchestrated deployment)

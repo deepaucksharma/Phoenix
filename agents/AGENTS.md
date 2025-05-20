@@ -45,7 +45,7 @@ This document defines the roles, responsibilities, and boundaries for agents and
 
 ## Technical Standards
 
-- Go version: 1.24+
+- Go version: 1.22+
 - Code style: Follow `golangci-lint` rules
 - Commit style: [Conventional Commits](https://www.conventionalcommits.org/)
 - PR process: Create branch → Implement → CI checks → Review → Merge

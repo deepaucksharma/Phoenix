@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/go:1.24
+FROM mcr.microsoft.com/devcontainers/go:1.22
 
 ARG USERNAME=vscode
 ARG USER_UID=1000
