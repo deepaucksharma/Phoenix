@@ -148,7 +148,7 @@ service:
     # Main data pipeline
     metrics:
       receivers: [hostmetrics]
-      processors: [metric_pipeline]
+      processors: [metric_pipeline, attr_filter]
       exporters: [logging, prometheusremotewrite, otlp]
     
     # Control pipeline for self-regulation

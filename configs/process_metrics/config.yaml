@@ -192,7 +192,7 @@ service:
     metrics/process:
       receivers: [hostmetrics]
       # Process flow: Convert CPU counters to delta → Process with unified metric pipeline → Batch for efficiency
-      processors: [cumulativetodelta, metric_pipeline, batch]
+      processors: [cumulativetodelta, metric_pipeline, attr_filter, batch]
       exporters: [logging, otlphttp/newrelic]
     
     # Self-metrics pipeline to export Phoenix's own metrics to New Relic
