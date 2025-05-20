@@ -9,13 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 
-	"github.com/deepaucksharma/Phoenix/internal/control/pid"
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
 	"github.com/deepaucksharma/Phoenix/pkg/metrics"
-	"github.com/deepaucksharma/Phoenix/test/testutils"
 )
 
 // TestOutputParameterBounds verifies that PID controller output values are
@@ -62,7 +61,7 @@ func TestOutputParameterBounds(t *testing.T) {
 
 	// Create the PID processor
 	settings := component.TelemetrySettings{}
-	processor, err := adaptive_pid.NewProcessor(config, settings, nil, component.NewIDWithName("processor", "pid_decider"))
+	processor, err := adaptive_pid.NewProcessor(config, settings, nil, component.NewIDWithName(component.MustNewType("processor"), "pid_decider"))
 	require.NoError(t, err, "Failed to create adaptive_pid processor")
 
 	// Create mock metrics to simulate a large error

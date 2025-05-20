@@ -6,9 +6,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/pdata/pmetric"
 
 	"github.com/deepaucksharma/Phoenix/internal/control/pid"
 	"github.com/deepaucksharma/Phoenix/pkg/metrics"

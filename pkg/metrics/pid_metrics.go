@@ -3,6 +3,7 @@ package metrics
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -24,6 +25,10 @@ type PIDMetrics struct {
 	Setpoint    float64
 	Measurement float64
 
+	// Custom metrics
+	customMetrics map[string]float64
+	lock          sync.RWMutex
+
 	// State tracking
 	LastEmission time.Time
 	EmitInterval time.Duration
@@ -39,6 +44,7 @@ func NewPIDMetrics(controllerName string, parent *MetricsEmitter) *PIDMetrics {
 		LastEmission:   time.Time{},      // Zero time
 		EmitInterval:   time.Second * 10, // Default interval
 		Parent:         parent,
+		customMetrics:  make(map[string]float64),
 	}
 }
 
@@ -57,6 +63,14 @@ func (p *PIDMetrics) Update(setpoint, measurement, error, pValue, iValue, dValue
 	p.DValue = dValue
 	p.RawOutput = rawOutput
 	p.Output = output
+}
+
+// AddMetric adds or updates a custom metric with the given name and value.
+func (p *PIDMetrics) AddMetric(name string, value float64) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	
+	p.customMetrics[name] = value
 }
 
 // ShouldEmit checks if metrics should be emitted based on the interval.
@@ -160,4 +174,16 @@ func createPIDMetrics(metrics pmetric.MetricSlice, p *PIDMetrics) {
 	dp = measurementMetric.Gauge().DataPoints().AppendEmpty()
 	dp.SetTimestamp(now)
 	dp.SetDoubleValue(p.Measurement)
+	
+	// Add any custom metrics
+	p.lock.RLock()
+	for name, value := range p.customMetrics {
+		customMetric := metrics.AppendEmpty()
+		customMetric.SetName(name)
+		customMetric.SetEmptyGauge()
+		dp = customMetric.Gauge().DataPoints().AppendEmpty()
+		dp.SetTimestamp(now)
+		dp.SetDoubleValue(value)
+	}
+	p.lock.RUnlock()
 }

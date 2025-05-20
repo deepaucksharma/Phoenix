@@ -190,6 +190,11 @@ func (p *processorImpl) OnConfigPatch(ctx context.Context, patch interfaces.Conf
 	return nil
 }
 
+// GetName returns the processor name for identification
+func (p *processorImpl) GetName() string {
+	return "others_rollup"
+}
+
 // GetConfigStatus implements UpdateableProcessor.
 func (p *processorImpl) GetConfigStatus(ctx context.Context) (interfaces.ConfigStatus, error) {
 	p.lock.RLock()

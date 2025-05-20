@@ -9,13 +9,13 @@ import (
 	"go.opentelemetry.io/collector/processor"
 )
 
-// typeStr is the unique identifier for the pid_decider processor.
-var typeStr = "pid_decider"
+// processorType is the unique identifier for the pid_decider processor.
+var processorType = component.MustNewType(typeStr)
 
 // NewFactory creates a factory for the pid_decider processor
 func NewFactory() processor.Factory {
 	return processor.NewFactory(
-		component.MustNewType(typeStr),
+		processorType,
 		createDefaultConfig,
 		processor.WithMetrics(createMetricsProcessor, component.StabilityLevelDevelopment),
 	)
@@ -77,5 +77,6 @@ func createMetricsProcessor(
 	nextConsumer consumer.Metrics,
 ) (processor.Metrics, error) {
 	pCfg := cfg.(*Config)
-	return newProcessor(pCfg, set.TelemetrySettings, nextConsumer, set.ID)
+	// We're using a simple interface for pic_control
+	return newProcessor(pCfg, set.TelemetrySettings, nil, set.ID)
 }

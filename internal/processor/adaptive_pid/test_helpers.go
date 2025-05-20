@@ -3,12 +3,12 @@ package adaptive_pid
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pmetric"
-	"go.uber.org/zap"
 
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 )
@@ -17,7 +17,7 @@ import (
 func createConfigPatch(targetProcessor, paramPath string, value float64, controllerName string) interfaces.ConfigPatch {
 	return interfaces.ConfigPatch{
 		PatchID:             uuid.New().String(),
-		TargetProcessorName: component.NewIDWithName("processor", targetProcessor),
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("processor"), targetProcessor),
 		ParameterPath:       paramPath,
 		NewValue:            value,
 		Reason:              fmt.Sprintf("Adjustment from %s controller", controllerName),
@@ -36,95 +36,155 @@ func generateReason(controllerName string, error, output float64) string {
 
 // ProcessMetricsForTest is a test helper that processes metrics and returns generated patches.
 func (p *pidProcessor) ProcessMetricsForTest(ctx context.Context, md pmetric.Metrics) ([]interfaces.ConfigPatch, error) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.lock.RLock() // Use read lock to allow parallel processing
+	defer p.lock.RUnlock()
 	
-	// Extract KPI values from metrics
-	kpiValues := extractKPIValues(md)
+	return p.processMetricsInternal(ctx, md)
+}
+
+// generatePatches creates configuration patches based on PID controller output
+func (c *controller) generatePatches(ctx context.Context, pidOutput float64, kpiValue float64, oscillating bool) []interfaces.ConfigPatch {
+	patches := make([]interfaces.ConfigPatch, 0, len(c.config.OutputConfigPatches))
 	
-	// Store patches to return
-	patches := make([]interfaces.ConfigPatch, 0)
-	
-	// Process each controller
-	for _, ctrl := range p.controllers {
-		// Get current KPI value
-		kpiValue, found := kpiValues[ctrl.config.KPIMetricName]
-		if !found {
-			// KPI not found in this batch, emit metric and continue
-			p.logger.Warn("KPI not found in metrics batch", 
-				zap.String("controller", ctrl.config.Name),
-				zap.String("kpi", ctrl.config.KPIMetricName))
-			
-			// Emit metric if available
-			if p.metrics != nil {
-				p.metrics.AddMetric("aemf_pid_decider_kpi_missing_total", 1)
-			}
-			continue
-		}
+	// If we're using Bayesian optimization and the system is oscillating,
+	// try a new point in parameter space
+	if c.config.UseBayesian && c.optimizer != nil && oscillating {
+		c.stallCount++
 		
-		// Save current value
-		ctrl.lastValues[ctrl.config.KPIMetricName] = kpiValue
-		
-		// Update PID controller and get output
-		output := ctrl.pid.Compute(kpiValue)
-		
-		// Generate ConfigPatch for each output parameter
-		for _, outConfig := range ctrl.config.OutputConfigPatches {
-			// Apply scaling factor to the output
-			scaledDelta := output * outConfig.ChangeScaleFactor
-			
-			// Get last output value for this parameter
-			lastValue := ctrl.lastOutputs[outConfig.ParameterPath]
-			
-			// Calculate new value
-			newValue := lastValue + scaledDelta
-			
-			// Raw value before clamping (for metrics)
-			rawValue := newValue
-			
-			// Clamp to min/max
-			if newValue < outConfig.MinValue {
-				if p.metrics != nil {
-					p.metrics.AddMetric("aemf_pid_output_clamped_total", 1)
-				}
-				newValue = outConfig.MinValue
-			} else if newValue > outConfig.MaxValue {
-				if p.metrics != nil {
-					p.metrics.AddMetric("aemf_pid_output_clamped_total", 1)
-				}
-				newValue = outConfig.MaxValue
-			}
-			
-			// Check against hysteresis threshold
-			if lastValue != 0 {
-				changePercent := (newValue - lastValue) / lastValue * 100
-				if ctrl.config.HysteresisPercent > 0 && 
-				   changePercent < ctrl.config.HysteresisPercent {
-					// Change too small, skip
-					continue
-				}
-			}
-			
-			// Generate patch
-			patch := interfaces.ConfigPatch{
-				PatchID:             uuid.New().String(),
-				TargetProcessorName: component.NewIDWithName("processor", outConfig.TargetProcessorName),
-				ParameterPath:       outConfig.ParameterPath,
-				NewValue:            newValue,
-				Reason:              generateReason(ctrl.config.Name, ctrl.config.KPITargetValue-kpiValue, output),
-				Severity:            "normal",
-				Source:              "pid_decider",
-				Timestamp:           time.Now().Unix(),
-				TTLSeconds:          300, // 5 minute TTL
-			}
-			
-			// Add patch to result
-			patches = append(patches, patch)
-			
-			// Update last output value
-			ctrl.lastOutputs[outConfig.ParameterPath] = newValue
+		// If the system has been oscillating for too long, try a new point
+		if c.stallCount >= c.config.StallThreshold {
+			c.stallCount = 0
+			return c.generateBayesianOptimizationPatches(ctx, kpiValue)
 		}
 	}
 	
-	return patches, nil
+	// Normal PID-based patches
+	for _, patchCfg := range c.config.OutputConfigPatches {
+		// Get current value as baseline
+		currentValue, exists := c.lastOutputs[patchCfg.ParameterPath]
+		if !exists {
+			// Use midpoint of range as default
+			currentValue = (patchCfg.MinValue + patchCfg.MaxValue) / 2
+		}
+		
+		// Apply scaling factor to the output
+		scaledDelta := pidOutput * patchCfg.ChangeScaleFactor
+		
+		// Calculate new value
+		newValue := currentValue + scaledDelta
+		
+		// Clamp to min/max
+		if newValue < patchCfg.MinValue {
+			newValue = patchCfg.MinValue
+		} else if newValue > patchCfg.MaxValue {
+			newValue = patchCfg.MaxValue
+		}
+		
+		// Check against hysteresis threshold
+		if currentValue != 0 {
+			changePercent := math.Abs((newValue - currentValue) / currentValue * 100)
+			if c.config.HysteresisPercent > 0 && 
+			   changePercent < c.config.HysteresisPercent {
+				// Change too small, skip
+				continue
+			}
+		}
+		
+		// Skip if the change is negligible
+		if math.Abs(newValue - currentValue) < 0.001 {
+			continue
+		}
+		
+		// Create the patch
+		patch := interfaces.ConfigPatch{
+			PatchID:             fmt.Sprintf("%s-%d", c.config.Name, time.Now().UnixNano()),
+			TargetProcessorName: component.NewIDWithName(component.MustNewType("processor"), patchCfg.TargetProcessorName),
+			ParameterPath:       patchCfg.ParameterPath,
+			NewValue:            newValue,
+			PrevValue:           currentValue,
+			Reason:              fmt.Sprintf("PID adjustment based on KPI=%f, target=%f", kpiValue, c.config.KPITargetValue),
+			Severity:            "normal",
+			Source:              "adaptive_pid",
+			Timestamp:           time.Now().Unix(),
+			TTLSeconds:          300, // 5 minute expiry
+			SafetyOverride:      false,
+		}
+		
+		// Remember the last output for this parameter
+		c.lastOutputs[patchCfg.ParameterPath] = newValue
+		
+		// Add to list of patches
+		patches = append(patches, patch)
+	}
+	
+	return patches
+}
+
+// generateBayesianOptimizationPatches creates patches based on Bayesian optimization
+func (c *controller) generateBayesianOptimizationPatches(ctx context.Context, kpiValue float64) []interfaces.ConfigPatch {
+	patches := make([]interfaces.ConfigPatch, 0, len(c.config.OutputConfigPatches))
+	
+	// If this is the first time, just suggest the midpoint
+	if c.optimizer == nil || len(c.lastValues) == 0 {
+		return patches
+	}
+	
+	// Create a point from the current parameter values
+	currentPoint := make([]float64, len(c.config.OutputConfigPatches))
+	for i, patchCfg := range c.config.OutputConfigPatches {
+		currentPoint[i] = c.lastOutputs[patchCfg.ParameterPath]
+	}
+	
+	// Add the current point with its performance metric
+	// For KPI metrics where higher is better:
+	performance := kpiValue
+	// For KPI metrics where lower is better, you might use:
+	// performance = -kpiValue or performance = 1/kpiValue
+	
+	c.lastValues[c.config.KPIMetricName] = kpiValue
+	c.optimizer.AddSample(currentPoint, performance)
+	
+	// Get new suggested point
+	newPoint := c.optimizer.Suggest()
+	
+	// Generate patches for the new point
+	for i, patchCfg := range c.config.OutputConfigPatches {
+		currentValue := c.lastOutputs[patchCfg.ParameterPath]
+		newValue := newPoint[i]
+		
+		// Apply limits
+		if newValue < patchCfg.MinValue {
+			newValue = patchCfg.MinValue
+		} else if newValue > patchCfg.MaxValue {
+			newValue = patchCfg.MaxValue
+		}
+		
+		// Skip if the change is negligible
+		if math.Abs(newValue - currentValue) < 0.001 {
+			continue
+		}
+		
+		// Create the patch
+		patch := interfaces.ConfigPatch{
+			PatchID:             fmt.Sprintf("%s-bayes-%d", c.config.Name, time.Now().UnixNano()),
+			TargetProcessorName: component.NewIDWithName(component.MustNewType("processor"), patchCfg.TargetProcessorName),
+			ParameterPath:       patchCfg.ParameterPath,
+			NewValue:            newValue,
+			PrevValue:           currentValue,
+			Reason:              fmt.Sprintf("Bayesian optimization step, current KPI=%f", kpiValue),
+			Severity:            "normal",
+			Source:              "adaptive_pid_bayesian",
+			Timestamp:           time.Now().Unix(),
+			TTLSeconds:          300, // 5 minute expiry
+			SafetyOverride:      false,
+		}
+		
+		// Remember the last output for this parameter
+		c.lastOutputs[patchCfg.ParameterPath] = newValue
+		
+		// Add to list of patches
+		patches = append(patches, patch)
+	}
+	
+	return patches
 }

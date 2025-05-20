@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/pdata/pmetric"
 
 	"github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
@@ -70,7 +69,8 @@ func TestDistributedCoordination(t *testing.T) {
 	// Verify that all nodes received the configuration change
 	for i, node := range nodes {
 		processor := node.MockProcessors["adaptive_topk"]
-		value := processor.GetParameter("k_value")
+		value, exists := processor.GetParameter("k_value")
+		assert.True(t, exists, "Node %d should have k_value parameter", i)
 		assert.Equal(t, 50, value, "Node %d should have received global configuration update", i)
 	}
 	
@@ -84,12 +84,17 @@ func TestDistributedCoordination(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	
 	// Verify that only Node 1 received the configuration change
-	assert.Equal(t, 50, nodes[0].MockProcessors["adaptive_topk"].GetParameter("k_value"), 
-		"Node 0 should not have been affected by node-specific change")
-	assert.Equal(t, 75, nodes[1].MockProcessors["adaptive_topk"].GetParameter("k_value"), 
-		"Node 1 should have received node-specific configuration update")
-	assert.Equal(t, 50, nodes[2].MockProcessors["adaptive_topk"].GetParameter("k_value"), 
-		"Node 2 should not have been affected by node-specific change")
+	value0, exists0 := nodes[0].MockProcessors["adaptive_topk"].GetParameter("k_value")
+	assert.True(t, exists0, "Node 0 should have k_value parameter")
+	assert.Equal(t, 50, value0, "Node 0 should not have been affected by node-specific change")
+	
+	value1, exists1 := nodes[1].MockProcessors["adaptive_topk"].GetParameter("k_value")
+	assert.True(t, exists1, "Node 1 should have k_value parameter")
+	assert.Equal(t, 75, value1, "Node 1 should have received node-specific configuration update")
+	
+	value2, exists2 := nodes[2].MockProcessors["adaptive_topk"].GetParameter("k_value")
+	assert.True(t, exists2, "Node 2 should have k_value parameter")
+	assert.Equal(t, 50, value2, "Node 2 should not have been affected by node-specific change")
 	
 	// PART 3: Test cluster roll-out with sequencing
 	
@@ -100,7 +105,8 @@ func TestDistributedCoordination(t *testing.T) {
 	// Verify that all nodes eventually received the configuration change
 	for i, node := range nodes {
 		processor := node.MockProcessors["adaptive_topk"]
-		value := processor.GetParameter("k_value")
+		value, exists := processor.GetParameter("k_value")
+		assert.True(t, exists, "Node %d should have k_value parameter", i)
 		assert.Equal(t, 100, value, "Node %d should have received sequential configuration update", i)
 	}
 	
@@ -179,7 +185,7 @@ func (c *testCoordinator) ApplyGlobalConfigurationChange(
 	// Create a patch
 	patch := interfaces.ConfigPatch{
 		PatchID:             fmt.Sprintf("global-patch-%d", time.Now().UnixNano()),
-		TargetProcessorName: component.NewIDWithName("processor", processorName),
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("processor"), processorName),
 		ParameterPath:       parameterPath,
 		NewValue:            value,
 		Reason:              "Global configuration change",
@@ -218,7 +224,7 @@ func (c *testCoordinator) ApplyNodeSpecificConfiguration(
 	// Create a patch
 	patch := interfaces.ConfigPatch{
 		PatchID:             fmt.Sprintf("node-specific-patch-%d", time.Now().UnixNano()),
-		TargetProcessorName: component.NewIDWithName("processor", processorName),
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("processor"), processorName),
 		ParameterPath:       parameterPath,
 		NewValue:            value,
 		Reason:              fmt.Sprintf("Node-specific configuration change for node %d", nodeIndex),
@@ -247,7 +253,7 @@ func (c *testCoordinator) ApplySequentialConfigurationChange(
 		// Create a patch
 		patch := interfaces.ConfigPatch{
 			PatchID:             fmt.Sprintf("sequential-patch-%d-%d", i, time.Now().UnixNano()),
-			TargetProcessorName: component.NewIDWithName("processor", processorName),
+			TargetProcessorName: component.NewIDWithName(component.MustNewType("processor"), processorName),
 			ParameterPath:       parameterPath,
 			NewValue:            value,
 			Reason:              fmt.Sprintf("Sequential configuration change for node %d", i),

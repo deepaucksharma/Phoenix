@@ -38,4 +38,7 @@ type UpdateableProcessor interface {
 
 	// GetConfigStatus returns the current effective configuration.
 	GetConfigStatus(ctx context.Context) (ConfigStatus, error)
+	
+	// GetName returns the processor name for identification purposes
+	GetName() string
 }

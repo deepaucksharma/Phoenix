@@ -155,6 +155,11 @@ func (p *ProcessorImpl) computeScores() {
 	p.scores = scores
 }
 
+// GetName returns the processor name for identification
+func (p *ProcessorImpl) GetName() string {
+	return "process_context_learner"
+}
+
 // GetConfigStatus implements the UpdateableProcessor interface.
 func (p *ProcessorImpl) GetConfigStatus(ctx context.Context) (interfaces.ConfigStatus, error) {
 	p.lock.RLock()

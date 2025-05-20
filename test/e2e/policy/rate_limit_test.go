@@ -64,7 +64,7 @@ func TestPatchRateLimiting(t *testing.T) {
 	validPatch := func(id string, value int) interfaces.ConfigPatch {
 		return interfaces.ConfigPatch{
 			PatchID:             id,
-			TargetProcessorName: component.NewIDWithName("processor", "adaptive_topk"),
+			TargetProcessorName: component.NewIDWithName(component.MustNewType("processor"), "adaptive_topk"),
 			ParameterPath:       "k_value",
 			NewValue:            value,
 			Reason:              "Testing rate limiting",
@@ -78,17 +78,23 @@ func TestPatchRateLimiting(t *testing.T) {
 	// Apply first patch - should succeed
 	err = extension.ApplyConfigPatch(ctx, validPatch("patch-1", 20))
 	assert.NoError(t, err, "First patch should be accepted")
-	assert.Equal(t, 20, mockTopK.GetParameter("k_value"), "First patch should be applied")
+	value, exists := mockTopK.GetParameter("k_value")
+	assert.True(t, exists, "k_value parameter should exist")
+	assert.Equal(t, 20, value, "First patch should be applied")
 	
 	// Apply second patch - should succeed
 	err = extension.ApplyConfigPatch(ctx, validPatch("patch-2", 30))
 	assert.NoError(t, err, "Second patch should be accepted")
-	assert.Equal(t, 30, mockTopK.GetParameter("k_value"), "Second patch should be applied")
+	value, exists = mockTopK.GetParameter("k_value")
+	assert.True(t, exists, "k_value parameter should exist")
+	assert.Equal(t, 30, value, "Second patch should be applied")
 	
 	// Apply third patch - should be rate limited
 	err = extension.ApplyConfigPatch(ctx, validPatch("patch-3", 40))
 	assert.Error(t, err, "Third patch should be rate limited")
-	assert.Equal(t, 30, mockTopK.GetParameter("k_value"), "Third patch should not be applied")
+	value, exists = mockTopK.GetParameter("k_value")
+	assert.True(t, exists, "k_value parameter should exist")
+	assert.Equal(t, 30, value, "Third patch should not be applied")
 	
 	// Verify the rate limit metric was emitted
 	metrics := metricsCollector.GetMetricsByName("aemf_patch_rate_limited_total")
@@ -100,7 +106,9 @@ func TestPatchRateLimiting(t *testing.T) {
 	// Apply a new patch after cooldown - should succeed
 	err = extension.ApplyConfigPatch(ctx, validPatch("patch-4", 50))
 	assert.NoError(t, err, "Patch after cooldown should be accepted")
-	assert.Equal(t, 50, mockTopK.GetParameter("k_value"), "Patch after cooldown should be applied")
+	value, exists = mockTopK.GetParameter("k_value")
+	assert.True(t, exists, "k_value parameter should exist")
+	assert.Equal(t, 50, value, "Patch after cooldown should be applied")
 	
 	// Test priority handling - urgent patches should bypass rate limiting
 	urgentPatch := validPatch("urgent-patch", 100)
@@ -109,5 +117,7 @@ func TestPatchRateLimiting(t *testing.T) {
 	// Apply urgent patch - should bypass rate limiting
 	err = extension.ApplyConfigPatch(ctx, urgentPatch)
 	assert.NoError(t, err, "Urgent patch should bypass rate limiting")
-	assert.Equal(t, 100, mockTopK.GetParameter("k_value"), "Urgent patch should be applied")
+	value, exists = mockTopK.GetParameter("k_value")
+	assert.True(t, exists, "k_value parameter should exist")
+	assert.Equal(t, 100, value, "Urgent patch should be applied")
 }

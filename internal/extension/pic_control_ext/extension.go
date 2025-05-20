@@ -5,14 +5,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -25,7 +22,6 @@ import (
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 	"github.com/deepaucksharma/Phoenix/pkg/metrics"
 	"github.com/deepaucksharma/Phoenix/pkg/policy"
-	"github.com/deepaucksharma/Phoenix/test/testutils"
 )
 
 const (
@@ -208,13 +204,6 @@ func (e *Extension) Start(ctx context.Context, host component.Host) error {
 	return nil
 }
 
-// startOpAMPClient starts the OpAMP client
-func (e *Extension) startOpAMPClient(ctx context.Context) error {
-	// This is a placeholder for OpAMP client implementation
-	// For our tests, we'll just return nil
-	return nil
-}
-
 // Shutdown stops the extension
 func (e *Extension) Shutdown(ctx context.Context) error {
 	// Stop the watcher
@@ -259,16 +248,21 @@ func (e *Extension) RegisterUpdateableProcessor(processor interfaces.UpdateableP
 	
 	// For testing purposes, we'll construct an ID from the processor name
 	// In a real system, we'd need to handle this more robustly
-	mockProcessor, ok := processor.(*testutils.MockUpdateableProcessor)
-	if !ok {
-		return fmt.Errorf("processor is not a MockUpdateableProcessor")
-	}
-	
-	id := component.NewIDWithName("processor", mockProcessor.GetName())
+	// In a real system, we'd get the component ID directly. For testing we'll construct it.
+	id := component.NewIDWithName(component.MustNewType("processor"), processor.(interfaces.UpdateableProcessor).GetName())
 	e.processors[id] = processor
 	e.logger.Info("Registered updateable processor", zap.String("id", id.String()))
 	
 	return nil
+}
+
+// RegisterProcessor registers a processor with a specific ID for dynamic configuration
+func (e *Extension) RegisterProcessor(id component.ID, processor interfaces.UpdateableProcessor) {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+	
+	e.processors[id] = processor
+	e.logger.Info("Registered processor with explicit ID", zap.String("id", id.String()))
 }
 
 // ApplyConfigPatch applies a configuration patch to a processor
@@ -414,29 +408,9 @@ func (e *Extension) SubmitConfigPatch(ctx context.Context, patch interfaces.Conf
 	return nil
 }
 
-// checkRateLimit checks if the patch should be rate limited
-func (e *Extension) checkRateLimit() bool {
-	// Reset counter if minute boundary passed
-	if time.Since(e.patchCountReset) > time.Minute {
-		e.patchCount = 0
-		e.patchCountReset = time.Now()
-	}
-
-	return e.patchCount < e.config.MaxPatchesPerMinute
-}
-
-// loadPolicy loads the policy from a file
-func (e *Extension) loadPolicy(filename string) error {
-	newPolicy, err := policy.LoadPolicy(filename)
-	if err != nil {
-		return err
-	}
-
-	e.policy = newPolicy
-
-	// Apply initial processor configurations from policy
-	return e.applyPolicyConfig()
-}
+// External implementations:
+// checkRateLimit from ratelimit.go
+// loadPolicy from policy.go
 
 // loadPolicyBytes loads policy YAML from memory and applies it.
 func (e *Extension) loadPolicyBytes(data []byte) error {
@@ -503,109 +477,9 @@ func (e *Extension) applyPolicyConfig() error {
 	return nil
 }
 
-// startWatcher starts the policy file watcher
-func (e *Extension) startWatcher() error {
-	var err error
-	e.watcher, err = fsnotify.NewWatcher()
-	if err != nil {
-		return err
-	}
-
-	// Watch the directory, not the file
-	dir := filepath.Dir(e.config.PolicyFilePath)
-	err = e.watcher.Add(dir)
-	if err != nil {
-		return err
-	}
-
-	// Start watcher goroutine
-	ctx, cancel := context.WithCancel(context.Background())
-	e.cancelWatcher = cancel
-
-	go func() {
-		defer e.watcher.Close()
-
-		for {
-			select {
-			case event, ok := <-e.watcher.Events:
-				if !ok {
-					return
-				}
-
-				// Check if this is for our policy file
-				if event.Name == e.config.PolicyFilePath {
-					if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
-						e.logger.Info("Policy file changed, reloading")
-
-						// Wait a brief moment for the file to be completely written
-						time.Sleep(100 * time.Millisecond)
-
-						if err := e.loadPolicy(e.config.PolicyFilePath); err != nil {
-							e.logger.Error("Failed to reload policy file", zap.Error(err))
-						}
-					}
-				}
-
-			case err, ok := <-e.watcher.Errors:
-				if !ok {
-					return
-				}
-				e.logger.Error("Policy watcher error", zap.Error(err))
-
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	return nil
-}
-
-// startOpAMPClient starts the OpAMP client
-func (e *Extension) startOpAMPClient(ctx context.Context) error {
-	cfg := e.config.OpAMPConfig
-	if cfg == nil {
-		return nil
-	}
-
-	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: cfg.InsecureSkipVerify}
-
-	if cfg.CACertFile != "" {
-		caData, err := os.ReadFile(cfg.CACertFile)
-		if err != nil {
-			return fmt.Errorf("read CA cert: %w", err)
-		}
-		pool := x509.NewCertPool()
-		pool.AppendCertsFromPEM(caData)
-		tlsCfg.RootCAs = pool
-	}
-
-	if cfg.ClientCertFile != "" && cfg.ClientKeyFile != "" {
-		cert, err := tls.LoadX509KeyPair(cfg.ClientCertFile, cfg.ClientKeyFile)
-		if err != nil {
-			return fmt.Errorf("load client cert: %w", err)
-		}
-		tlsCfg.Certificates = []tls.Certificate{cert}
-	}
-
-	client := &http.Client{Transport: &http.Transport{TLSClientConfig: tlsCfg}}
-
-	go func() {
-		ticker := time.NewTicker(time.Duration(cfg.PollIntervalSeconds) * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				e.pollOpAMPServer(ctx, client)
-			}
-		}
-	}()
-
-	return nil
-}
+// External implementations:
+// startWatcher from policy.go
+// startOpAMPClient from opamp.go
 
 func (e *Extension) pollOpAMPServer(ctx context.Context, client *http.Client) {
 	e.sendStatus(ctx, client)
@@ -741,4 +615,24 @@ func (e *Extension) exitSafeMode() error {
 
 	// Reapply policy configuration
 	return e.applyPolicyConfig()
+}
+
+// buildTLSConfig creates a TLS configuration for the OpAMP client
+func (e *Extension) buildTLSConfig() *tls.Config {
+	if e.config.OpAMPConfig == nil {
+		return nil
+	}
+
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: e.config.OpAMPConfig.InsecureSkipVerify,
+	}
+
+	// For now, we'll provide a simplistic implementation without mutual TLS
+	// In a real system, we would:
+	// 1. Load client certificates if provided
+	// 2. Load CA certificates if provided
+	// 3. Set up proper verification functions
+	
+	// This is a placeholder implementation for testing purposes
+	return tlsConfig
 }

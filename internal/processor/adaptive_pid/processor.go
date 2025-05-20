@@ -7,9 +7,7 @@ import (
 	"math"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/google/uuid"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -140,14 +138,18 @@ func (p *pidProcessor) Capabilities() consumer.Capabilities {
 
 // ConsumeMetrics processes incoming metrics and submits patches to pic_control
 func (p *pidProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
-	// Process metrics and generate patches
-	patches, err := p.ProcessMetricsForTest(ctx, md)
+	// Only acquire a read lock during processing to allow parallel metric processing
+	p.lock.RLock()
+	patches, err := p.processMetricsInternal(ctx, md)
+	p.lock.RUnlock()
+
 	if err != nil {
 		return err
 	}
 	
 	// Submit patches to pic_control if available
-	if p.picControl != nil {
+	// Do this outside our lock to prevent deadlocks with pic_control extension
+	if p.picControl != nil && len(patches) > 0 {
 		for _, patch := range patches {
 			err := p.picControl.SubmitConfigPatch(ctx, patch)
 			if err != nil {
@@ -159,11 +161,56 @@ func (p *pidProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) e
 	}
 	
 	// Forward metrics to next consumer if one is configured
+	// Also outside our lock to prevent possible deadlocks
 	if p.nextConsumer != nil {
 		return p.nextConsumer.ConsumeMetrics(ctx, md)
 	}
 	
 	return nil
+}
+
+// processMetricsInternal handles the actual processing of metrics
+// Assumes the caller holds at least a read lock
+func (p *pidProcessor) processMetricsInternal(ctx context.Context, md pmetric.Metrics) ([]interfaces.ConfigPatch, error) {
+	// Extract KPI values from metrics
+	kpiValues := extractKPIValues(md)
+	if len(kpiValues) == 0 {
+		return nil, nil
+	}
+	
+	// Generate patches - we'll implement this in ProcessMetricsForTest
+	patches := make([]interfaces.ConfigPatch, 0)
+	
+	// Process each enabled controller
+	for _, controller := range p.controllers {
+		if !controller.config.Enabled {
+			continue
+		}
+		
+		// Look for this controller's KPI metric
+		kpiValue, exists := kpiValues[controller.config.KPIMetricName]
+		if !exists {
+			continue // Skip if KPI metric not found
+		}
+		
+		// Compute PID output
+		pidOutput := controller.pid.Compute(kpiValue)
+		
+		// Check for oscillation (will be used by circuit breaker later)
+		oscillating := false
+		if controller.lastPIDOut * pidOutput < 0 && 
+		   math.Abs(pidOutput) > 0.1 && 
+		   math.Abs(controller.lastPIDOut) > 0.1 {
+			oscillating = true
+		}
+		controller.lastPIDOut = pidOutput
+		
+		// Generate patches based on the output
+		controllerPatches := controller.generatePatches(ctx, pidOutput, kpiValue, oscillating)
+		patches = append(patches, controllerPatches...)
+	}
+	
+	return patches, nil
 }
 
 // OnConfigPatch implements the UpdateableProcessor interface
@@ -231,12 +278,10 @@ func (p *pidProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 
 		// Find the runtime controller instance
 		var ctrlInstance *controller
-		var ctrlInstanceIdx int
 		found = false
-		for i, ctrl := range p.controllers {
+		for _, ctrl := range p.controllers {
 			if ctrl.config.Name == controllerName {
 				ctrlInstance = ctrl
-				ctrlInstanceIdx = i
 				found = true
 				break
 			}
@@ -258,14 +303,166 @@ func (p *pidProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 		// Update the PID controller's setpoint
 		ctrlInstance.pid.SetSetpoint(targetValue)
 
+		// Reset integral term when setpoint changes significantly to prevent windup
+		ctrlInstance.pid.ResetIntegral()
+
 		p.logger.Info("Updated controller KPI target value",
 			zap.String("controller", controllerName),
 			zap.Float64("target_value", targetValue))
 		return nil
 
+	case "kp":
+		// Find the controller by name
+		controllerName := getControllerName(patch.TargetProcessorName)
+		if controllerName == "" {
+			return fmt.Errorf("invalid target processor name: %s", patch.TargetProcessorName.String())
+		}
+
+		// Find controller in config
+		configIdx, found := findControllerIndex(controllerName)
+		if !found {
+			return fmt.Errorf("controller not found in config: %s", controllerName)
+		}
+
+		// Find the runtime controller instance
+		var ctrlInstance *controller
+		for _, ctrl := range p.controllers {
+			if ctrl.config.Name == controllerName {
+				ctrlInstance = ctrl
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return fmt.Errorf("controller runtime instance not found: %s", controllerName)
+		}
+
+		// Convert to float64 using type converter
+		kp, err := typeconv.ToFloat64(patch.NewValue)
+		if err != nil {
+			return fmt.Errorf("invalid value for kp: %v", err)
+		}
+
+		// Get current tuning values to update only kp
+		_, currentKI, currentKD := ctrlInstance.pid.GetTunings()
+		
+		// Update the controller configuration
+		p.config.Controllers[configIdx].KP = kp
+
+		// Update the PID controller's tuning
+		ctrlInstance.pid.SetTunings(kp, currentKI, currentKD)
+
+		p.logger.Info("Updated controller proportional gain",
+			zap.String("controller", controllerName),
+			zap.Float64("kp", kp))
+		return nil
+
+	case "ki":
+		// Find the controller by name
+		controllerName := getControllerName(patch.TargetProcessorName)
+		if controllerName == "" {
+			return fmt.Errorf("invalid target processor name: %s", patch.TargetProcessorName.String())
+		}
+
+		// Find controller in config
+		configIdx, found := findControllerIndex(controllerName)
+		if !found {
+			return fmt.Errorf("controller not found in config: %s", controllerName)
+		}
+
+		// Find the runtime controller instance
+		var ctrlInstance *controller
+		for _, ctrl := range p.controllers {
+			if ctrl.config.Name == controllerName {
+				ctrlInstance = ctrl
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return fmt.Errorf("controller runtime instance not found: %s", controllerName)
+		}
+
+		// Convert to float64 using type converter
+		ki, err := typeconv.ToFloat64(patch.NewValue)
+		if err != nil {
+			return fmt.Errorf("invalid value for ki: %v", err)
+		}
+
+		// Get current tuning values to update only ki
+		currentKP, _, currentKD := ctrlInstance.pid.GetTunings()
+		
+		// Update the controller configuration
+		p.config.Controllers[configIdx].KI = ki
+
+		// Update the PID controller's tuning
+		ctrlInstance.pid.SetTunings(currentKP, ki, currentKD)
+
+		// Reset integral term when ki changes to prevent windup
+		ctrlInstance.pid.ResetIntegral()
+
+		p.logger.Info("Updated controller integral gain",
+			zap.String("controller", controllerName),
+			zap.Float64("ki", ki))
+		return nil
+
+	case "kd":
+		// Find the controller by name
+		controllerName := getControllerName(patch.TargetProcessorName)
+		if controllerName == "" {
+			return fmt.Errorf("invalid target processor name: %s", patch.TargetProcessorName.String())
+		}
+
+		// Find controller in config
+		configIdx, found := findControllerIndex(controllerName)
+		if !found {
+			return fmt.Errorf("controller not found in config: %s", controllerName)
+		}
+
+		// Find the runtime controller instance
+		var ctrlInstance *controller
+		for _, ctrl := range p.controllers {
+			if ctrl.config.Name == controllerName {
+				ctrlInstance = ctrl
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return fmt.Errorf("controller runtime instance not found: %s", controllerName)
+		}
+
+		// Convert to float64 using type converter
+		kd, err := typeconv.ToFloat64(patch.NewValue)
+		if err != nil {
+			return fmt.Errorf("invalid value for kd: %v", err)
+		}
+
+		// Get current tuning values to update only kd
+		currentKP, currentKI, _ := ctrlInstance.pid.GetTunings()
+		
+		// Update the controller configuration
+		p.config.Controllers[configIdx].KD = kd
+
+		// Update the PID controller's tuning
+		ctrlInstance.pid.SetTunings(currentKP, currentKI, kd)
+
+		p.logger.Info("Updated controller derivative gain",
+			zap.String("controller", controllerName),
+			zap.Float64("kd", kd))
+		return nil
+
 	default:
 		return fmt.Errorf("unsupported parameter: %s", patch.ParameterPath)
 	}
+}
+
+// GetName returns the processor name for identification
+func (p *pidProcessor) GetName() string {
+	return "adaptive_pid"
 }
 
 // GetConfigStatus implements the UpdateableProcessor interface

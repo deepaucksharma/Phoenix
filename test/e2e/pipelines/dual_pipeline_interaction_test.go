@@ -78,7 +78,7 @@ func TestDualPipelineInteraction(t *testing.T) {
 		pidConfig, 
 		component.TelemetrySettings{}, 
 		picControlExt, // Connect to pic_control_ext for patch submission
-		component.NewIDWithName("processor", "pid_decider"),
+		component.NewIDWithName(component.MustNewType("processor"), "pid_decider"),
 	)
 	require.NoError(t, err, "Failed to create adaptive_pid processor")
 	
@@ -114,7 +114,7 @@ func TestDualPipelineInteraction(t *testing.T) {
 	require.NotNil(t, kValuePatch, "Should generate a patch for k_value")
 	
 	// Verify the patch correctly targets adaptive_topk
-	assert.Equal(t, component.NewIDWithName("processor", "adaptive_topk"), kValuePatch.TargetProcessorName)
+	assert.Equal(t, component.NewIDWithName(component.MustNewType("processor"), "adaptive_topk"), kValuePatch.TargetProcessorName)
 	
 	// Verify the patch increases k_value (to improve coverage)
 	newKValue, ok := kValuePatch.NewValue.(float64)
@@ -126,7 +126,8 @@ func TestDualPipelineInteraction(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	
 	// Check if the processor's parameter was updated
-	updatedKValue := mockTopK.GetParameter("k_value")
+	updatedKValue, exists := mockTopK.GetParameter("k_value")
+	assert.True(t, exists, "k_value parameter should exist")
 	assert.Equal(t, newKValue, updatedKValue, "Processor's k_value should be updated")
 	
 	// STEP 3: Now simulate improved metrics after the adjustment

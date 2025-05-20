@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 
 	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_pid"
@@ -57,7 +58,7 @@ func TestMissingSelfMetrics(t *testing.T) {
 
 	// Create the PID processor
 	settings := component.TelemetrySettings{}
-	processor, err := adaptive_pid.NewProcessor(config, settings, nil, component.NewIDWithName("processor", "pid_decider"))
+	processor, err := adaptive_pid.NewProcessor(config, settings, nil, component.NewIDWithName(component.MustNewType("processor"), "pid_decider"))
 	require.NoError(t, err, "Failed to create adaptive_pid processor")
 
 	// Create metrics with NO KPI data
@@ -94,7 +95,8 @@ func TestMissingSelfMetrics(t *testing.T) {
 		}
 	}
 	
-	t.Fail("Expected to find patch for k_value parameter")
+	t.Fail()
+		t.Log("Expected to find patch for k_value parameter")
 }
 
 // createEmptyMetrics creates metrics with no KPI data.
@@ -109,7 +111,7 @@ func createEmptyMetrics(t *testing.T) pmetric.Metrics {
 	metric.SetName("irrelevant_metric")
 	gauge := metric.SetEmptyGauge()
 	dataPoint := gauge.DataPoints().AppendEmpty()
-	dataPoint.SetTimestamp(pmetric.NewTimestampFromTime(time.Now()))
+	dataPoint.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 	dataPoint.SetDoubleValue(123.45)
 	
 	return metrics
@@ -126,7 +128,7 @@ func createTestMetricsWithKPI(t *testing.T, kpiName string, value float64) pmetr
 	metric.SetName(kpiName)
 	gauge := metric.SetEmptyGauge()
 	dataPoint := gauge.DataPoints().AppendEmpty()
-	dataPoint.SetTimestamp(pmetric.NewTimestampFromTime(time.Now()))
+	dataPoint.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 	dataPoint.SetDoubleValue(value)
 	
 	return metrics

@@ -11,7 +11,7 @@ import (
 type Item struct {
 	ID    string  // Identifier for this item
 	Count float64 // Estimated count for this item
-	Error float64 // Maximum error in the count estimate
+	Error float64 // Maximum error in the count estimate (maximum overestimation possible)
 	index int     // Index in the heap, used by heap.Interface
 }
 
@@ -45,6 +45,7 @@ func (ss *SpaceSaving) Add(id string, count float64) {
 		return // Ignore non-positive counts
 	}
 
+	// Use lock with minimal scope
 	ss.lock.Lock()
 	defer ss.lock.Unlock()
 
@@ -62,7 +63,7 @@ func (ss *SpaceSaving) Add(id string, count float64) {
 		item := &Item{
 			ID:    id,
 			Count: count,
-			Error: 0,
+			Error: 0, // New items have zero error since their count is exact
 		}
 		heap.Push(&ss.heap, item)
 		ss.items[id] = item
@@ -71,15 +72,23 @@ func (ss *SpaceSaving) Add(id string, count float64) {
 
 	// Otherwise, replace the minimum item
 	minItem := ss.heap[0]
-	error := minItem.Count
+	
+	// The true error bound is the minimum item's count
+	// This is the maximum possible error in our estimate for the new item
+	errorBound := minItem.Count
 
-	// Remove the minimum item
+	// Remove the minimum item from our tracking
 	delete(ss.items, minItem.ID)
 
 	// Replace with the new item
+	// The new count is the minimum count plus the incoming count
+	// This ensures the new item will have a higher count than the minimum
 	minItem.ID = id
 	minItem.Count = minItem.Count + count
-	minItem.Error = error
+	
+	// Store the error bound - this is the maximum overestimation possible
+	// due to replacing the minimum item
+	minItem.Error = errorBound
 
 	// Update the map and fix the heap
 	ss.items[id] = minItem
@@ -94,6 +103,7 @@ func (ss *SpaceSaving) GetTopK() []*Item {
 	result := make([]*Item, len(ss.items))
 	i := 0
 	for _, item := range ss.items {
+		// Create a deep copy to prevent concurrent modification
 		result[i] = &Item{
 			ID:    item.ID,
 			Count: item.Count,
@@ -150,12 +160,21 @@ func (ss *SpaceSaving) SetK(newK int) {
 			heap.Push(&ss.heap, newItem)
 			ss.items[item.ID] = newItem
 		}
+		
+		// Update total count to account for discarded items
+		// This ensures GetCoverage() remains accurate
+		newTotalCount := 0.0
+		for _, item := range ss.items {
+			newTotalCount += item.Count
+		}
+		ss.totalCount = newTotalCount
 	}
 
 	ss.k = newK
 }
 
 // GetCoverage returns the fraction of the total count covered by the top-k items
+// Adjusted to account for potential error in the counts
 func (ss *SpaceSaving) GetCoverage() float64 {
 	ss.lock.RLock()
 	defer ss.lock.RUnlock()
@@ -165,11 +184,26 @@ func (ss *SpaceSaving) GetCoverage() float64 {
 	}
 
 	topKCount := 0.0
+	totalError := 0.0
+	
+	// Sum all counts and errors
 	for _, item := range ss.items {
 		topKCount += item.Count
+		totalError += item.Error
 	}
 
-	return topKCount / ss.totalCount
+	// Adjust for potential overestimation
+	// The true count could be as low as (topKCount - totalError)
+	adjustedCoverage := (topKCount - totalError) / ss.totalCount
+	
+	// Ensure the coverage is between 0 and 1
+	if adjustedCoverage < 0 {
+		adjustedCoverage = 0
+	} else if adjustedCoverage > 1 {
+		adjustedCoverage = 1
+	}
+
+	return adjustedCoverage
 }
 
 // minHeap implementation (heap.Interface)

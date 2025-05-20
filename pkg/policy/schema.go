@@ -220,6 +220,15 @@ func LoadPolicy(filename string) (*Policy, error) {
 	return &policy, nil
 }
 
+// ReadPolicyFile reads the raw bytes from a policy file
+func ReadPolicyFile(filename string) ([]byte, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("reading policy file: %w", err)
+	}
+	return data, nil
+}
+
 // ParsePolicy parses and validates policy YAML from memory.
 func ParsePolicy(data []byte) (*Policy, error) {
 	if err := ValidatePolicy(data); err != nil {

@@ -286,6 +286,11 @@ func (p *processorImpl) OnConfigPatch(ctx context.Context, patch interfaces.Conf
 	}
 }
 
+// GetName returns the processor name for identification
+func (p *processorImpl) GetName() string {
+	return "adaptive_topk"
+}
+
 // GetConfigStatus implements UpdateableProcessor interface.
 func (p *processorImpl) GetConfigStatus(ctx context.Context) (interfaces.ConfigStatus, error) {
 	p.RLock()

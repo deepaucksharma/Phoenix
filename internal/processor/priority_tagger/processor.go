@@ -96,6 +96,11 @@ func (p *processorImp) Capabilities() consumer.Capabilities {
 	return consumer.Capabilities{MutatesData: true}
 }
 
+// GetName returns the processor name for identification
+func (p *processorImp) GetName() string {
+	return "priority_tagger"
+}
+
 // ConsumeMetrics implements the consumer.Metrics interface.
 func (p *processorImp) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
 	p.lock.RLock()

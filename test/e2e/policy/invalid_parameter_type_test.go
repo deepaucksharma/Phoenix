@@ -60,7 +60,7 @@ func TestInvalidParameterType(t *testing.T) {
 	// Create an invalid patch with wrong type (string instead of int)
 	invalidPatch := interfaces.ConfigPatch{
 		PatchID:             "test-invalid-type-patch",
-		TargetProcessorName: component.NewIDWithName("processor", "adaptive_topk"),
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("processor"), "adaptive_topk"),
 		ParameterPath:       "k_value",
 		NewValue:            "20", // String value for an integer parameter
 		Reason:              "Testing invalid type handling",
@@ -91,12 +91,14 @@ func TestInvalidParameterType(t *testing.T) {
 	assert.True(t, foundValidationFailure, "patch_validation_failed_total metric should be emitted")
 
 	// Verify the processor's value didn't change
-	assert.Equal(t, 10, mockTopK.GetParameter("k_value"), "Processor parameter should remain unchanged")
+	value, exists := mockTopK.GetParameter("k_value")
+	assert.True(t, exists, "k_value parameter should exist")
+	assert.Equal(t, 10, value, "Processor parameter should remain unchanged")
 	
 	// Now try with a valid patch to verify normal operation
 	validPatch := interfaces.ConfigPatch{
 		PatchID:             "test-valid-type-patch",
-		TargetProcessorName: component.NewIDWithName("processor", "adaptive_topk"),
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("processor"), "adaptive_topk"),
 		ParameterPath:       "k_value",
 		NewValue:            30, // Correct integer type
 		Reason:              "Testing valid type handling",
@@ -111,5 +113,7 @@ func TestInvalidParameterType(t *testing.T) {
 	assert.NoError(t, err, "Valid patch should be accepted")
 	
 	// Verify the parameter was updated
-	assert.Equal(t, 30, mockTopK.GetParameter("k_value"), "Processor parameter should be updated")
+	value, exists = mockTopK.GetParameter("k_value")
+	assert.True(t, exists, "k_value parameter should exist")
+	assert.Equal(t, 30, value, "Processor parameter should be updated")
 }

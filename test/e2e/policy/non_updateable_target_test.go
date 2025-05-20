@@ -61,7 +61,7 @@ func TestNonUpdateableTarget(t *testing.T) {
 	// Create a patch targeting a non-existent component (batch processor from standard_components)
 	nonUpdateablePatch := interfaces.ConfigPatch{
 		PatchID:             "test-non-updateable-patch",
-		TargetProcessorName: component.NewIDWithName("processor", "batch"),
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("processor"), "batch"),
 		ParameterPath:       "batch_size",
 		NewValue:            1000,
 		Reason:              "Testing non-updateable target handling",
@@ -94,7 +94,7 @@ func TestNonUpdateableTarget(t *testing.T) {
 	// Verify the updateable processor is still properly registered
 	validPatch := interfaces.ConfigPatch{
 		PatchID:             "test-valid-target-patch",
-		TargetProcessorName: component.NewIDWithName("processor", "adaptive_topk"),
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("processor"), "adaptive_topk"),
 		ParameterPath:       "k_value",
 		NewValue:            20,
 		Reason:              "Testing valid target handling",
@@ -109,12 +109,14 @@ func TestNonUpdateableTarget(t *testing.T) {
 	assert.NoError(t, err, "Valid patch should be accepted")
 	
 	// Verify the parameter was updated on the valid target
-	assert.Equal(t, 20, mockTopK.GetParameter("k_value"), "Valid processor parameter should be updated")
+	value, exists := mockTopK.GetParameter("k_value")
+	assert.True(t, exists, "k_value parameter should exist")
+	assert.Equal(t, 20, value, "Valid processor parameter should be updated")
 
 	// Test targeting a processor that exists in the policy but hasn't been registered
 	unregisteredPatch := interfaces.ConfigPatch{
 		PatchID:             "test-unregistered-processor-patch",
-		TargetProcessorName: component.NewIDWithName("processor", "priority_tagger"),
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("processor"), "priority_tagger"),
 		ParameterPath:       "priority_threshold",
 		NewValue:            0.8,
 		Reason:              "Testing unregistered processor handling",

@@ -1,6 +1,9 @@
 package adaptive_pid
 
 import (
+	"time"
+	
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
@@ -50,4 +53,20 @@ func extractKPIValues(md pmetric.Metrics) map[string]float64 {
 	}
 	
 	return result
+}
+
+// createMetric creates a simple metric for testing purposes
+func createMetric(name string, value float64) pmetric.Metrics {
+	metrics := pmetric.NewMetrics()
+	rm := metrics.ResourceMetrics().AppendEmpty()
+	sm := rm.ScopeMetrics().AppendEmpty()
+	m := sm.Metrics().AppendEmpty()
+	
+	m.SetName(name)
+	m.SetEmptyGauge()
+	dp := m.Gauge().DataPoints().AppendEmpty()
+	dp.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+	dp.SetDoubleValue(value)
+	
+	return metrics
 }

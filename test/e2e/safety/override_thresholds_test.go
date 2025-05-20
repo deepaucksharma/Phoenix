@@ -87,7 +87,7 @@ func TestOverrideThresholds(t *testing.T) {
 	// Create a standard patch to apply
 	validPatch := interfaces.ConfigPatch{
 		PatchID:             "standard-patch",
-		TargetProcessorName: component.NewIDWithName("processor", "test_processor"),
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("processor"), "test_processor"),
 		ParameterPath:       "value",
 		NewValue:            20,
 		Reason:              "Standard patch",
@@ -100,7 +100,9 @@ func TestOverrideThresholds(t *testing.T) {
 	// Verify the patch works normally
 	err = picControlExt.ApplyConfigPatch(ctx, validPatch)
 	assert.NoError(t, err, "Patch should be accepted under normal conditions")
-	assert.Equal(t, 20, mockProcessor.GetParameter("value"), "Parameter should be updated")
+	value, exists := mockProcessor.GetParameter("value")
+	assert.True(t, exists, "value parameter should exist")
+	assert.Equal(t, 20, value, "Parameter should be updated")
 
 	// Now simulate resource exhaustion
 	mockMetricsProvider.CPUUsageMCores = 600    // Above threshold
@@ -121,12 +123,14 @@ func TestOverrideThresholds(t *testing.T) {
 	validPatch.NewValue = 30
 	err = picControlExt.ApplyConfigPatch(ctx, validPatch)
 	assert.Error(t, err, "Patch should be rejected in safe mode")
-	assert.Equal(t, 20, mockProcessor.GetParameter("value"), "Parameter should not be updated in safe mode")
+	value, exists = mockProcessor.GetParameter("value")
+	assert.True(t, exists, "value parameter should exist")
+	assert.Equal(t, 20, value, "Parameter should not be updated in safe mode")
 	
 	// Now create an urgent patch with override safety flag
 	urgentPatch := interfaces.ConfigPatch{
 		PatchID:             "urgent-override-patch",
-		TargetProcessorName: component.NewIDWithName("processor", "test_processor"),
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("processor"), "test_processor"),
 		ParameterPath:       "value",
 		NewValue:            40,
 		Reason:              "Urgent override patch",
@@ -140,7 +144,9 @@ func TestOverrideThresholds(t *testing.T) {
 	// Apply the urgent patch with safety override
 	err = picControlExt.ApplyConfigPatch(ctx, urgentPatch)
 	assert.NoError(t, err, "Urgent patch with safety override should be accepted")
-	assert.Equal(t, 40, mockProcessor.GetParameter("value"), "Parameter should be updated")
+	value, exists = mockProcessor.GetParameter("value")
+	assert.True(t, exists, "value parameter should exist")
+	assert.Equal(t, 40, value, "Parameter should be updated")
 	
 	// Verify threshold values were temporarily increased
 	assert.Greater(t, safetyMonitor.GetCurrentCPUThreshold(), safetyConfig.CPUUsageThresholdMCores,
@@ -164,5 +170,7 @@ func TestOverrideThresholds(t *testing.T) {
 	validPatch.NewValue = 50
 	err = picControlExt.ApplyConfigPatch(ctx, validPatch)
 	assert.NoError(t, err, "Patch should be accepted after safe mode deactivation")
-	assert.Equal(t, 50, mockProcessor.GetParameter("value"), "Parameter should be updated")
+	value, exists = mockProcessor.GetParameter("value")
+	assert.True(t, exists, "value parameter should exist")
+	assert.Equal(t, 50, value, "Parameter should be updated")
 }

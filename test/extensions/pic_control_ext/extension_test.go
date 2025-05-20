@@ -94,6 +94,7 @@ func newMockProcessor() *mockProcessor {
 
 func (m *mockProcessor) Start(context.Context, component.Host) error { return nil }
 func (m *mockProcessor) Shutdown(context.Context) error              { return nil }
+func (m *mockProcessor) GetName() string                             { return "mock_processor" }
 
 func (m *mockProcessor) OnConfigPatch(ctx context.Context, patch interfaces.ConfigPatch) error {
 	m.patches = append(m.patches, patch)
