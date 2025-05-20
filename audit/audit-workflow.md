@@ -10,7 +10,7 @@ First, initialize the audit directory structure and discover all components:
 
 ```bash
 mkdir -p audit
-python audit/audit-tool.py init --project-root /home/deepak/Phoenix --audit-dir audit
+python audit/audit-tool.py init --project-root $(pwd) --audit-dir audit
 ```
 
 This will:
@@ -23,7 +23,7 @@ This will:
 Familiarize yourself with the audit plan:
 
 ```bash
-less /home/deepak/Phoenix/audit-plan.md
+less audit-plan.md
 ```
 
 ## Conducting Component Audits
