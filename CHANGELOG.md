@@ -12,11 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added Bayesian optimization for multi-dimensional parameter spaces
 - Added Policy-In-Code (PIC) control extension for configuration governance
 - Added comprehensive PID controller documentation and tuning guidelines
-- Added standardized task tracking system
 - Added benchmarking CI workflow for continuous performance monitoring
-- Added agent definition for tester role
-- Added agent-specific issue template
-- Enhanced PR template with better agent role integration
+- Enhanced PR template with better integration
 - Added comprehensive development guide and documentation
 - Added Docker Compose setup for development environment
 - Added Dev Container configuration for VS Code
@@ -28,8 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cleaned up and consolidated project files
 - Updated Dependabot configuration to include dedicated security updates
 - Updated GoReleaser configuration with better version information
-- Updated CODEOWNERS file to include tester role
-- Improved task creation script with more options and role validation
+- Updated CODEOWNERS file with appropriate roles
 - Enhanced Makefile with better offline support and documentation
 - Standardized Go version to 1.22 across all workflows and Docker
 - Improved offline build documentation
@@ -38,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed low-pass filtering for derivative term to reduce noise sensitivity
 - Fixed Space-Saving algorithm for accurate frequency tracking
 - Fixed thread safety issues in controller code
-- Removed Windows-based GitHub tasks to reduce CI load
+- Removed Windows-based GitHub workflows to reduce CI load
 - Fixed Docker image build process with proper versioning
 - Ensured consistent vendored dependencies usage
 

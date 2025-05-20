@@ -9,14 +9,11 @@ Architecture Decision Records are documents that capture important architectural
 ## ADR Index
 
 - [ADR-001: Dual Pipeline Architecture](001-dual-pipeline-architecture.md)
-- [ADR-002: Self-Regulating PID Control for Adaptive Processing](20250519-use-self-regulating-pid-control-for-adaptive-processing.md)
 
 ## Creating a New ADR
 
-Use the script in the repository to create a new ADR:
+To create a new ADR, use the following format and naming convention:
 
-```bash
-./hack/new-adr.sh "Title of the ADR"
-```
-
-This will create a new ADR with the correct format and naming convention.
+- Filename: NNN-title-with-hyphens.md (where NNN is the sequence number)
+- Include sections for Context, Decision, Consequences, and Alternatives Considered
+- Date the ADR for tracking purposes
