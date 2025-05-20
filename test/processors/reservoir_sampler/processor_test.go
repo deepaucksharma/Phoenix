@@ -18,6 +18,14 @@ import (
 	"github.com/deepaucksharma/Phoenix/test/testutils"
 )
 
+func TestReservoirSamplerConfigValidate(t *testing.T) {
+	cfg := &reservoir_sampler.Config{ReservoirSize: 0}
+	assert.Error(t, cfg.Validate())
+
+	cfg.ReservoirSize = 5
+	assert.NoError(t, cfg.Validate())
+}
+
 func TestReservoirSamplerProcessor(t *testing.T) {
 	factory := reservoir_sampler.NewFactory()
 	cfg := factory.CreateDefaultConfig().(*reservoir_sampler.Config)
