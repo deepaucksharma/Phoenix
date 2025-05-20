@@ -3,6 +3,7 @@ package priority_tagger
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"sync"
 
@@ -149,7 +150,7 @@ func (p *processorImp) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 		// Update enabled flag
 		enabled, ok := patch.NewValue.(bool)
 		if !ok {
-			return nil
+			return fmt.Errorf("invalid type for enabled: %T", patch.NewValue)
 		}
 		p.config.Enabled = enabled
 		return nil
@@ -158,7 +159,7 @@ func (p *processorImp) OnConfigPatch(ctx context.Context, patch interfaces.Confi
 		// Update rules
 		rules, ok := patch.NewValue.([]Rule)
 		if !ok {
-			return nil
+			return fmt.Errorf("invalid type for rules: %T", patch.NewValue)
 		}
 
 		// Reset rules
