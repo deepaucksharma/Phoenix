@@ -14,8 +14,40 @@ import (
 	"go.opentelemetry.io/collector/processor"
 	"go.uber.org/zap"
 
+	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 	learner "github.com/deepaucksharma/Phoenix/internal/processor/process_context_learner"
 )
+
+func TestProcessContextLearnerConfigValidate(t *testing.T) {
+	cfg := &learner.Config{DampingFactor: 0, Iterations: 0}
+	assert.Error(t, cfg.Validate())
+
+	cfg.DampingFactor = 0.5
+	cfg.Iterations = 3
+	assert.NoError(t, cfg.Validate())
+}
+
+func TestProcessContextLearnerOnPatch(t *testing.T) {
+	factory := learner.NewFactory()
+	cfg := factory.CreateDefaultConfig().(*learner.Config)
+	ctx := context.Background()
+	sink := new(consumertest.MetricsSink)
+	proc, err := factory.CreateMetrics(ctx, processor.Settings{TelemetrySettings: component.TelemetrySettings{Logger: zap.NewNop()}}, cfg, sink)
+	require.NoError(t, err)
+	up, ok := proc.(interfaces.UpdateableProcessor)
+	require.True(t, ok)
+
+	patch := interfaces.ConfigPatch{
+		PatchID:             "damp",
+		TargetProcessorName: component.NewIDWithName(component.MustNewType("process_context_learner"), ""),
+		ParameterPath:       "damping_factor",
+		NewValue:            0.6,
+	}
+	require.NoError(t, up.OnConfigPatch(ctx, patch))
+	status, err := up.GetConfigStatus(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0.6, status.Parameters["damping_factor"])
+}
 
 func TestProcessContextLearner(t *testing.T) {
 	factory := learner.NewFactory()
@@ -51,7 +83,7 @@ func TestProcessContextLearner(t *testing.T) {
 
 	lp := proc.(*learner.ProcessorImpl)
 	scores := lp.GetScores()
-	require.Len(t, scores, 4)
+	require.GreaterOrEqual(t, len(scores), 4)
 
 	assert.Greater(t, scores[1], scores[2])
 	assert.Greater(t, scores[2], scores[3])

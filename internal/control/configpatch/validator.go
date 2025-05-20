@@ -51,9 +51,9 @@ func DefaultOptions() *Options {
 type StandardValidator struct {
 	options        *Options
 	patchHistory   []interfaces.ConfigPatch
-	paramLastPatch map[string]time.Time  // Last patch time per parameter
-	patchCount     int                   // Number of patches in the current minute
-	lastMinute     time.Time             // The start of the current minute window
+	paramLastPatch map[string]time.Time // Last patch time per parameter
+	patchCount     int                  // Number of patches in the current minute
+	lastMinute     time.Time            // The start of the current minute window
 }
 
 // NewStandardValidator creates a new standard validator with the given options
@@ -196,12 +196,12 @@ func (v *StandardValidator) Validate(patch interfaces.ConfigPatch) error {
 // GetHistory returns the patch history (newest first)
 func (v *StandardValidator) GetHistory() []interfaces.ConfigPatch {
 	history := make([]interfaces.ConfigPatch, len(v.patchHistory))
-	
+
 	// Copy in reverse order (newest first)
 	for i, j := 0, len(v.patchHistory)-1; j >= 0; i, j = i+1, j-1 {
 		history[i] = v.patchHistory[j]
 	}
-	
+
 	return history
 }
 

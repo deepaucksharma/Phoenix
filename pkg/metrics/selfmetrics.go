@@ -4,7 +4,7 @@ package metrics
 import (
 	"fmt"
 	"time"
-	
+
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -55,15 +55,15 @@ func CreatePatchMetric(patch *interfaces.ConfigPatch) pmetric.Metrics {
 	rm := metrics.ResourceMetrics().AppendEmpty()
 	sm := rm.ScopeMetrics().AppendEmpty()
 	sm.Scope().SetName("phoenix.pid_decider")
-	
+
 	m := sm.Metrics().AppendEmpty()
 	m.SetName("aemf_ctrl_proposed_patch")
 	m.SetDescription("Proposed configuration patch")
-	
+
 	dp := m.SetEmptyGauge().DataPoints().AppendEmpty()
 	dp.SetDoubleValue(1.0) // Always 1.0 to indicate a patch
 	dp.SetTimestamp(pcommon.NewTimestampFromTime(time.Unix(patch.Timestamp, 0)))
-	
+
 	// Add attributes from the patch
 	dp.Attributes().PutStr("patch_id", patch.PatchID)
 	dp.Attributes().PutStr("target_processor_name", patch.TargetProcessorName.String())
@@ -71,7 +71,7 @@ func CreatePatchMetric(patch *interfaces.ConfigPatch) pmetric.Metrics {
 	dp.Attributes().PutStr("reason", patch.Reason)
 	dp.Attributes().PutStr("severity", patch.Severity)
 	dp.Attributes().PutStr("source", patch.Source)
-	
+
 	// Add the new value as string, regardless of its actual type
 	switch v := patch.NewValue.(type) {
 	case int:
@@ -86,6 +86,6 @@ func CreatePatchMetric(patch *interfaces.ConfigPatch) pmetric.Metrics {
 		// Try to convert to string as fallback
 		dp.Attributes().PutStr("new_value_string", fmt.Sprintf("%v", v))
 	}
-	
+
 	return metrics
 }

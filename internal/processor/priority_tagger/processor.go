@@ -47,12 +47,12 @@ func (cfg *Config) Validate() error {
 
 // processorImp is the implementation of the priority_tagger processor.
 type processorImp struct {
-	config    Config
-	logger    *zap.Logger
-	next      consumer.Metrics
-	rules     []*regexp.Regexp
-	lock      sync.RWMutex
-	metrics   *metrics.MetricsEmitter
+	config  Config
+	logger  *zap.Logger
+	next    consumer.Metrics
+	rules   []*regexp.Regexp
+	lock    sync.RWMutex
+	metrics *metrics.MetricsEmitter
 }
 
 // Ensure the processor implements the required interfaces.

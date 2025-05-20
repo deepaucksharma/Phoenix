@@ -10,7 +10,7 @@ import (
 // ConfigPatch defines a proposed change to a processor's configuration
 type ConfigPatch struct {
 	PatchID             string       `json:"patch_id"`              // Unique ID for this patch attempt
-	TargetProcessorName component.ID  `json:"target_processor_name"` // Name of the processor to update
+	TargetProcessorName component.ID `json:"target_processor_name"` // Name of the processor to update
 	ParameterPath       string       `json:"parameter_path"`        // Dot-separated path to the parameter
 	NewValue            any          `json:"new_value"`             // The new value for the parameter
 	PrevValue           any          `json:"prev_value"`            // Previous value (for rollback)

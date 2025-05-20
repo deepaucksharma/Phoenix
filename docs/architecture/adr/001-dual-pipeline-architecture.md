@@ -77,3 +77,4 @@ We will implement a dual-pipeline architecture within a single OpenTelemetry Col
 - OpenTelemetry Collector Architecture: https://opentelemetry.io/docs/collector/about/
 - PID Controller Theory: https://en.wikipedia.org/wiki/PID_controller
 - Service Mesh Auto-Configuration: Various Istio and Linkerd papers
+

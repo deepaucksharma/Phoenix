@@ -9,7 +9,7 @@ import (
 
 // Test configuration structure
 type TestConfig struct {
-	BaseConfig `mapstructure:",squash"`
+	BaseConfig  `mapstructure:",squash"`
 	StringParam string `mapstructure:"string_param"`
 	IntParam    int    `mapstructure:"int_param"`
 	NestedParam struct {
@@ -20,7 +20,7 @@ type TestConfig struct {
 
 func TestGetConfigByPath(t *testing.T) {
 	cfg := &TestConfig{
-		BaseConfig: BaseConfig{Enabled: true},
+		BaseConfig:  BaseConfig{Enabled: true},
 		StringParam: "test",
 		IntParam:    42,
 		SliceParam:  []string{"a", "b", "c"},
@@ -102,45 +102,45 @@ func TestSetConfigByPath(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			name:    "Set enabled",
-			path:    "enabled",
-			value:   false,
+			name:  "Set enabled",
+			path:  "enabled",
+			value: false,
 			validate: func(cfg *TestConfig) bool {
 				return !cfg.Enabled
 			},
 			wantErr: false,
 		},
 		{
-			name:    "Set string param",
-			path:    "StringParam",
-			value:   "new value",
+			name:  "Set string param",
+			path:  "StringParam",
+			value: "new value",
 			validate: func(cfg *TestConfig) bool {
 				return cfg.StringParam == "new value"
 			},
 			wantErr: false,
 		},
 		{
-			name:    "Set int param",
-			path:    "IntParam",
-			value:   99,
+			name:  "Set int param",
+			path:  "IntParam",
+			value: 99,
 			validate: func(cfg *TestConfig) bool {
 				return cfg.IntParam == 99
 			},
 			wantErr: false,
 		},
 		{
-			name:    "Set nested param",
-			path:    "NestedParam.SubParam",
-			value:   false,
+			name:  "Set nested param",
+			path:  "NestedParam.SubParam",
+			value: false,
 			validate: func(cfg *TestConfig) bool {
 				return !cfg.NestedParam.SubParam
 			},
 			wantErr: false,
 		},
 		{
-			name:    "Set slice element",
-			path:    "SliceParam[1]",
-			value:   "z",
+			name:  "Set slice element",
+			path:  "SliceParam[1]",
+			value: "z",
 			validate: func(cfg *TestConfig) bool {
 				return cfg.SliceParam[1] == "z"
 			},
@@ -164,7 +164,7 @@ func TestSetConfigByPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a fresh config for each test
 			cfg := &TestConfig{
-				BaseConfig: BaseConfig{Enabled: true},
+				BaseConfig:  BaseConfig{Enabled: true},
 				StringParam: "test",
 				IntParam:    42,
 				SliceParam:  []string{"a", "b", "c"},
@@ -184,7 +184,7 @@ func TestSetConfigByPath(t *testing.T) {
 
 func TestGetDefaultConfigStatus(t *testing.T) {
 	cfg := &TestConfig{
-		BaseConfig: BaseConfig{Enabled: true},
+		BaseConfig:  BaseConfig{Enabled: true},
 		StringParam: "test",
 		IntParam:    42,
 		SliceParam:  []string{"a", "b", "c"},
@@ -193,14 +193,14 @@ func TestGetDefaultConfigStatus(t *testing.T) {
 
 	status, err := GetDefaultConfigStatus(cfg)
 	require.NoError(t, err)
-	
+
 	// Check that Enabled is true
 	assert.True(t, status.Enabled)
-	
+
 	// Check that parameters are exported
 	assert.Contains(t, status.Parameters, "stringparam")
 	assert.Equal(t, "test", status.Parameters["stringparam"])
-	
+
 	assert.Contains(t, status.Parameters, "intparam")
 	assert.Equal(t, 42, status.Parameters["intparam"])
 }

@@ -18,6 +18,14 @@ import (
 	"github.com/deepaucksharma/Phoenix/test/testutils"
 )
 
+func TestCardinalityGuardianConfigValidate(t *testing.T) {
+	cfg := &cardinality_guardian.Config{MaxUnique: 0}
+	assert.Error(t, cfg.Validate())
+
+	cfg.MaxUnique = 5
+	assert.NoError(t, cfg.Validate())
+}
+
 // checkReduced verifies that datapoints have been bucketized.
 func checkReduced(md pmetric.Metrics) bool {
 	for i := 0; i < md.ResourceMetrics().Len(); i++ {

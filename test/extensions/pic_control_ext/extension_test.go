@@ -2,7 +2,11 @@ package pic_control_ext_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -21,8 +25,8 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/deepaucksharma/Phoenix/internal/connector/pic_connector"
-	piccontrol "github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
 	pic_control_ext "github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
+	piccontrol "github.com/deepaucksharma/Phoenix/internal/extension/pic_control_ext"
 	"github.com/deepaucksharma/Phoenix/internal/interfaces"
 	"github.com/deepaucksharma/Phoenix/internal/processor/adaptive_topk"
 	"github.com/deepaucksharma/Phoenix/pkg/policy"
@@ -47,12 +51,12 @@ func loadPolicyBytes(*piccontrol.Extension, []byte) error
 
 // mockProcessor implements interfaces.UpdateableProcessor for testing.
 type mockProcessor struct {
-	params  map[string]any
-	enabled bool
-	patches []interfaces.ConfigPatch
+	params       map[string]any
+	enabled      bool
+	patches      []interfaces.ConfigPatch
 	patchApplied bool
-	lastPatch interfaces.ConfigPatch
-	parameters map[string]any
+	lastPatch    interfaces.ConfigPatch
+	parameters   map[string]any
 }
 
 func getProcessors(e *piccontrol.Extension) map[component.ID]interfaces.UpdateableProcessor {
@@ -82,8 +86,8 @@ func isSafeMode(e *piccontrol.Extension) bool {
 
 func newMockProcessor() *mockProcessor {
 	return &mockProcessor{
-		params: make(map[string]any), 
-		enabled: true,
+		params:     make(map[string]any),
+		enabled:    true,
 		parameters: make(map[string]any),
 	}
 }
@@ -95,7 +99,7 @@ func (m *mockProcessor) OnConfigPatch(ctx context.Context, patch interfaces.Conf
 	m.patches = append(m.patches, patch)
 	m.patchApplied = true
 	m.lastPatch = patch
-	
+
 	if patch.ParameterPath == "enabled" {
 		v, ok := patch.NewValue.(bool)
 		if !ok {
@@ -154,6 +158,43 @@ pic_control_config:
       k_value: 10
 `
 
+const remotePolicy = `
+global_settings:
+  autonomy_level: shadow
+  collector_cpu_safety_limit_mcores: 400
+  collector_rss_safety_limit_mib: 350
+processors_config:
+  priority_tagger:
+    enabled: true
+  adaptive_topk:
+    enabled: true
+    k_value: 40
+    k_min: 10
+    k_max: 60
+  cardinality_guardian:
+    enabled: false
+    max_unique: 1000
+  reservoir_sampler:
+    enabled: false
+    reservoir_size: 100
+  others_rollup:
+    enabled: false
+pid_decider_config:
+  controllers:
+    - name: test
+      enabled: false
+      kpi_metric_name: test_metric
+      kpi_target_value: 1
+      output_config_patches: []
+pic_control_config:
+  policy_file_path: /etc/sa-omf/policy.yaml
+  max_patches_per_minute: 10
+  patch_cooldown_seconds: 1
+  safe_mode_processor_configs:
+    adaptive_topk:
+      k_value: 10
+`
+
 // createExtension with a single mock processor registered
 func createExtension(t *testing.T) (*piccontrol.Extension, component.ID, *mockProcessor) {
 	cfg := &piccontrol.Config{
@@ -183,6 +224,37 @@ func createStartedExtension(t *testing.T) (*piccontrol.Extension, component.ID, 
 		PatchCooldownSeconds: 1,
 		SafeModeConfigs: map[string]any{
 			"adaptive_topk": map[string]any{"k_value": 10},
+		},
+	}
+	ext, err := piccontrol.NewExtension(cfg, zaptest.NewLogger(t))
+	require.NoError(t, err)
+	procID := component.NewID(component.MustNewType("adaptive_topk"))
+	mp := newMockProcessor()
+	getProcessors(ext)[procID] = mp
+
+	ctx := context.Background()
+	require.NoError(t, ext.Start(ctx, mockHost{}))
+	t.Cleanup(func() { _ = ext.Shutdown(ctx) })
+	return ext, procID, mp
+}
+
+// createStartedOpAMPExtension starts the extension with OpAMP integration
+func createStartedOpAMPExtension(t *testing.T, serverURL string) (*piccontrol.Extension, component.ID, *mockProcessor) {
+	dir := t.TempDir()
+	policyFile := filepath.Join(dir, "policy.yaml")
+	require.NoError(t, os.WriteFile(policyFile, []byte(minimalPolicy), 0o644))
+
+	cfg := &piccontrol.Config{
+		PolicyFilePath:       policyFile,
+		MaxPatchesPerMinute:  1,
+		PatchCooldownSeconds: 0,
+		SafeModeConfigs: map[string]any{
+			"adaptive_topk": map[string]any{"k_value": 10},
+		},
+		OpAMPConfig: &piccontrol.OpAMPClientConfig{
+			ServerURL:           serverURL,
+			InsecureSkipVerify:  true,
+			PollIntervalSeconds: 1,
 		},
 	}
 	ext, err := piccontrol.NewExtension(cfg, zaptest.NewLogger(t))
@@ -353,9 +425,56 @@ func TestPicControlExtension(t *testing.T) {
 	assert.NoError(t, conn.Shutdown(ctx))
 }
 
+func TestOpAMPSync(t *testing.T) {
+	procID := component.NewID(component.MustNewType("adaptive_topk"))
+
+	patches := []interfaces.ConfigPatch{
+		{PatchID: "p1", TargetProcessorName: procID, ParameterPath: "k_value", NewValue: 45},
+		{PatchID: "p2", TargetProcessorName: procID, ParameterPath: "k_value", NewValue: 55},
+	}
+	patchIdx := 0
+	var statuses [][]byte
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/policy":
+			fmt.Fprint(w, remotePolicy)
+		case "/patch":
+			if patchIdx < len(patches) {
+				_ = json.NewEncoder(w).Encode(patches[patchIdx])
+				patchIdx++
+			} else {
+				w.WriteHeader(http.StatusNoContent)
+			}
+		case "/status":
+			body, _ := io.ReadAll(r.Body)
+			r.Body.Close()
+			statuses = append(statuses, body)
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	ext, _, proc := createStartedOpAMPExtension(t, server.URL)
+
+	time.Sleep(2500 * time.Millisecond)
+
+	assert.Equal(t, 45, proc.params["k_value"])
+	assert.Len(t, getPatchHistory(ext), 1)
+	assert.Equal(t, "p1", getPatchHistory(ext)[0].PatchID)
+
+	if assert.NotEmpty(t, statuses) {
+		var st map[string]any
+		require.NoError(t, json.Unmarshal(statuses[0], &st))
+		assert.Contains(t, st, "safe_mode")
+	}
+}
+
 func TestPicControlExtensionComprehensive(t *testing.T) {
 	t.Skip("Test temporarily disabled until API compatibility issues are fixed")
-	
+
 	// Original test implementation has been temporarily removed
 	assert.True(t, true, "Test skipped")
 }

@@ -238,11 +238,11 @@ func (e *Extension) registerProcessors() error {
 	// Note: The current implementation doesn't provide direct access to processors
 	// We'll use a placeholder method to simulate processor discovery
 	// This would be replaced with actual processor discovery in a production environment
-	
+
 	// Find processors from the host - this simulated code must be updated when a real solution
 	// for processor discovery is implemented
 	testProcessors := map[component.ID]interfaces.UpdateableProcessor{}
-	
+
 	// Simulated processors for testing
 	for id, proc := range testProcessors {
 		e.processors[id] = proc

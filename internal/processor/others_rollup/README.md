@@ -34,3 +34,4 @@ Example patch:
   "new_value": "avg"
 }
 ```
+

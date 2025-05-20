@@ -204,31 +204,7 @@ func testValidParameters(t *testing.T, suite *UpdateableProcessorTestSuite) {
 						
 					// Check if the value was set correctly, handling possible type conversions
 					if status.Parameters[paramName] != nil {
-						actualType := reflect.TypeOf(status.Parameters[paramName])
-						expectedType := reflect.TypeOf(value)
-						
-						if actualType == expectedType {
-							assert.Equal(t, value, status.Parameters[paramName], 
-								"Parameter %s value mismatch", paramName)
-						} else {
-							// Try to convert between numeric types
-							actualValue := reflect.ValueOf(status.Parameters[paramName])
-							expectedValue := reflect.ValueOf(value)
-							
-							if actualType.Kind() == reflect.Float64 && expectedType.Kind() == reflect.Int {
-								// Convert int to float64 for comparison
-								assert.Equal(t, float64(expectedValue.Int()), actualValue.Float(), 
-									"Parameter %s value mismatch (int to float64 conversion)", paramName)
-							} else if actualType.Kind() == reflect.Int && expectedType.Kind() == reflect.Float64 {
-								// Convert float64 to int for comparison
-								assert.Equal(t, int(expectedValue.Float()), actualValue.Int(), 
-									"Parameter %s value mismatch (float64 to int conversion)", paramName)
-							} else {
-								// Just check string representation as fallback
-								assert.Equal(t, fmt.Sprintf("%v", value), fmt.Sprintf("%v", status.Parameters[paramName]), 
-									"Parameter %s string representation mismatch", paramName)
-							}
-						}
+						compareValues(t, value, status.Parameters[paramName], paramName)
 					}
 				})
 			}
@@ -241,6 +217,92 @@ func testValidParameters(t *testing.T, suite *UpdateableProcessorTestSuite) {
 			restorePatch := createConfigPatch(paramName, origValue)
 			_ = suite.Processor.OnConfigPatch(ctx, restorePatch)
 		}
+	}
+}
+
+// compareValues compares expected and actual values with proper type conversion when needed
+func compareValues(t *testing.T, expected, actual interface{}, paramName string) bool {
+	if expected == nil || actual == nil {
+		return assert.Equal(t, expected, actual, "Parameter %s value mismatch", paramName)
+	}
+
+	expectedType := reflect.TypeOf(expected)
+	actualType := reflect.TypeOf(actual)
+	
+	// If types match directly, use direct comparison
+	if expectedType == actualType {
+		return assert.Equal(t, expected, actual, "Parameter %s value mismatch", paramName)
+	}
+	
+	// Handle numeric conversions
+	expectedValue := reflect.ValueOf(expected)
+	actualValue := reflect.ValueOf(actual)
+	
+	// Check if both are numeric types
+	if isNumeric(expectedType.Kind()) && isNumeric(actualType.Kind()) {
+		// Convert both to float64 for comparison
+		expectedFloat := convertToFloat64(expectedValue)
+		actualFloat := convertToFloat64(actualValue)
+		
+		// For integer types, ensure we don't lose precision by comparing as integers if both are whole numbers
+		if isInteger(expectedType.Kind()) && isInteger(actualType.Kind()) {
+			return assert.Equal(t, int64(expectedFloat), int64(actualFloat), 
+				"Parameter %s value mismatch (integer conversion)", paramName)
+		}
+		
+		// Allow small floating point differences
+		return assert.InDelta(t, expectedFloat, actualFloat, 1e-6, 
+			"Parameter %s value mismatch (float conversion)", paramName)
+	}
+	
+	// Handle strings and string convertible types
+	if (expectedType.Kind() == reflect.String || actualType.Kind() == reflect.String) {
+		expectedStr := fmt.Sprintf("%v", expected)
+		actualStr := fmt.Sprintf("%v", actual)
+		return assert.Equal(t, expectedStr, actualStr, 
+			"Parameter %s string representation mismatch", paramName)
+	}
+	
+	// If we get here, types are incompatible - log details and fail
+	t.Logf("Type mismatch for parameter %s: expected %T but got %T", 
+		paramName, expected, actual)
+	return assert.Fail(t, "Parameter types are incompatible")
+}
+
+// isNumeric checks if a reflect.Kind is a numeric type
+func isNumeric(kind reflect.Kind) bool {
+	switch kind {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		return true
+	default:
+		return false
+	}
+}
+
+// isInteger checks if a reflect.Kind is an integer type
+func isInteger(kind reflect.Kind) bool {
+	switch kind {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return true
+	default:
+		return false
+	}
+}
+
+// convertToFloat64 converts any numeric value to float64
+func convertToFloat64(value reflect.Value) float64 {
+	switch value.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return float64(value.Int())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return float64(value.Uint())
+	case reflect.Float32, reflect.Float64:
+		return value.Float()
+	default:
+		return 0.0
 	}
 }
 

@@ -18,6 +18,14 @@ import (
 	"github.com/deepaucksharma/Phoenix/internal/processor/others_rollup"
 )
 
+func TestOthersRollupConfigValidate(t *testing.T) {
+	cfg := &others_rollup.Config{Strategy: "invalid"}
+	assert.Error(t, cfg.Validate())
+
+	cfg.Strategy = "sum"
+	assert.NoError(t, cfg.Validate())
+}
+
 func TestOthersRollupProcessor(t *testing.T) {
 	factory := others_rollup.NewFactory()
 	cfg := factory.CreateDefaultConfig().(*others_rollup.Config)
