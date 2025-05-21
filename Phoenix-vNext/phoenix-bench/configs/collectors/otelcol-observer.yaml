@@ -161,11 +161,7 @@ processors:
           - set(correlation_id, Concat(observer_id, "-", ToString(timestamp_ms)))
           
           # Decision reason for metadata
-          - set(reason, Concat("ts_count=", ToString(ts_opt), 
-                       ", thresholds: moderate=", ToString(threshold_moderate), 
-                       ", caution=", ToString(threshold_caution), 
-                       ", warning=", ToString(threshold_warning),
-                       ", ultra=", ToString(threshold_ultra)))
+          - set(reason, Concat("ts_count=", ToString(ts_opt), ", thresholds: moderate=", ToString(threshold_moderate), ", caution=", ToString(threshold_caution), ", warning=", ToString(threshold_warning), ", ultra=", ToString(threshold_ultra)))
           
           # Build control file structure
           - set(file.mode, current_mode)

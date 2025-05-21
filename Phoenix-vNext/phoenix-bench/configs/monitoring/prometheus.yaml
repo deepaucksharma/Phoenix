@@ -37,6 +37,20 @@ scrape_configs:
           pipeline: 'observer'
           collector: 'otelcol-observer'
 
+  # Synthetic metrics collector
+  - job_name: 'synthetic-metrics-collector'
+    static_configs:
+      - targets: ['synthetic-metrics-collector:9999']
+        labels:
+          collector: 'synthetic-metrics'
+          
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
   # Pipeline-specific views (using relabeling to separate data by pipeline.id)
   # Full pipeline metrics - baseline with minimal processing
   - job_name: 'pipeline-full'
@@ -110,6 +124,6 @@ scrape_configs:
         action: keep
 
   # Internal Prometheus metrics
-  - job_name: 'prometheus'
+  - job_name: 'prometheus-internal'
     static_configs:
       - targets: ['localhost:9090']

@@ -1,3 +1,4 @@
+# filepath: /Users/deepaksharma/Desktop/src_main/Phoenix-vNext/phoenix-bench/configs/control_signals/opt_mode.yaml
 # Optimization mode control file with enhanced structure
 # This file is read by otelcol-main and written by otelcol-observer
 # Changes trigger pipeline configuration updates
@@ -6,11 +7,11 @@
 mode: "moderate"
 
 # Metadata for tracking and coordination
-last_updated: "2025-05-21T20:09:29Z"
+last_updated: "2025-05-21T20:00:51Z"
 reason: "initial_deployment"
 ts_count: 0
 config_version: 1
-correlation_id: "init-phoenix-vnext-1747858169"
+correlation_id: "init-phoenix-vnext-1747857651"
 
 # Fine-grained optimization level (0-100)
 # 0-25: moderate, 26-75: adaptive, 76-100: ultra
@@ -26,6 +27,6 @@ thresholds:
 # State transition information for debugging and audit
 state:
   previous_mode: "initial"
-  transition_timestamp: "2025-05-21T20:09:29Z"
+  transition_timestamp: "2025-05-21T20:00:51Z"
   transition_duration_seconds: 0
   stability_period_seconds: 300  # Don't change mode again for 5 minutes

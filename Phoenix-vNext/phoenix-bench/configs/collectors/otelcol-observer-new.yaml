@@ -1,0 +1,111 @@
+receivers:
+  prometheus/otelcol_main_cardinality:
+    config:
+      scrape_configs:
+        - job_name: 'otelcol-main-cardinality-scrape'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['otelcol-main:8888'] # Main collector's primary metrics endpoint
+          metric_relabel_configs:
+            - source_labels: [__name__] # Scrape all phoenix.*.ts_active metrics
+              regex: '^phoenix_.*_ts_active$|^phoenix_ts_active$'
+              action: keep
+  otlp/from_main_collector: # Receives OTLP data from otelcol-main's otlp/observer_feedback exporter
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4319 # As defined in docker-compose
+      http: # Matching the port defined in docker-compose for observer
+        endpoint: 0.0.0.0:4320
+
+processors:
+  # This processor will attempt to determine the mode based on 'phoenix_opt_ts_active'.
+  # Writing the full complex YAML is extremely hard. We will simplify:
+  # It will create a metric with attributes that *might* be serialized by the file exporter.
+  # The core logic for the complex YAML generation (correlation IDs, timestamps, nested structures)
+  # CANNOT be reliably done with standard OTel processors.
+  # This processor will focus on determining the 'mode' string.
+  metricstransform/determine_mode_and_payload:
+    transforms:
+      - include: phoenix_opt_ts_active # Use this specific metric for mode decision
+        action: update
+        # We want to create a *new* metric or set attributes on THIS metric
+        # such that the file exporter writes something usable.
+        # new_name: control_file_data # This is the metric that will be serialized by 'file/control_signal_writer'
+        operations:
+          # The goal is to add attributes to this metric datapoint which the file exporter can use.
+          # Standard metricstransform cannot easily set a label like 'mode_value' to "ultra" or "moderate"
+          # based on the *value* of the input metric 'phoenix_opt_ts_active'.
+          #
+          # Simplification: This processor will just pass 'phoenix_opt_ts_active' through.
+          # The intelligence to interpret this metric's value and generate the *full* control YAML
+          # is beyond standard OTel processors. The file exporter will serialize the
+          # 'phoenix_opt_ts_active' metric's OTel data model.
+          #
+          # IF we had a script processor, it would be:
+          # 1. Get value of phoenix_opt_ts_active.
+          # 2. Compare with THRESHOLD_MODERATE, THRESHOLD_ULTRA from env.
+          # 3. Construct the full YAML string with new mode, timestamp, correlation_id, config_version.
+          # 4. Set this YAML string as the body of a log or a special attribute on a metric.
+          #
+          # For now, this processor will just ensure the relevant metric is selected.
+          # The file exporter will write the OTel data model of phoenix_opt_ts_active.
+          # Otelcol-main's GetPath will need to parse this complex structure.
+          # The 'mode' it reads will likely be the *numeric value* of phoenix_opt_ts_active.
+          # This means otelcol-main then needs another transform to map this number to "moderate" or "ultra".
+
+          # Let's attempt to add the mode as a label, understanding this is hard.
+          # We'll create placeholder attributes to match the desired schema.
+          - action: add_label
+            new_label: yaml_mode_placeholder # Placeholder for mode
+            # Actual logic for moderate/ultra based on value is missing here.
+            # Example: if metric value > Env("THRESHOLD_ULTRA"), then "ultra" else "moderate"
+            # This requires more advanced conditional logic not in standard metricstransform.
+            new_value: "unknown_due_to_processor_limitation"
+          - action: add_label
+            new_label: yaml_last_updated_placeholder
+            new_value: "1970-01-01T00:00:00Z" # Needs dynamic timestamp
+          - action: add_label
+            new_label: yaml_config_version_placeholder
+            new_value: "0" # Needs dynamic versioning
+          - action: add_label
+            new_label: yaml_correlation_id_placeholder
+            new_value: "placeholder_correlation_id" # Needs dynamic generation
+  batch:
+    send_batch_size: 100 # Smaller batches for control signals
+    timeout: 5s
+
+exporters:
+  file/control_signal_writer:
+    path: ${CONTROL_SIGNAL_WRITE_PATH} # e.g., /control_out/opt_mode.yaml
+    format: yaml # Will serialize the metric passed to it (e.g., phoenix_opt_ts_active
+                 # with any added labels) into YAML. This will likely be the OTel
+                 # data model, not the simple key-value YAML desired for opt_mode.yaml.
+    # rotation: {max_megabytes: 1, max_backups: 1} # Keep it small
+  logging/observer_debug: # For troubleshooting what's being processed and exported
+    verbosity: detailed
+  prometheus: # For observer's own operational metrics
+    endpoint: 0.0.0.0:8891
+    namespace: phoenix_observer
+    send_timestamps: true
+
+service:
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8891 # Expose observer's own metrics
+      level: detailed
+    logs:
+      level: info
+  extensions: [health_check, pprof, zpages] # Define extensions used
+  pipelines:
+    metrics/observer_control_logic:
+      receivers: [prometheus/otelcol_main_cardinality]
+      processors: [metricstransform/determine_mode_and_payload, batch] # Attempt to shape data
+      exporters: [file/control_signal_writer, logging/observer_debug]
+    metrics/observer_feedback_intake: # Processes OTLP data from main collector
+      receivers: [otlp/from_main_collector]
+      processors: [batch]
+      exporters: [logging/observer_debug, prometheus] # Log and expose to its own Prometheus
+  extensions: # Configuration for extensions
+    health_check: {endpoint: "0.0.0.0:13133"} # Port should be mapped in docker-compose
+    pprof: {endpoint: "0.0.0.0:1777"}
+    zpages: {endpoint: "0.0.0.0:55679"}

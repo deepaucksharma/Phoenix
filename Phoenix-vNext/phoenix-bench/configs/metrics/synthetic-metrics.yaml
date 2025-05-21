@@ -323,7 +323,7 @@ processors:
             aggregation_type: sum
             label_set: []
           - action: experimental_scale_value
-            experimental_scale: "${THRESHOLD_MODERATE:-300.0}"
+            experimental_scale: 300.0
             
       - include: "process\\.runtime\\..*"
         match_type: regexp
@@ -334,7 +334,7 @@ processors:
             aggregation_type: sum
             label_set: []
           - action: experimental_scale_value
-            experimental_scale: "${THRESHOLD_CAUTION:-350.0}"
+            experimental_scale: 350.0
             
       - include: "process\\.runtime\\..*"
         match_type: regexp
@@ -345,7 +345,7 @@ processors:
             aggregation_type: sum
             label_set: []
           - action: experimental_scale_value
-            experimental_scale: "${THRESHOLD_WARNING:-400.0}"
+            experimental_scale: 400.0
             
       - include: "process\\.runtime\\..*"
         match_type: regexp
@@ -356,7 +356,7 @@ processors:
             aggregation_type: sum
             label_set: []
           - action: experimental_scale_value
-            experimental_scale: "${THRESHOLD_ULTRA:-450.0}"
+            experimental_scale: 450.0
             
   # Optimization mode - alternates between 0 and 1
   metricstransform/opt_mode:
