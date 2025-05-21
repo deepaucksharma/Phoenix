@@ -1,0 +1,18 @@
+apiVersion: 1
+
+providers:
+  # <string> Provider name
+  - name: 'Phoenix-vNext Dashboards'
+    # <string> Provider type
+    type: file
+    # <bool> Disable dashboard deletion
+    disableDeletion: false
+    # <int> How often Grafana will scan for changed dashboards
+    updateIntervalSeconds: 10
+    # <bool> Allow updating provisioned dashboards from the UI
+    allowUiUpdates: true
+    options:
+      # <string, required> Path to dashboard files on disk
+      path: /etc/grafana/provisioning/dashboards
+      # <bool> Use folder names from filesystem to create folders in Grafana
+      foldersFromFilesStructure: false

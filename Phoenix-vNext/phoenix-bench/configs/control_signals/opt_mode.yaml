@@ -1,1 +1,7 @@
-mode: moderate # observer toggles this to "ultra" if TS >450
+# Optimization mode control file
+# This file is read by otelcol-main and written by otelcol-observer
+# Values:
+#   mode: moderate - Less aggressive optimization, used when time series count < 300
+#   mode: ultra - Aggressive optimization, used when time series count > 450
+
+mode: moderate

@@ -1,19 +1,150 @@
 receivers:
+  # Scrape metrics from the main collector
+  prometheus/otelcol_main:
+    config:
+      scrape_configs:
+        - job_name: 'otelcol-main-scrape'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['otelcol-main:8888']
+          # Using OTel processors instead of Prometheus relabeling to avoid variable substitution issues
+  
+  # Scrape metrics from the synthetic metrics generator
+  prometheus/synthetic:
+    config:
+      scrape_configs:
+        - job_name: 'synthetic-scrape'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['synthetic-metrics:9999']
+            
+  # Simplified approach for control signals
   otlp:
     protocols:
-      http:
-        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: "0.0.0.0:4317"
+        
+  # Self-monitoring for the observer collector
+  hostmetrics/observer:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      memory: {}
+      load: {}
 
 processors:
   batch:
+    send_batch_size: 1000
+    timeout: 10s
+  
+  # Handle pipeline labels from scrape
+  metricstransform/pipeline_labels:
+    transforms:
+      - include: ".*"
+        match_type: regexp
+        action: update
+        operations:
+          - action: add_label
+            new_label: collector_pipeline
+            new_value: "main"
+    
+  # Process metrics to determine optimization mode
+  filter/ts_count:
+    metrics:
+      include:
+        match_type: regexp
+        metric_names:
+          - "phoenix_ts_count_.*"
+          
+  # Transform metrics for optimization mode control
+  metricstransform/mode_control:
+    transforms:
+      - include: phoenix_system_cpu_time_seconds_total
+        match_type: regexp
+        action: update
+        operations:
+          # Apply thresholds to determine mode
+          # We'll use this simplified approach where:
+          # If time series count > 450, set mode=ultra
+          # If time series count < 300, set mode=moderate
+          # Otherwise keep current mode
+          - action: add_label
+            new_label: optimization_mode
+            new_value: "{{ if gt .ts_count_full 450.0 }}ultra{{ else if lt .ts_count_full 300.0 }}moderate{{ else }}current{{ end }}"
+  
+  # Convert optimization mode to a control signal
+  transform/control_signal:
+    metric_statements:
+      - context: datapoint
+        statements:
+          - set(attributes["optimization_decision"], attributes["optimization_mode"]) where attributes["optimization_mode"] != nil
+          - set(resource.attributes["control.signal"], attributes["optimization_mode"]) where attributes["optimization_mode"] != nil
+          
+  # Generate explicit control plane metrics for better visibility
+  metricstransform/control_metrics:
+    transforms:
+      - include: ".*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix.observer.last_decision_time
+        operations:
+          - action: add_label  
+            new_label: collector_component
+            new_value: "observer"
+  
+  # Add thresholds as metrics 
+  metricstransform/thresholds:
+    transforms:
+      - include: ".*threshold_moderate.*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix.observer.threshold
+        operations:
+          - action: add_label
+            new_label: threshold_type
+            new_value: "moderate"
+      - include: ".*threshold_ultra.*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix.observer.threshold
+        operations:
+          - action: add_label
+            new_label: threshold_type
+            new_value: "ultra"
 
 exporters:
   prometheus:
-    endpoint: 0.0.0.0:8889
+    endpoint: 0.0.0.0:9889
+
+  file/control_signal_output:
+    path: ${CONTROL_SIGNAL_WRITE_PATH}
+    format: json  # Changed to json which is supported
+    rotation:
+      max_megabytes: 5
+      max_days: 3
+      max_backups: 3
 
 service:
-  pipelines:
+  telemetry:
     metrics:
-      receivers: [otlp]
-      processors: [batch]
+      address: 0.0.0.0:9890
+      level: detailed
+  
+  pipelines:
+    # Main metrics from the collector
+    metrics/main:
+      receivers: [prometheus/otelcol_main]
+      processors: [metricstransform/pipeline_labels, batch]
+      exporters: [prometheus]
+    
+    # Synthetic metrics and control signals
+    metrics/synthetic:
+      receivers: [prometheus/synthetic]
+      processors: [filter/ts_count, metricstransform/mode_control, transform/control_signal, metricstransform/thresholds, batch]
+      exporters: [prometheus, file/control_signal_output]
+      
+    # Self-monitoring for the observer
+    metrics/observer:
+      receivers: [hostmetrics/observer, otlp]
+      processors: [metricstransform/control_metrics, batch]
       exporters: [prometheus]

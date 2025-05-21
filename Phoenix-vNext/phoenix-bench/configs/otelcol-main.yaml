@@ -1,36 +1,128 @@
 receivers:
   hostmetrics:
     collection_interval: 30s
+    root_path: /host/proc
     scrapers:
-      cpu:
-      memory:
-      load:
-      disk:
-      filesystem:
-      network:
+      cpu: {}
+      memory: {}
+      process:
+        mute_process_name_error: true
+      filesystem: {}
+      disk: {}
+      load: {}
+  
+  # Use a configmap approach for control signals
+  hostmetrics/control:
+    collection_interval: 10s
+    scrapers:
+      load: {} # Minimal scraper just to have something
 
 processors:
+  # General batching
   batch:
+    send_batch_size: 1000
+    timeout: 10s
+    
+  # Pipeline-specific processors
+  filter/full_pipeline:
+    # Full pipeline passes everything through - no filtering
+    metrics:
+      include: {}
+      
+  filter/opt_pipeline:
+    # Optimized pipeline with moderate and ultra modes
+    metrics:
+      include:
+        match_type: regexp
+        metric_names:
+          - "system.cpu.*"
+          - "system.memory.*"
+          - "process.*(pid|exec).*"
+
+  filter/exp_pipeline:
+    # Experimental pipeline (space-saving)
+    metrics:
+      include:
+        match_type: regexp
+        metric_names:
+          - "system.*"
+          - "process.cpu.*"
+
+  # Add pipeline labels
+  metricstransform/full:
+    transforms:
+      - include: ".*"
+        match_type: regexp
+        action: update
+        operations:
+          - action: add_label
+            new_label: pipeline
+            new_value: "full"
+  
+  metricstransform/opt:
+    transforms:
+      - include: ".*"
+        match_type: regexp
+        action: update
+        operations:
+          - action: add_label
+            new_label: pipeline
+            new_value: "optimized"
+      
+  metricstransform/exp:
+    transforms:
+      - include: ".*"
+        match_type: regexp
+        action: update
+        operations:
+          - action: add_label
+            new_label: pipeline
+            new_value: "experimental"
 
 exporters:
-  otlphttp/full:
-    endpoint: https://otlp.nr-data.net/v1/metrics
+  # Prometheus exporter for local visualization
+  prometheus:
+    endpoint: 0.0.0.0:8888
+    namespace: phoenix
+    send_timestamps: true
+    
+  # New Relic exporters for each pipeline
+  otlp/newrelic_full:
+    endpoint: "https://otlp.nr-data.net:4317"
     headers:
       api-key: ${NR_FULL_KEY}
-  
-  prometheus:
-    endpoint: 0.0.0.0:8887
-  
-  prometheusremotewrite:
-    endpoint: http://prometheus:9090/api/v1/write
+    
+  otlp/newrelic_opt:
+    endpoint: "https://otlp.nr-data.net:4317"
+    headers:
+      api-key: ${NR_OPT_KEY}
+    
+  otlp/newrelic_exp:
+    endpoint: "https://otlp.nr-data.net:4317" 
+    headers:
+      api-key: ${NR_EXP_KEY}
 
 service:
   telemetry:
     metrics:
-      address: 0.0.0.0:8887
-  
+      address: 0.0.0.0:8889
+      level: detailed
+
   pipelines:
-    metrics:
+    # Full pipeline - minimal processing (truth source)
+    metrics/full:
       receivers: [hostmetrics]
-      processors: [batch]
-      exporters: [otlphttp/full, prometheus, prometheusremotewrite]
+      processors: [filter/full_pipeline, metricstransform/full, batch]
+      exporters: [prometheus, otlp/newrelic_full]
+      
+    # Optimized pipeline - dynamic filtering based on time series count
+    metrics/optimized:
+      receivers: [hostmetrics, hostmetrics/control]
+      processors: [filter/opt_pipeline, metricstransform/opt, batch]
+      exporters: [prometheus, otlp/newrelic_opt]
+      
+    # Experimental pipeline - space-saving techniques
+    metrics/experimental:
+      receivers: [hostmetrics]
+      processors: [filter/exp_pipeline, metricstransform/exp, batch]
+      exporters: [prometheus, otlp/newrelic_exp]

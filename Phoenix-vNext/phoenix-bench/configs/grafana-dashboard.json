@@ -27,7 +27,7 @@
         "type": "prometheus",
         "uid": "PBFA97CFB590B2093"
       },
-      "description": "Shows pipeline optimization mode transitions (moderate/ultra)",
+      "description": "Overview of the Phoenix-vNext Process Metrics Benchmarking Stack",
       "gridPos": {
         "h": 4,
         "w": 24,
@@ -41,7 +41,7 @@
           "showLineNumbers": false,
           "showTimestamps": false
         },
-        "content": "# Phoenix-vNext New Relic Optimization Lab\n\nThis dashboard shows the comparison between 3 metric pipelines:\n* **Full Pipeline:** Baseline with minimal processing (truth source)\n* **Optimized Pipeline:** Aggressive filtering, adaptive Top-K, delta conversion, histogram bucketing\n* **Experimental Pipeline:** Using community space-saving TopK processor",
+        "content": "# Phoenix-vNext Process-Centric Observability Lab\n\nThis dashboard shows the comparison between 3 process metric pipelines:\n* **Full Pipeline:** Baseline with minimal processing (truth source)\n* **Optimized Pipeline:** Aggregated by executable name with aggressive filtering and delta conversion\n* **Experimental Pipeline:** Using space-saving Top-K selection for processes",
         "mode": "markdown"
       },
       "pluginVersion": "10.4.3",
@@ -53,7 +53,7 @@
         "type": "prometheus",
         "uid": "PBFA97CFB590B2093"
       },
-      "description": "Shows how many active time series are being produced by each pipeline",
+      "description": "Shows how many active process time series are being produced by each pipeline",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -187,7 +187,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "count(scrape_series_added{job=\"otelcol-main\"})",
+          "expr": "count(process_cpu_time_seconds_total{job=\"otelcol-main\"})",
           "hide": false,
           "legendFormat": "Full Pipeline",
           "range": true,
@@ -199,7 +199,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "count(scrape_series_added{job=\"otelcol-main\"}) * 0.3",
+          "expr": "phoenix_opt_ts_active{job=\"otelcol-main\"} or vector(0)",
           "hide": false,
           "legendFormat": "Optimized Pipeline",
           "range": true,
@@ -211,7 +211,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "count(scrape_series_added{job=\"otelcol-main\"}) * 0.45",
+          "expr": "count(process_cpu_time_seconds_total{job=\"otelcol-main\"}) * 0.45",
           "hide": false,
           "legendFormat": "Experimental Pipeline",
           "range": true,
@@ -242,8 +242,94 @@
           "refId": "E"
         }
       ],
-      "title": "Active Series Comparison by Pipeline",
+      "title": "Process Metrics - Active Series Comparison",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "Current optimization mode based on active series count",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "Moderate"
+                },
+                "1": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "Ultra"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "id": 8,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.4.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "phoenix_opt_mode{job=\"otelcol-observer\"} or vector(0)",
+          "legendFormat": "Current Mode",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Current Optimization Mode",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -309,7 +395,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
+        "x": 12,
         "y": 14
       },
       "id": 3,
@@ -334,7 +420,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "70",
+          "expr": "(1 - (phoenix_opt_ts_active / count(process_cpu_time_seconds_total{job=\"otelcol-main\"}))) * 100 or vector(70)",
           "legendFormat": "Size Reduction (Opt)",
           "range": true,
           "refId": "A"
@@ -359,93 +445,7 @@
         "type": "prometheus",
         "uid": "PBFA97CFB590B2093"
       },
-      "description": "Current optimization mode based on active series count",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "green",
-                  "index": 0,
-                  "text": "Moderate"
-                },
-                "1": {
-                  "color": "red",
-                  "index": 1,
-                  "text": "Ultra"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 0.5
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 14
-      },
-      "id": 8,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.4.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "0",
-          "legendFormat": "Current Mode",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Current Optimization Mode",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "description": "CPU usage pattern across pipelines",
+      "description": "Top processes by CPU usage",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -493,53 +493,7 @@
           },
           "unit": "percentunit"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Full Pipeline"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "dark-blue",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Optimized Pipeline"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "dark-green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Experimental Pipeline"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "dark-purple",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
@@ -570,35 +524,13 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "rate(process_cpu_seconds_total{job=\"otelcol-main\"}[1m])",
-          "legendFormat": "Full Pipeline",
+          "expr": "topk(5, sum by(process_executable_name) (rate(process_cpu_time_seconds_total{job=\"otelcol-main\"}[1m])))",
+          "legendFormat": "{{process_executable_name}}",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "rate(process_cpu_seconds_total{job=\"otelcol-main\"}[1m]) * 0.8",
-          "legendFormat": "Optimized Pipeline",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "rate(process_cpu_seconds_total{job=\"otelcol-main\"}[1m]) * 0.7",
-          "legendFormat": "Experimental Pipeline",
-          "range": true,
-          "refId": "C"
         }
       ],
-      "title": "CPU Usage by Pipeline",
+      "title": "Top Processes by CPU Usage",
       "type": "timeseries"
     },
     {
@@ -606,7 +538,7 @@
         "type": "prometheus",
         "uid": "PBFA97CFB590B2093"
       },
-      "description": "Memory usage pattern across pipelines",
+      "description": "Top processes by memory usage",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -654,53 +586,7 @@
           },
           "unit": "bytes"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Full Pipeline"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "dark-blue",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Optimized Pipeline"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "dark-green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Experimental Pipeline"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "dark-purple",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
@@ -731,35 +617,13 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "process_resident_memory_bytes{job=\"otelcol-main\"}",
-          "legendFormat": "Full Pipeline",
+          "expr": "topk(5, sum by(process_executable_name) (process_memory_usage{job=\"otelcol-main\"}))",
+          "legendFormat": "{{process_executable_name}}",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "process_resident_memory_bytes{job=\"otelcol-main\"} * 0.6",
-          "legendFormat": "Optimized Pipeline",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "process_resident_memory_bytes{job=\"otelcol-main\"} * 0.7",
-          "legendFormat": "Experimental Pipeline",
-          "range": true,
-          "refId": "C"
         }
       ],
-      "title": "Memory Usage by Pipeline",
+      "title": "Top Processes by Memory Usage",
       "type": "timeseries"
     },
     {
@@ -1002,7 +866,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "30",
+          "expr": "(phoenix_opt_ts_active / count(process_cpu_time_seconds_total{job=\"otelcol-main\"})) * 100 or vector(30)",
           "legendFormat": "Ingest Cost (Opt)",
           "range": true,
           "refId": "B"
@@ -1133,7 +997,7 @@
           "showLineNumbers": false,
           "showTimestamps": false
         },
-        "content": "Note: This dashboard uses simulated values to demonstrate what the full implementation would track. In a production system, these panels would use real metrics from the three pipelines.",
+        "content": "Note: Some metrics in this dashboard use simulated values where actual pipeline data is not yet available. In a production deployment, these would be real metrics from the three pipelines.",
         "mode": "markdown"
       },
       "pluginVersion": "10.4.3",
@@ -1154,8 +1018,8 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Phoenix-vNext Optimization Dashboard",
-  "uid": "phoenix-optimization",
+  "title": "Phoenix-vNext Process Metrics Dashboard",
+  "uid": "phoenix-process-metrics",
   "version": 1,
   "weekStart": ""
 }

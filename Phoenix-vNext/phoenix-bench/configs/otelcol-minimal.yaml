@@ -1,0 +1,33 @@
+receivers:
+  hostmetrics:
+    collection_interval: 30s
+    root_path: /host/proc
+    scrapers:
+      cpu: {}
+      memory: {}
+      process:
+        mute_process_name_error: true
+      filesystem: {}
+      disk: {}
+      load: {}
+
+processors:
+  batch:
+    send_batch_size: 1000
+    timeout: 10s
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8888
+
+service:
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8889
+      level: basic
+
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      processors: [batch]
+      exporters: [prometheus]

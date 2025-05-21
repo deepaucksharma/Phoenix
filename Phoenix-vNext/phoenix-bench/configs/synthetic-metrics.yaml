@@ -1,0 +1,127 @@
+receivers:
+  hostmetrics:
+    collection_interval: 5s
+    scrapers:
+      cpu: {}
+      memory: {}
+
+processors:
+  metricstransform/pipelines:
+    transforms:
+      - include: system.cpu.time
+        action: update
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          # Add namespace and consistent name for dashboard compatibility
+          - action: add_label
+            new_label: namespace
+            new_value: "phoenix"
+          - action: add_label
+            new_label: pipeline_full
+            new_value: "3.0"
+          - action: add_label  
+            new_label: pipeline_opt_moderate
+            new_value: "1.0"
+          - action: add_label
+            new_label: pipeline_opt_ultra
+            new_value: "0.5"
+          - action: add_label
+            new_label: pipeline_exp
+            new_value: "1.35"
+          - action: add_label
+            new_label: pipeline_hybrid
+            new_value: "0.8"
+          - action: add_label
+            new_label: ts_count_full
+            new_value: "410.0"
+          - action: add_label
+            new_label: ts_count_opt_moderate
+            new_value: "180.0"
+          - action: add_label
+            new_label: ts_count_opt_ultra
+            new_value: "75.0"
+          - action: add_label
+            new_label: ts_count_exp
+            new_value: "205.0"
+          - action: add_label
+            new_label: ts_count_hybrid
+            new_value: "163.0"
+          - action: add_label
+            new_label: quality_full
+            new_value: "100.0"
+          - action: add_label
+            new_label: quality_opt_moderate
+            new_value: "92.0"
+          - action: add_label
+            new_label: quality_opt_ultra
+            new_value: "85.0"
+          - action: add_label
+            new_label: quality_exp
+            new_value: "88.0"
+          - action: add_label
+            new_label: quality_hybrid
+            new_value: "90.0"
+          - action: add_label
+            new_label: cost_reduction_opt_moderate
+            new_value: "56.0"
+          - action: add_label
+            new_label: cost_reduction_opt_ultra
+            new_value: "82.0"
+          - action: add_label
+            new_label: cost_reduction_exp
+            new_value: "50.0"
+          - action: add_label
+            new_label: cost_reduction_hybrid
+            new_value: "60.0"
+          - action: add_label
+            new_label: threshold_moderate
+            new_value: "300.0"
+          - action: add_label
+            new_label: threshold_ultra
+            new_value: "450.0"
+          - action: add_label
+            new_label: opt_mode
+            new_value: "0.0"
+            
+  filter/cpu:
+    metrics:
+      include:
+        match_type: strict
+        metric_names:
+          - system.cpu.time
+
+  # Generate a duplicate metric with the standardized name 
+  metricstransform/standardized:
+    transforms:
+      - include: system.cpu.time
+        match_type: strict  
+        action: update
+        operations:
+          - action: add_label
+            new_label: metric_format
+            new_value: "standardized"
+
+  batch:
+    send_batch_size: 1000
+    timeout: 10s
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:9999
+    namespace: phoenix
+    send_timestamps: true
+    metric_expiration: 180m
+
+service:
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      processors: [metricstransform/pipelines, filter/cpu, metricstransform/standardized, batch]
+      exporters: [prometheus]
+  
+  telemetry:
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8899

@@ -3,10 +3,60 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
+  # Main collector (hostmetrics)
   - job_name: 'otelcol-main'
     static_configs:
-      - targets: ['otelcol-main:8887']
-  
+      - targets: ['otelcol-main:8888']
+        labels:
+          pipeline: 'main'
+
+  # Observer collector (monitoring metrics, controls optimization mode)
   - job_name: 'otelcol-observer'
     static_configs:
-      - targets: ['otelcol-observer:8889']
+      - targets: ['otelcol-observer:9889']
+        labels:
+          pipeline: 'observer'
+
+  # Synthetic metrics service (simulated pipeline data)
+  - job_name: 'synthetic-metrics'
+    static_configs:
+      - targets: ['synthetic-metrics:9999']
+        labels:
+          pipeline: 'synthetic'
+
+  # Full pipeline metrics - baseline with minimal processing
+  - job_name: 'pipeline-full'
+    honor_labels: true
+    static_configs:
+      - targets: ['otelcol-main:8888']
+        labels:
+          pipeline: 'full'
+
+  # Optimized pipeline metrics - filtering and aggregation
+  - job_name: 'pipeline-opt'
+    honor_labels: true
+    static_configs:
+      - targets: ['otelcol-main:8888']
+        labels:
+          pipeline: 'opt'
+
+  # Experimental pipeline metrics - space-saving techniques
+  - job_name: 'pipeline-exp'
+    honor_labels: true
+    static_configs:
+      - targets: ['otelcol-main:8888']
+        labels:
+          pipeline: 'exp'
+
+  # Hybrid pipeline metrics - combined optimization approach
+  - job_name: 'pipeline-hybrid'
+    honor_labels: true
+    static_configs:
+      - targets: ['otelcol-main:8888']
+        labels:
+          pipeline: 'hybrid'
+
+  # Internal Prometheus metrics
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

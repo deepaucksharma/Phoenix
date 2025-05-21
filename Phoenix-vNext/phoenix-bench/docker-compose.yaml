@@ -1,39 +1,52 @@
-version: "3.9"
 services:
   ### Workload generators (CPU-heavy & IO-heavy) ###
   stress-cpu:
     image: polinux/stress
-    command: ["stress", "--cpu", "6", "--vm", "3", "--vm-bytes", "1G", "--timeout", "3600s"]
+    command: ["stress", "--cpu", "8", "--vm", "2", "--vm-bytes", "512M", "--timeout", "9999d"]
     pid: host
     restart: unless-stopped
 
   stress-io:
     image: polinux/stress
-    command: ["stress", "--io", "4", "--timeout", "3600s"]
+    command: ["stress", "--io", "4", "--hdd", "1", "--timeout", "9999d"]
     pid: host
     restart: unless-stopped
+    
+  ### Synthetic Metrics Generator ###
+  synthetic-metrics:
+    image: otel/opentelemetry-collector-contrib:0.103.0
+    command: ["--config=/etc/otelcol/synthetic-metrics.yaml"]
+    volumes:
+      - ./configs/synthetic-metrics.yaml:/etc/otelcol/synthetic-metrics.yaml:ro
+    ports:
+      - "9999:9999" # Metrics endpoint
+      - "8899:8899" # Telemetry endpoint
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    
 
-  ### Main Collector with 3 pipelines ###
+  ### Main Collector with multiple process metric pipelines ###
   otelcol-main:
     image: otel/opentelemetry-collector-contrib:0.103.0
     command: ["--config=/etc/otelcol/otelcol-main.yaml"]
-    privileged: true
+    privileged: true # For hostmetrics access to /proc
     pid: host
     environment:
-      HOST_PROC: /host/proc
-      CONTROL_SIGNAL_PATH: /etc/control/opt_mode.yaml
-      NR_FULL_KEY: ${NR_FULL_KEY}
-      NR_OPT_KEY: ${NR_OPT_KEY}
-      NR_EXP_KEY: ${NR_EXP_KEY}
+      HOST_PROC: /host/proc # For hostmetrics receiver to access actual /proc
+      # New Relic API keys for different pipelines
+      NR_FULL_KEY: ${NR_FULL_KEY:-}
+      NR_OPT_KEY: ${NR_OPT_KEY:-}  
+      NR_EXP_KEY: ${NR_EXP_KEY:-}
     volumes:
       - ./configs/otelcol-main.yaml:/etc/otelcol/otelcol-main.yaml:ro
-      - ./configs/control_signals:/etc/control
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /etc:/host/etc:ro
-      - ./data:/data
+      - ./configs/control_signals:/etc/otelcol/control_signals:ro # Mount control signals directory
+      - /proc:/host/proc:ro # Mount host /proc to /host/proc in container
     ports:
-      - "8887:8887" # self-metrics
+      - "8888:8888" # Self-metrics endpoint for otelcol-main
+    depends_on:
+      - stress-cpu
+      - stress-io
     restart: unless-stopped
 
   ### Observer / control-plane ###
@@ -41,13 +54,17 @@ services:
     image: otel/opentelemetry-collector-contrib:0.103.0
     command: ["--config=/etc/otelcol/otelcol-observer.yaml"]
     environment:
-      CONTROL_SIGNAL_PATH: /etc/control/opt_mode.yaml
+      # This is the path INSIDE the otelcol-observer container where it WRITES the control file
+      CONTROL_SIGNAL_WRITE_PATH: /control_out/opt_mode.yaml
     volumes:
       - ./configs/otelcol-observer.yaml:/etc/otelcol/otelcol-observer.yaml:ro
-      - ./configs/control_signals:/etc/control
+      # This mounts the host's ./configs/control_signals to /control_out in the observer
+      # So when observer writes to /control_out/opt_mode.yaml, it updates the host file
+      - ./configs/control_signals:/control_out:rw # Must be writable by observer
     ports:
-      - "8889:8889" # /metrics
-      - "4318:4318" # OTLP HTTP ingest
+      - "9889:9889" # Self-metrics endpoint for otelcol-observer
+    depends_on:
+      - otelcol-main # So it can scrape otelcol-main's metrics via localhost through Docker network
     restart: unless-stopped
 
   ### Prometheus & Grafana ###
@@ -55,14 +72,19 @@ services:
     image: prom/prometheus:v2.52.0
     volumes:
       - ./configs/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - ./data/prometheus:/prometheus # Persistent Prometheus data
     ports: ["9090:9090"]
     restart: unless-stopped
 
   grafana:
     image: grafana/grafana:10.4.3
-    environment: { GF_SECURITY_ADMIN_PASSWORD: admin }
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin # Default Grafana admin password
+      GF_PROVISIONING_PATH: /etc/grafana/provisioning # Path for Grafana to load configs
     volumes:
-      - ./configs/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/all.yml:ro
-      - ./configs/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/phoenix.json:ro
+      - ./configs/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - ./configs/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ./configs/phoenix-master-dashboard.json:/etc/grafana/provisioning/dashboards/phoenix_master_dashboard.json:ro
+      - ./data/grafana:/var/lib/grafana # Persistent Grafana data
     ports: ["3000:3000"]
     restart: unless-stopped

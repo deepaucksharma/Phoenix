@@ -1,0 +1,7 @@
+# This file is read by otelcol-main.
+# Initially set to "moderate" mode.
+# The observer toggles this between "moderate", "adaptive", and "ultra" based on active series count:
+# - moderate: < 300 active series, minimal optimization
+# - adaptive: 300-450 active series, balanced optimization
+# - ultra: > 450 active series, aggressive optimization
+mode: "moderate"
