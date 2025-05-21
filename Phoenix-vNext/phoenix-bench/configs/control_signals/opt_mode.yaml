@@ -6,26 +6,25 @@
 mode: "moderate"
 
 # Metadata for tracking and coordination
-last_updated: "2025-05-21T20:09:29Z"
-reason: "initial_deployment"
+last_updated: "2025-05-22T20:00:00Z"
+reason: "schema_alignment"
 ts_count: 0
 config_version: 1
-correlation_id: "init-phoenix-vnext-1747858169"
+correlation_id: "init-phoenix-vnext-1747946400"
 
 # Fine-grained optimization level (0-100)
 # 0-25: moderate, 26-75: adaptive, 76-100: ultra
 optimization_level: 0
 
-# Current thresholds (graduated levels for improved stability)
+# Current thresholds (aligned with otelcol-main schema)
 thresholds:
   moderate: 300.0
-  caution: 350.0
-  warning: 400.0
+  adaptive: 375.0
   ultra: 450.0
 
 # State transition information for debugging and audit
 state:
   previous_mode: "initial"
-  transition_timestamp: "2025-05-21T20:09:29Z"
+  transition_timestamp: "2025-05-22T20:00:00Z"
   transition_duration_seconds: 0
   stability_period_seconds: 300  # Don't change mode again for 5 minutes

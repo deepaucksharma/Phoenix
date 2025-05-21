@@ -1,7 +1,7 @@
 # Config sources with improved reliability
 config_sources:
   ctlfile:
-    path: ${CONTROL_SIGNAL_PATH:/etc/otelcol/control_signals/opt_mode.yaml}
+    path: /etc/otelcol/control_signals/opt_mode.yaml
     watch: true
     format: yaml # Expects YAML format
     reload_delay: 10s # Debounce rapid file changes
@@ -31,7 +31,7 @@ receivers:
     collection_interval: 5s
     root_path: /host
     scrapers:
-      cpu: { report_per_cpu: false } # Less verbose CPU metrics for hires
+      cpu: {} # CPU metrics for hires
       memory: {}
   otlp/control: # Receives control signals/feedback from observer or other tools
     protocols:
@@ -40,7 +40,7 @@ receivers:
       http:
         endpoint: 0.0.0.0:4318
   filelog/control: # Monitors the control file for changes as log entries
-    include: [ "${CONTROL_SIGNAL_PATH:/etc/otelcol/control_signals/opt_mode.yaml}" ]
+    include: [ "/etc/otelcol/control_signals/opt_mode.yaml" ]
     start_at: end # Process only new changes
     include_file_path: true
     operators: # Parse the YAML content of the file
@@ -71,7 +71,7 @@ processors:
   resource/add_tags: # Common tags for all metrics
     attributes:
       - key: benchmark.id
-        value: ${BENCHMARK_ID:phoenix-vnext}
+        value: phoenix-vnext
         action: insert
       - key: service.name # Identifies this collector instance or the benchmarked service
         value: "phoenix-observability"
@@ -80,10 +80,10 @@ processors:
         value: "1.0.0"
         action: insert
       - key: deployment.environment
-        value: ${DEPLOYMENT_ENV:development}
+        value: development
         action: insert
       - key: processing.correlation_id # Initial correlation ID
-        value: ${CORRELATION_ID:initial-main-collector}
+        value: initial-main-collector
         action: insert
   cumulativetodelta: # Converts counters to deltas
     metrics:
@@ -275,7 +275,7 @@ processors:
             new_value: "1" # Placeholder value
           - action: add_label
             new_label: phoenix_correlation_id
-            new_value: "${CORRELATION_ID:unknown}" # Default if not available
+            new_value: "unknown" # Default if not available
   # Routers
   routing/family_aware: # Routes based on metric_family_id (conceptual attribute)
     from_attribute: resource.metric_family_id # Attribute on the resource
@@ -307,7 +307,7 @@ processors:
 exporters:
   otlphttp/full:
     endpoint: https://otlp.nr-data.net/v1/metrics
-    headers: { api-key: "${NR_FULL_KEY}" } # Removed default dummy key
+    headers: { api-key: "" } # Removed default dummy key
   otlphttp/opt:
     endpoint: https://otlp.nr-data.net/v1/metrics
     headers: { api-key: "${NR_OPT_KEY}" }
@@ -332,7 +332,7 @@ exporters:
     resource_to_telemetry_conversion: { enabled: true }
     const_labels: # Add these labels to all metrics exported by this instance
       collector_version: "0.103.0"
-      environment: "${DEPLOYMENT_ENV:development}"
+      environment: "development"
   otlp/observer_feedback: # Sends data TO the observer collector
     endpoint: otelcol-observer:4319 # Port for observer's OTLP receiver
     tls: { insecure: true } # Assuming local network, no TLS
@@ -348,12 +348,11 @@ exporters:
 
 service:
   telemetry: # Collector's own operational metrics
-    metrics: { address: :8888 } # Same as the main prometheus exporter endpoint
+    metrics: { address: 0.0.0.0:8888 } # Same as the main prometheus exporter endpoint
     logs:
       level: info
       development: false
       encoding: json
-  extensions: [health_check, pprof, zpages, memory_limiter] # memory_limiter is also an extension
   pipelines:
     # Pipeline 0: Common Intake and Fan-out
     metrics/ingest:
@@ -465,7 +464,7 @@ service:
       processors: [batch]
       exporters: [otlphttp/hybrid]
 
-  extensions: # Define extensions used in the service
+  extensions:
     health_check: # Default config: endpoint 0.0.0.0:13133
       endpoint: 0.0.0.0:13133
     pprof: # Default config: endpoint 0.0.0.0:1777

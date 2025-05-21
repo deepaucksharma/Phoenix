@@ -69,6 +69,19 @@ services:
       - otelcol-main
     restart: unless-stopped
 
+  ### Synthetic Metrics Collector ###
+  synthetic-metrics-collector:
+    image: otel/opentelemetry-collector-contrib:0.103.0
+    command: ["--config=/etc/otelcol/synthetic-metrics.yaml"]
+    env_file: .env # Load environment variables from .env file
+    volumes:
+      - ./configs/metrics/synthetic-metrics.yaml:/etc/otelcol/synthetic-metrics.yaml:ro
+    ports:
+      - "9999:9999" # Expose synthetic metrics endpoint
+    depends_on:
+      - otelcol-main
+    restart: unless-stopped
+
   ### Prometheus & Grafana ###
   prometheus:
     image: prom/prometheus:v2.52.0
@@ -99,21 +112,6 @@ services:
     ports: ["3000:3000"]
     restart: unless-stopped
 
-  ### Synthetic Metrics Generator (Placeholder Service) ###
-  synthetic-metrics-collector: # This service will run the synthetic-metrics.yaml OTel config
-    image: otel/opentelemetry-collector-contrib:0.103.0
-    command: ["--config=/etc/otelcol/synthetic-metrics.yaml"]
-    env_file: .env # For THRESHOLD_* vars
-    environment:
-      OTELCOL_MAIN_ENDPOINT: otelcol-main:8888 # For prometheus/main_collector receiver
-    volumes:
-      - ./configs/metrics/synthetic-metrics.yaml:/etc/otelcol/synthetic-metrics.yaml:ro
-    ports:
-      - "9999:9999" # Prometheus exporter from synthetic-metrics collector
-      - "8899:8899" # service.telemetry.metrics for this collector
-    depends_on:
-      - otelcol-main
-    restart: unless-stopped
 
   # Optional: Service for direct-metrics-generator.sh if you want it containerized
   # direct-metrics-script:
