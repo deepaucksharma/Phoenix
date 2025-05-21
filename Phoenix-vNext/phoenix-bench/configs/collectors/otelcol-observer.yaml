@@ -45,13 +45,6 @@ processors:
         value: "observer-main"
         action: insert
   
-  # Simple cardinality monitoring processor
-  transform/cardinality_monitor:
-    metric_statements:
-      - context: metric
-        statements:
-          - set(attributes["observer.monitored"], "true")
-  
   batch:
     send_batch_size: 1000
     timeout: 10s
@@ -86,7 +79,7 @@ service:
     # Main monitoring pipeline
     metrics/main:
       receivers: [prometheus/main_collector, otlp/from_main_collector]
-      processors: [resourcedetection, resource/observer, transform/cardinality_monitor, batch]
+      processors: [resourcedetection, resource/observer, batch]
       exporters: [prometheus, debug]
     
     # Observer self-monitoring
