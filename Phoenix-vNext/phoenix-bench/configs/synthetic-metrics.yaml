@@ -33,6 +33,10 @@ processors:
           - action: add_label
             new_label: pipeline_hybrid
             new_value: "0.8"
+          # Add metadata about hybrid pipeline approach  
+          - action: add_label
+            new_label: hybrid_approach
+            new_value: "balanced"
           - action: add_label
             new_label: ts_count_full
             new_value: "410.0"

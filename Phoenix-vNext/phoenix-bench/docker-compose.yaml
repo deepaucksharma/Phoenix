@@ -34,10 +34,13 @@ services:
     pid: host
     environment:
       HOST_PROC: /host/proc # For hostmetrics receiver to access actual /proc
+      # Environment variables for deployment context
+      DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-development}
       # New Relic API keys for different pipelines
       NR_FULL_KEY: ${NR_FULL_KEY:-}
       NR_OPT_KEY: ${NR_OPT_KEY:-}  
       NR_EXP_KEY: ${NR_EXP_KEY:-}
+      NR_HYBRID_KEY: ${NR_HYBRID_KEY:-${NR_EXP_KEY:-}}
     volumes:
       - ./configs/otelcol-main.yaml:/etc/otelcol/otelcol-main.yaml:ro
       - ./configs/control_signals:/etc/otelcol/control_signals:ro # Mount control signals directory
@@ -54,8 +57,15 @@ services:
     image: otel/opentelemetry-collector-contrib:0.103.0
     command: ["--config=/etc/otelcol/otelcol-observer.yaml"]
     environment:
-      # This is the path INSIDE the otelcol-observer container where it WRITES the control file
+      # Control signal configuration
       CONTROL_SIGNAL_WRITE_PATH: /control_out/opt_mode.yaml
+      # Configurable thresholds for mode switching with graduated levels
+      THRESHOLD_MODERATE: ${THRESHOLD_MODERATE:-300.0}
+      THRESHOLD_CAUTION: ${THRESHOLD_CAUTION:-350.0}
+      THRESHOLD_WARNING: ${THRESHOLD_WARNING:-400.0}
+      THRESHOLD_ULTRA: ${THRESHOLD_ULTRA:-450.0}
+      # Add more context about deployment
+      DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-development}
     volumes:
       - ./configs/otelcol-observer.yaml:/etc/otelcol/otelcol-observer.yaml:ro
       # This mounts the host's ./configs/control_signals to /control_out in the observer

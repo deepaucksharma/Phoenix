@@ -1,1 +1,24 @@
-{"mode": "moderate"}
+# Optimization mode template file
+# This file is used as a template for the optimization mode
+# Values:
+#   mode: moderate - Less aggressive optimization, used when time series count < THRESHOLD_MODERATE
+#   mode: ultra - Aggressive optimization, used when time series count > THRESHOLD_ULTRA
+#   mode: current - Maintain the current mode when between thresholds (hysteresis)
+
+# Mode configuration
+mode: moderate
+
+# Metadata
+last_updated: "2025-05-21T00:00:00Z"
+reason: "initial_state"
+ts_count: 0
+
+# Optimization level (0-100)
+optimization_level: 0
+
+# Current thresholds (graduated levels)
+thresholds:
+  moderate: 300.0
+  caution: 350.0
+  warning: 400.0
+  ultra: 450.0

@@ -40,7 +40,10 @@ while true; do
       phoenix_threshold_ultra 450.0
       
       # Current optimization mode (0=moderate, 1=ultra)
+      # Add readable labels for dashboard display
       phoenix_opt_mode 0.0
+      phoenix_opt_mode_name{value="0", name="moderate"} 0
+      phoenix_opt_mode_name{value="1", name="ultra"} 1
     '
     
   # Sleep for 5 seconds

@@ -56,21 +56,48 @@ processors:
         metric_names:
           - "phoenix_ts_count_.*"
           
-  # Transform metrics for optimization mode control
+  # Transform metrics for optimization mode control with graduated thresholds
   metricstransform/mode_control:
     transforms:
       - include: phoenix_system_cpu_time_seconds_total
         match_type: regexp
         action: update
         operations:
-          # Apply thresholds to determine mode
-          # We'll use this simplified approach where:
-          # If time series count > 450, set mode=ultra
-          # If time series count < 300, set mode=moderate
-          # Otherwise keep current mode
+          # Apply graduated thresholds with transition zones for smoother switching
+          # This implements hysteresis to prevent oscillation between modes
+          # A series count trending up needs to cross THRESHOLD_ULTRA to switch to ultra
+          # A series count trending down needs to cross THRESHOLD_MODERATE to switch to moderate
+          # In between, we maintain current mode to avoid thrashing
           - action: add_label
             new_label: optimization_mode
-            new_value: "{{ if gt .ts_count_full 450.0 }}ultra{{ else if lt .ts_count_full 300.0 }}moderate{{ else }}current{{ end }}"
+            new_value: >-
+              {{ if gt .ts_count_full ${THRESHOLD_ULTRA:-450.0} }}ultra{{ else 
+                 if lt .ts_count_full ${THRESHOLD_MODERATE:-300.0} }}moderate{{ else
+                 if gt .ts_count_full ${THRESHOLD_WARNING:-400.0} }}ultra_ready{{ else
+                 if lt .ts_count_full ${THRESHOLD_CAUTION:-350.0} }}moderate_ready{{ else }}current{{ end }}{{ end }}{{ end }}{{ end }}
+          
+          # Add decision reason for better observability with graduated levels
+          - action: add_label
+            new_label: decision_reason
+            new_value: >-
+              {{ if gt .ts_count_full ${THRESHOLD_ULTRA:-450.0} }}critical_high_cardinality{{ else 
+                 if lt .ts_count_full ${THRESHOLD_MODERATE:-300.0} }}low_cardinality{{ else 
+                 if gt .ts_count_full ${THRESHOLD_WARNING:-400.0} }}high_cardinality_warning{{ else 
+                 if lt .ts_count_full ${THRESHOLD_CAUTION:-350.0} }}moderate_cardinality_caution{{ else }}normal_operation{{ end }}{{ end }}{{ end }}{{ end }}
+          
+          # Numeric level indicator for dashboard visualization (0-100 scale)
+          - action: add_label
+            new_label: optimization_level
+            new_value: >-
+              {{ if gt .ts_count_full ${THRESHOLD_ULTRA:-450.0} }}100{{ else
+                 if lt .ts_count_full ${THRESHOLD_MODERATE:-300.0} }}0{{ else 
+                 if gt .ts_count_full ${THRESHOLD_WARNING:-400.0} }}75{{ else 
+                 if lt .ts_count_full ${THRESHOLD_CAUTION:-350.0} }}25{{ else }}50{{ end }}{{ end }}{{ end }}{{ end }}
+                 
+          # Add decision time for tracking
+          - action: add_label
+            new_label: decision_timestamp
+            new_value: "{{ timestamp }}"
   
   # Convert optimization mode to a control signal
   transform/control_signal:
@@ -80,9 +107,37 @@ processors:
           - set(attributes["optimization_decision"], attributes["optimization_mode"]) where attributes["optimization_mode"] != nil
           - set(resource.attributes["control.signal"], attributes["optimization_mode"]) where attributes["optimization_mode"] != nil
           
+  # Generate advanced control effectiveness metrics  
+  transform/effectiveness:
+    metric_statements:
+      # Calculate effectiveness metrics at the resource level
+      - context: resource
+        statements:
+          # Calculate percentage reduction in cardinality
+          - set(resource.attributes["cardinality_reduction_pct"], 
+                div(sub(metric.ts_count_full, metric.ts_count_opt_moderate), metric.ts_count_full) * 100.0) 
+                where metric.ts_count_full > 0
+          
+          # Calculate quality impact (higher is better)
+          - set(resource.attributes["quality_impact"], 
+                metric.quality_opt_moderate / 100.0) 
+                where metric.quality_opt_moderate > 0
+                
+          # Calculate cost reduction percentage
+          - set(resource.attributes["cost_reduction_pct"], 
+                metric.cost_reduction_opt_moderate) 
+                where metric.cost_reduction_opt_moderate > 0
+                
+          # Calculate overall effectiveness score (0-100)
+          # Formula: Quality * Cost Reduction / 100
+          - set(resource.attributes["effectiveness_score"], 
+                (metric.quality_opt_moderate * metric.cost_reduction_opt_moderate) / 100.0) 
+                where and(metric.quality_opt_moderate > 0, metric.cost_reduction_opt_moderate > 0)
+          
   # Generate explicit control plane metrics for better visibility
   metricstransform/control_metrics:
     transforms:
+      # Last decision timestamp metric for tracking decision history
       - include: ".*"
         match_type: regexp
         action: insert
@@ -91,6 +146,42 @@ processors:
           - action: add_label  
             new_label: collector_component
             new_value: "observer"
+            
+      # Time series count metric for tracking cardinality over time
+      - include: ".*ts_count_full.*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix.observer.time_series_count
+        operations:
+          - action: add_label
+            new_label: metric_type
+            new_value: "cardinality"
+            
+      # Current optimization level metric
+      - include: ".*optimization_level.*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix.observer.optimization_level
+        operations:
+          - action: add_label
+            new_label: metric_type
+            new_value: "control_effectiveness"
+            
+      # Control effectiveness metrics - measure impact of optimization
+      - include: ".*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix.observer.control_effectiveness
+        operations:
+          - action: add_label
+            new_label: metric_type
+            new_value: "feedback"
+          - action: add_label
+            new_label: cardinality_reduction_pct
+            new_value: "{{ if and .ts_count_full (gt .ts_count_full 0.0) }}{{ div (sub .ts_count_full .ts_count_opt_moderate) .ts_count_full }}{{ else }}0{{ end }}"
+          - action: add_label
+            new_label: impact_score
+            new_value: "{{ if and .quality_opt_moderate (gt .quality_opt_moderate 0.0) }}{{ mul (div (sub .ts_count_full .ts_count_opt_moderate) .ts_count_full) .quality_opt_moderate }}{{ else }}0{{ end }}"
   
   # Add thresholds as metrics 
   metricstransform/thresholds:
@@ -116,13 +207,26 @@ exporters:
   prometheus:
     endpoint: 0.0.0.0:9889
 
+  # Enhanced control signal output with more context
   file/control_signal_output:
     path: ${CONTROL_SIGNAL_WRITE_PATH}
-    format: json  # Changed to json which is supported
+    format: yaml  # Use YAML for better human readability
     rotation:
       max_megabytes: 5
       max_days: 3
       max_backups: 3
+    content:
+      # Format the control file with mode and metadata
+      mode: "{{ if .optimization_mode }}{{ .optimization_mode }}{{ else }}moderate{{ end }}"
+      last_updated: "{{ timestamp }}"
+      reason: "{{ if .decision_reason }}{{ .decision_reason }}{{ else }}initial_state{{ end }}"
+      ts_count: "{{ if .ts_count_full }}{{ .ts_count_full }}{{ else }}0{{ end }}"
+      optimization_level: "{{ if .optimization_level }}{{ .optimization_level }}{{ else }}0{{ end }}"
+      thresholds:
+        moderate: "${THRESHOLD_MODERATE:-300.0}"
+        caution: "${THRESHOLD_CAUTION:-350.0}"
+        warning: "${THRESHOLD_WARNING:-400.0}"
+        ultra: "${THRESHOLD_ULTRA:-450.0}"
 
 service:
   telemetry:
@@ -137,14 +241,20 @@ service:
       processors: [metricstransform/pipeline_labels, batch]
       exporters: [prometheus]
     
-    # Synthetic metrics and control signals
+    # Synthetic metrics and control signals with effectiveness tracking
     metrics/synthetic:
       receivers: [prometheus/synthetic]
-      processors: [filter/ts_count, metricstransform/mode_control, transform/control_signal, metricstransform/thresholds, batch]
+      processors: [filter/ts_count, metricstransform/mode_control, transform/control_signal, transform/effectiveness, metricstransform/thresholds, batch]
       exporters: [prometheus, file/control_signal_output]
       
-    # Self-monitoring for the observer
+    # Self-monitoring for the observer with detailed effectiveness metrics
     metrics/observer:
       receivers: [hostmetrics/observer, otlp]
       processors: [metricstransform/control_metrics, batch]
+      exporters: [prometheus]
+      
+    # Dedicated pipeline for control effectiveness metrics
+    metrics/effectiveness:
+      receivers: [prometheus/synthetic]
+      processors: [transform/effectiveness, batch]
       exporters: [prometheus]
