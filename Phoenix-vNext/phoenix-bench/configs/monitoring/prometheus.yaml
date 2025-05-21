@@ -1,0 +1,115 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Main collector (hostmetrics) - primary metrics endpoint
+  - job_name: 'otelcol-main'
+    static_configs:
+      - targets: ['otelcol-main:8888']
+        labels:
+          pipeline: 'main'
+          collector: 'otelcol-main'
+
+  # Consistency metrics endpoint
+  - job_name: 'otelcol-main-consistency'
+    static_configs:
+      - targets: ['otelcol-main:8889']
+        labels:
+          pipeline: 'coherence'
+          collector: 'otelcol-main'
+          metrics_type: 'consistency'
+
+  # Feedback metrics endpoint
+  - job_name: 'otelcol-main-feedback'
+    static_configs:
+      - targets: ['otelcol-main:8890']
+        labels:
+          pipeline: 'feedback'
+          collector: 'otelcol-main'
+          metrics_type: 'feedback'
+
+  # Observer collector metrics
+  - job_name: 'otelcol-observer'
+    static_configs:
+      - targets: ['otelcol-observer:8891']
+        labels:
+          pipeline: 'observer'
+          collector: 'otelcol-observer'
+
+  # Pipeline-specific views (using relabeling to separate data by pipeline.id)
+  # Full pipeline metrics - baseline with minimal processing
+  - job_name: 'pipeline-full'
+    honor_labels: true
+    static_configs:
+      - targets: ['otelcol-main:8888']
+        labels:
+          pipeline_view: 'full'
+    metric_relabel_configs:
+      - source_labels: [pipeline_id]
+        regex: 'full'
+        action: keep
+
+  # Optimized moderate pipeline metrics - filtering and aggregation
+  - job_name: 'pipeline-opt'
+    honor_labels: true
+    static_configs:
+      - targets: ['otelcol-main:8888']
+        labels:
+          pipeline_view: 'opt'
+    metric_relabel_configs:
+      - source_labels: [pipeline_id]
+        regex: 'opt'
+        action: keep
+
+  # Optimized ultra pipeline metrics - aggressive filtering
+  - job_name: 'pipeline-ultra'
+    honor_labels: true
+    static_configs:
+      - targets: ['otelcol-main:8888']
+        labels:
+          pipeline_view: 'ultra'
+    metric_relabel_configs:
+      - source_labels: [pipeline_id]
+        regex: 'ultra'
+        action: keep
+
+  # Experimental pipeline metrics - using space-saving algorithm
+  - job_name: 'pipeline-exp'
+    honor_labels: true
+    static_configs:
+      - targets: ['otelcol-main:8888']
+        labels:
+          pipeline_view: 'exp'
+    metric_relabel_configs:
+      - source_labels: [pipeline_id]
+        regex: 'exp'
+        action: keep
+
+  # Hybrid pipeline metrics - balanced approach
+  - job_name: 'pipeline-hybrid'
+    honor_labels: true
+    static_configs:
+      - targets: ['otelcol-main:8888']
+        labels:
+          pipeline_view: 'hybrid'
+    metric_relabel_configs:
+      - source_labels: [pipeline_id]
+        regex: 'hybrid'
+        action: keep
+
+  # Metrics related to control file state changes
+  - job_name: 'control-signals'
+    static_configs:
+      - targets: ['otelcol-main:8888', 'otelcol-observer:8891']
+        labels:
+          metrics_type: 'control'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: '.*control.*|.*mode.*|.*correlation.*|.*config_version.*|phoenix_.*_ts_active'
+        action: keep
+
+  # Internal Prometheus metrics
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

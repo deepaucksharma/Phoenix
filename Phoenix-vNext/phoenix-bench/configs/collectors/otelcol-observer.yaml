@@ -1,0 +1,302 @@
+receivers:
+  # Scrape metrics from the main collector with focus on cardinality metrics
+  prometheus/otelcol_main_cardinality:
+    config:
+      scrape_configs:
+        - job_name: 'otelcol-main-cardinality-scrape'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['otelcol-main:8888'] # otelcol-main's main metrics endpoint
+          metric_relabel_configs:
+            # Scrape phoenix.opt.ts_active, phoenix.ultra.ts_active, phoenix.hybrid.ts_active, phoenix.exp.ts_active
+            - source_labels: [__name__]
+              regex: 'phoenix_opt_ts_active|phoenix_ultra_ts_active|phoenix_hybrid_ts_active|phoenix_exp_ts_active|phoenix_ts_active'
+              action: keep
+            # Add source identifier
+            - source_labels: [__name__]
+              target_label: source
+              replacement: 'otelcol_main'
+  
+  # General metrics scrape from main collector
+  prometheus/otelcol_main:
+    config:
+      scrape_configs:
+        - job_name: 'otelcol-main-scrape'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['otelcol-main:8888']
+          metric_relabel_configs:
+            # Add source identifier
+            - source_labels: [__name__]
+              target_label: source
+              replacement: 'otelcol_main'
+  
+  # Scrape metrics from the synthetic metrics generator
+  prometheus/synthetic:
+    config:
+      scrape_configs:
+        - job_name: 'synthetic-scrape'
+          scrape_interval: 5s
+          static_configs:
+            - targets: ['synthetic-metrics:9999']
+          metric_relabel_configs:
+            # Debug label to track source
+            - source_labels: [__name__]
+              target_label: metric_source
+              replacement: 'synthetic'
+            
+  # OTLP receiver for direct control metrics and feedback
+  otlp/from_main_collector:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4319 # Differentiated port from main's OTLP receiver
+      http:
+        endpoint: 0.0.0.0:4320 # Example HTTP endpoint
+        
+  # Scrape consistency metrics from main collector's separate endpoint
+  prometheus/consistency:
+    config:
+      scrape_configs:
+        - job_name: 'consistency-metrics'
+          scrape_interval: 5s
+          static_configs:
+            - targets: ['otelcol-main:8889']
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              target_label: metrics_type
+              replacement: 'consistency'
+        
+  # Scrape feedback metrics from main collector's feedback endpoint
+  prometheus/feedback:
+    config:
+      scrape_configs:
+        - job_name: 'feedback-metrics'
+          scrape_interval: 5s
+          static_configs:
+            - targets: ['otelcol-main:8890']
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              target_label: metrics_type
+              replacement: 'feedback'
+        
+  # Self-monitoring for the observer collector
+  hostmetrics/observer:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      memory: {}
+      load: {}
+
+processors:
+  # Batching for efficiency
+  batch:
+    send_batch_size: 1000
+    timeout: 10s
+  
+  # Resource detection
+  resourcedetection:
+    detectors: [env]
+    timeout: 2s
+  
+  # Handle pipeline labels from scrape
+  metricstransform/pipeline_labels:
+    transforms:
+      - include: ".*"
+        match_type: regexp
+        action: update
+        operations:
+          - action: add_label
+            new_label: collector_pipeline
+            new_value: "main"
+  
+  # Advanced control signal processor that generates the opt_mode.yaml file  
+  transform/control_file_generator:
+    metric_statements:
+      - context: datapoint
+        statements:
+          # Extract cardinality metrics from main collector
+          - set(ts_opt, GetMetric("phoenix_opt_ts_active"))
+          - set(ts_ultra, GetMetric("phoenix_ultra_ts_active"))
+          - set(ts_hybrid, GetMetric("phoenix_hybrid_ts_active"))
+          - set(ts_exp, GetMetric("phoenix_exp_ts_active"))
+          - set(ts_total, GetMetric("phoenix_ts_active"))
+          
+          # Fallbacks for missing metrics
+          - set(ts_opt, ConditionalMatch(ts_opt == nil, 0.0, ts_opt))
+          - set(ts_ultra, ConditionalMatch(ts_ultra == nil, 0.0, ts_ultra))
+          - set(ts_hybrid, ConditionalMatch(ts_hybrid == nil, 0.0, ts_hybrid))
+          - set(ts_exp, ConditionalMatch(ts_exp == nil, 0.0, ts_exp))
+          - set(ts_total, ConditionalMatch(ts_total == nil, 0.0, ts_total))
+          
+          # Get thresholds from environment or use defaults
+          - set(threshold_moderate, ToDouble(Env("THRESHOLD_MODERATE")))
+          - set(threshold_caution, ToDouble(Env("THRESHOLD_CAUTION")))
+          - set(threshold_warning, ToDouble(Env("THRESHOLD_WARNING")))
+          - set(threshold_ultra, ToDouble(Env("THRESHOLD_ULTRA")))
+          
+          # Default thresholds if not found or invalid
+          - set(threshold_moderate, ConditionalMatch(threshold_moderate == nil, 300.0, threshold_moderate))
+          - set(threshold_caution, ConditionalMatch(threshold_caution == nil, 350.0, threshold_caution))
+          - set(threshold_warning, ConditionalMatch(threshold_warning == nil, 400.0, threshold_warning))
+          - set(threshold_ultra, ConditionalMatch(threshold_ultra == nil, 450.0, threshold_ultra))
+          
+          # Mode decision logic with graduated thresholds
+          - set(current_mode, "moderate") # Default
+          - set(current_mode, ConditionalMatch(ts_opt > threshold_ultra, "ultra", current_mode))
+          - set(current_mode, ConditionalMatch(ts_opt > threshold_warning && ts_opt <= threshold_ultra, "warning", current_mode))
+          - set(current_mode, ConditionalMatch(ts_opt > threshold_caution && ts_opt <= threshold_warning, "caution", current_mode))
+          
+          # Calculate optimization level (0-100) based on active series
+          - set(opt_range, threshold_ultra - threshold_moderate)
+          - set(opt_range, ConditionalMatch(opt_range <= 0.0, 1.0, opt_range)) # Avoid division by zero
+          - set(opt_position, ts_opt - threshold_moderate)
+          - set(opt_position, ConditionalMatch(opt_position < 0.0, 0.0, opt_position)) # Floor at 0
+          - set(optimization_level, Int(opt_position * 100.0 / opt_range))
+          - set(optimization_level, ConditionalMatch(optimization_level > 100, 100, optimization_level)) # Cap at 100
+          
+          # Generate correlation ID for this state transition
+          - set(observer_id, Env("OBSERVER_INSTANCE_ID"))
+          - set(observer_id, ConditionalMatch(observer_id == nil, "observer", observer_id))
+          - set(timestamp_ms, Int(Timestamp() / 1000000)) # Current time in milliseconds
+          - set(correlation_id, Concat(observer_id, "-", ToString(timestamp_ms)))
+          
+          # Decision reason for metadata
+          - set(reason, Concat("ts_count=", ToString(ts_opt), 
+                       ", thresholds: moderate=", ToString(threshold_moderate), 
+                       ", caution=", ToString(threshold_caution), 
+                       ", warning=", ToString(threshold_warning),
+                       ", ultra=", ToString(threshold_ultra)))
+          
+          # Build control file structure
+          - set(file.mode, current_mode)
+          - set(file.last_updated, Now())
+          - set(file.reason, reason)
+          - set(file.ts_count, ts_opt)
+          - set(file.config_version, Int64(timestamp_ms % 1000000)) # Simple versioning
+          - set(file.correlation_id, correlation_id)
+          - set(file.optimization_level, optimization_level)
+          
+          # Add threshold information
+          - set(file.thresholds.moderate, threshold_moderate)
+          - set(file.thresholds.caution, threshold_caution)
+          - set(file.thresholds.warning, threshold_warning)
+          - set(file.thresholds.ultra, threshold_ultra)
+          
+          # Add state transition info
+          - set(file.state.previous_mode, "unknown") # Would need state tracking
+          - set(file.state.transition_timestamp, Now())
+          
+          # Set output metric for file exporter
+          - set(resource.attributes["file_content"], ToJson(file))
+
+  # Generate debug metrics about control decisions
+  metricstransform/control_debug:
+    transforms:
+      - include: "phoenix_opt_ts_active"
+        action: update
+        operations:
+          - action: add_label
+            new_label: control_decision
+            new_value: "pending" # Will be updated based on ts count
+          - action: add_label
+            new_label: observer_id
+            new_value: "${OBSERVER_INSTANCE_ID:observer}"
+
+exporters:
+  # Prometheus exporter for Observer's metrics
+  prometheus:
+    endpoint: 0.0.0.0:8891
+    namespace: phoenix_observer
+    send_timestamps: true
+    metric_expiration: 180m
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # File exporter to write the optimization mode control file
+  file/control_signal:
+    path: "${CONTROL_SIGNAL_WRITE_PATH:/control_out/opt_mode.yaml}"
+    format: yaml
+    rotation:
+      max_megabytes: 5
+      max_days: 3
+      max_backups: 2
+      
+  # Debug exporter for development and troubleshooting
+  debug:
+    verbosity: detailed
+    
+  # OTLP exporter to send control signals to main collector
+  otlp/to_main_collector:
+    endpoint: otelcol-main:4317 # Main collector's OTLP endpoint
+    tls:
+      insecure: true # No TLS for local communication
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 1000
+
+service:
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8891 # Observer's own metrics endpoint
+      level: detailed
+    logs:
+      level: info
+  
+  # Extensions for health checks and debugging
+  extensions: [health_check, pprof, zpages]
+  
+  # Pipeline configurations
+  pipelines:
+    # Process cardinality metrics from main collector for control decisions
+    metrics/cardinality_control:
+      receivers: [prometheus/otelcol_main_cardinality]
+      processors: [transform/control_file_generator, batch]
+      exporters: [prometheus, file/control_signal, debug]
+    
+    # Process general metrics from main collector
+    metrics/main_monitoring:
+      receivers: [prometheus/otelcol_main]
+      processors: [metricstransform/pipeline_labels, batch]
+      exporters: [prometheus]
+    
+    # Process synthetic metrics (if used)
+    metrics/synthetic:
+      receivers: [prometheus/synthetic]
+      processors: [batch]
+      exporters: [prometheus]
+    
+    # Process consistency metrics from main collector
+    metrics/consistency:
+      receivers: [prometheus/consistency]
+      processors: [batch]
+      exporters: [prometheus]
+    
+    # Process feedback metrics from main collector
+    metrics/feedback:
+      receivers: [prometheus/feedback]
+      processors: [batch]
+      exporters: [prometheus]
+    
+    # Process OTLP metrics from main collector
+    metrics/otlp_from_main:
+      receivers: [otlp/from_main_collector]
+      processors: [batch]
+      exporters: [prometheus, debug]
+    
+    # Observer self-monitoring
+    metrics/self:
+      receivers: [hostmetrics/observer]
+      processors: [resourcedetection, batch]
+      exporters: [prometheus]
+  
+  # Extension configurations
+  extensions:
+    health_check:
+      endpoint: 0.0.0.0:13133
+      
+    pprof:
+      endpoint: 0.0.0.0:1777
+      
+    zpages:
+      endpoint: 0.0.0.0:55679

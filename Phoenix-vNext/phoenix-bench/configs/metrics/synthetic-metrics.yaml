@@ -34,7 +34,7 @@ processors:
   # Create fixed metrics with metricstransform
   metricstransform/timeseries:
     transforms:
-      # Base metrics from CPU for time series counts
+      # Base metrics from CPU
       - include: "system\\.cpu\\..*"
         match_type: regexp
         action: insert
@@ -205,9 +205,9 @@ processors:
             label_set: []
           - action: experimental_scale_value
             experimental_scale: 93.0
-
+   
   # Cost reduction metrics
-  metricstransform/cost_reduction:
+  metricstransform/cost:
     transforms:
       - include: "system\\.memory\\..*"
         match_type: regexp
@@ -252,23 +252,69 @@ processors:
             label_set: []
           - action: experimental_scale_value
             experimental_scale: 50.0
-            
-  # Control metrics
-  metricstransform/control:
+  
+  # Entity linking quality metrics
+  metricstransform/entity_quality:
     transforms:
-      - include: "system\\.memory\\..*"
+      - include: "system\\.load\\..*"
         match_type: regexp
         action: insert
-        new_name: phoenix_opt_mode
+        new_name: phoenix_entity_linking_full
         operations:
           - action: aggregate_labels
             aggregation_type: sum
             label_set: []
           - action: experimental_scale_value
-            experimental_scale: 0.0 # 0 = moderate mode
+            experimental_scale: 100.0
             
-      # Threshold metrics
-      - include: "system\\.memory\\..*"
+      - include: "system\\.load\\..*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix_entity_linking_opt_moderate
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          - action: experimental_scale_value
+            experimental_scale: 85.0
+            
+      - include: "system\\.load\\..*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix_entity_linking_opt_ultra
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          - action: experimental_scale_value
+            experimental_scale: 70.0
+            
+      - include: "system\\.load\\..*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix_entity_linking_exp
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          - action: experimental_scale_value
+            experimental_scale: 65.0
+            
+      - include: "system\\.load\\..*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix_entity_linking_hybrid
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          - action: experimental_scale_value
+            experimental_scale: 80.0
+  
+  # Thresholds based on environment variables
+  metricstransform/thresholds:
+    transforms:
+      - include: "process\\.runtime\\..*"
         match_type: regexp
         action: insert
         new_name: phoenix_threshold_moderate
@@ -277,9 +323,31 @@ processors:
             aggregation_type: sum
             label_set: []
           - action: experimental_scale_value
-            experimental_scale: 300.0
+            experimental_scale: "${THRESHOLD_MODERATE:-300.0}"
             
-      - include: "system\\.memory\\..*"
+      - include: "process\\.runtime\\..*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix_threshold_caution
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          - action: experimental_scale_value
+            experimental_scale: "${THRESHOLD_CAUTION:-350.0}"
+            
+      - include: "process\\.runtime\\..*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix_threshold_warning
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          - action: experimental_scale_value
+            experimental_scale: "${THRESHOLD_WARNING:-400.0}"
+            
+      - include: "process\\.runtime\\..*"
         match_type: regexp
         action: insert
         new_name: phoenix_threshold_ultra
@@ -288,9 +356,70 @@ processors:
             aggregation_type: sum
             label_set: []
           - action: experimental_scale_value
-            experimental_scale: 450.0
+            experimental_scale: "${THRESHOLD_ULTRA:-450.0}"
+            
+  # Optimization mode - alternates between 0 and 1
+  metricstransform/opt_mode:
+    transforms:
+      - include: "system\\.cpu\\..*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix_opt_mode
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          - action: experimental_scale_value
+            experimental_scale: 0.0
+  
+  # Calculated effectiveness metrics
+  metricstransform/cardinality:
+    transforms:
+      - include: "system\\.disk\\..*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix_cardinality_reduction_pct_moderate
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          - action: experimental_scale_value
+            experimental_scale: 40.0
+            
+      - include: "system\\.disk\\..*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix_cardinality_reduction_pct_ultra
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          - action: experimental_scale_value
+            experimental_scale: 80.0
 
-  # Phoenix system CPU time seconds total - the core metric for the dashboard
+      - include: "system\\.disk\\..*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix_cardinality_reduction_pct_exp
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          - action: experimental_scale_value
+            experimental_scale: 60.0
+            
+      - include: "system\\.disk\\..*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix_cardinality_reduction_pct_hybrid
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          - action: experimental_scale_value
+            experimental_scale: 65.0
+            
+  # Phoenix system CPU time seconds total - core metric used by dashboards
   metricstransform/phoenix_system:
     transforms:
       - include: "system\\.cpu\\.time"
@@ -352,61 +481,108 @@ processors:
           - action: add_label
             new_label: cost_reduction_hybrid
             new_value: "50"
+            
+  metricstransform/effectiveness:
+    transforms:
+      - include: "system\\.load\\..*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix_effectiveness_score_moderate
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          - action: experimental_scale_value
+            experimental_scale: 36.8
+            
+      - include: "system\\.load\\..*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix_effectiveness_score_ultra
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          - action: experimental_scale_value
+            experimental_scale: 58.5
+            
+      - include: "system\\.load\\..*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix_effectiveness_score_exp
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          - action: experimental_scale_value
+            experimental_scale: 51.0
+            
+      - include: "system\\.load\\..*"
+        match_type: regexp
+        action: insert
+        new_name: phoenix_effectiveness_score_hybrid
+        operations:
+          - action: aggregate_labels
+            aggregation_type: sum
+            label_set: []
+          - action: experimental_scale_value
+            experimental_scale: 57.2
+
+  # Add mode name labels for dashboard display
+  metricstransform/mode_labels:
+    transforms:
+      - include: phoenix_opt_mode
+        action: update
+        operations:
+          - action: add_label
+            new_label: mode_name
+            new_value: "moderate"
+            label_value: "0"
+          - action: add_label
+            new_label: mode_name
+            new_value: "ultra" 
+            label_value: "1"
+  
+  # Basic batch processing
+  batch:
+    send_batch_size: 1000
+    timeout: 10s
 
 exporters:
   prometheus:
-    endpoint: "0.0.0.0:9999"
-    namespace: ""
+    endpoint: 0.0.0.0:9999
+    namespace: phoenix
     send_timestamps: true
-    enable_open_metrics: true
+    metric_expiration: 180m
     resource_to_telemetry_conversion:
       enabled: true
-      
+  
   # Debug exporter for development
   debug:
     verbosity: detailed
 
 service:
   pipelines:
-    # Pipeline for time series counts
-    metrics/timeseries:
-      receivers: [hostmetrics]
-      processors: [resourcedetection, metricstransform/timeseries, batch]
-      exporters: [prometheus]
-      
-    # Pipeline for quality metrics
-    metrics/quality:
-      receivers: [hostmetrics]
-      processors: [resourcedetection, metricstransform/quality, batch]
-      exporters: [prometheus]
-      
-    # Pipeline for pipeline metrics
-    metrics/pipelines:
-      receivers: [hostmetrics]
-      processors: [resourcedetection, metricstransform/pipelines, batch]
-      exporters: [prometheus]
-      
-    # Pipeline for cost reduction metrics
-    metrics/cost:
-      receivers: [hostmetrics]
-      processors: [resourcedetection, metricstransform/cost_reduction, batch]
-      exporters: [prometheus]
-      
-    # Pipeline for control metrics
-    metrics/control:
-      receivers: [hostmetrics]
-      processors: [resourcedetection, metricstransform/control, batch]
-      exporters: [prometheus]
-      
-    # Core phoenix system metrics
-    metrics/phoenix_system:
-      receivers: [hostmetrics]
-      processors: [resourcedetection, metricstransform/phoenix_system, batch]
+    metrics:
+      receivers: [hostmetrics, prometheus/main_collector]
+      processors: [resourcedetection, 
+                  metricstransform/timeseries, 
+                  metricstransform/pipelines, 
+                  metricstransform/quality, 
+                  metricstransform/cost,
+                  metricstransform/entity_quality,
+                  metricstransform/thresholds,
+                  metricstransform/opt_mode, 
+                  metricstransform/cardinality, 
+                  metricstransform/effectiveness,
+                  metricstransform/mode_labels,
+                  metricstransform/phoenix_system,
+                  batch]
       exporters: [prometheus, debug]
-      
-  extensions: []
   
   telemetry:
     metrics:
       level: detailed
-      address: "0.0.0.0:8899"
+      address: 0.0.0.0:8899
+    logs:
+      level: info
