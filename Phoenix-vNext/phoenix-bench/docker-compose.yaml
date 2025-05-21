@@ -1,0 +1,68 @@
+version: "3.9"
+services:
+  ### Workload generators (CPU-heavy & IO-heavy) ###
+  stress-cpu:
+    image: polinux/stress
+    command: ["stress", "--cpu", "6", "--vm", "3", "--vm-bytes", "1G", "--timeout", "3600s"]
+    pid: host
+    restart: unless-stopped
+
+  stress-io:
+    image: polinux/stress
+    command: ["stress", "--io", "4", "--timeout", "3600s"]
+    pid: host
+    restart: unless-stopped
+
+  ### Main Collector with 3 pipelines ###
+  otelcol-main:
+    image: otel/opentelemetry-collector-contrib:0.103.0
+    command: ["--config=/etc/otelcol/otelcol-main.yaml"]
+    privileged: true
+    pid: host
+    environment:
+      HOST_PROC: /host/proc
+      CONTROL_SIGNAL_PATH: /etc/control/opt_mode.yaml
+      NR_FULL_KEY: ${NR_FULL_KEY}
+      NR_OPT_KEY: ${NR_OPT_KEY}
+      NR_EXP_KEY: ${NR_EXP_KEY}
+    volumes:
+      - ./configs/otelcol-main.yaml:/etc/otelcol/otelcol-main.yaml:ro
+      - ./configs/control_signals:/etc/control
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc:/host/etc:ro
+      - ./data:/data
+    ports:
+      - "8887:8887" # self-metrics
+    restart: unless-stopped
+
+  ### Observer / control-plane ###
+  otelcol-observer:
+    image: otel/opentelemetry-collector-contrib:0.103.0
+    command: ["--config=/etc/otelcol/otelcol-observer.yaml"]
+    environment:
+      CONTROL_SIGNAL_PATH: /etc/control/opt_mode.yaml
+    volumes:
+      - ./configs/otelcol-observer.yaml:/etc/otelcol/otelcol-observer.yaml:ro
+      - ./configs/control_signals:/etc/control
+    ports:
+      - "8889:8889" # /metrics
+      - "4318:4318" # OTLP HTTP ingest
+    restart: unless-stopped
+
+  ### Prometheus & Grafana ###
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    volumes:
+      - ./configs/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9090:9090"]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.4.3
+    environment: { GF_SECURITY_ADMIN_PASSWORD: admin }
+    volumes:
+      - ./configs/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/all.yml:ro
+      - ./configs/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/phoenix.json:ro
+    ports: ["3000:3000"]
+    restart: unless-stopped
