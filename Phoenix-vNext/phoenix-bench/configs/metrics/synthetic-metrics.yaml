@@ -1,3 +1,6 @@
+# Simplified Synthetic Metrics Collector Configuration
+# Compatible with otel/opentelemetry-collector-contrib:0.103.0
+
 receivers:
   # Get metrics from main collector
   prometheus/main_collector:
@@ -22,234 +25,56 @@ processors:
     detectors: [env]
     timeout: 2s
     
-  # Create simulation metrics for 5-pipeline testing
-  metricstransform/timeseries_simulation:
-    transforms:
-      # Base metrics from CPU - simulate different pipeline cardinalities
-      - include: "system\\.cpu\\..*"
-        match_type: regexp
+  # Add synthetic metrics tags
+  resource/synthetic:
+    attributes:
+      - key: service.name
+        value: "phoenix-synthetic-generator"
         action: insert
-        new_name: phoenix_ts_count_full
-        operations:
-          - action: aggregate_labels
-            aggregation_type: sum
-            label_set: []
-          - action: experimental_scale_value
-            experimental_scale: 250
-
-      - include: "system\\.cpu\\..*"
-        match_type: regexp
+      - key: benchmark.component
+        value: "synthetic-metrics"
         action: insert
-        new_name: phoenix_ts_count_opt_moderate
-        operations:
-          - action: aggregate_labels
-            aggregation_type: sum
-            label_set: []
-          - action: experimental_scale_value
-            experimental_scale: 150
-          
-      - include: "system\\.cpu\\..*"
-        match_type: regexp
+      - key: pipeline.simulation
+        value: "true"
         action: insert
-        new_name: phoenix_ts_count_opt_ultra
-        operations:
-          - action: aggregate_labels
-            aggregation_type: sum
-            label_set: []
-          - action: experimental_scale_value
-            experimental_scale: 50
-            
-      - include: "system\\.cpu\\..*"
-        match_type: regexp
-        action: insert
-        new_name: phoenix_ts_count_exp
-        operations:
-          - action: aggregate_labels
-            aggregation_type: sum
-            label_set: []
-          - action: experimental_scale_value
-            experimental_scale: 100
-            
-      - include: "system\\.cpu\\..*"
-        match_type: regexp
-        action: insert
-        new_name: phoenix_ts_count_hybrid
-        operations:
-          - action: aggregate_labels
-            aggregation_type: sum
-            label_set: []
-          - action: experimental_scale_value
-            experimental_scale: 125
   
-  # Pipeline performance metrics        
-  metricstransform/pipeline_performance:
-    transforms:
-      - include: "system\\.memory\\..*"
-        match_type: regexp
-        action: insert
-        new_name: phoenix_quality_full
-        operations:
-          - action: aggregate_labels
-            aggregation_type: sum
-            label_set: []
-          - action: experimental_scale_value
-            experimental_scale: 100.0
-            
-      - include: "system\\.memory\\..*"
-        match_type: regexp
-        action: insert
-        new_name: phoenix_quality_opt_moderate
-        operations:
-          - action: aggregate_labels
-            aggregation_type: sum
-            label_set: []
-          - action: experimental_scale_value
-            experimental_scale: 95.0
-            
-      - include: "system\\.memory\\..*"
-        match_type: regexp
-        action: insert
-        new_name: phoenix_quality_opt_ultra
-        operations:
-          - action: aggregate_labels
-            aggregation_type: sum
-            label_set: []
-          - action: experimental_scale_value
-            experimental_scale: 85.0
-            
-      - include: "system\\.memory\\..*"
-        match_type: regexp
-        action: insert
-        new_name: phoenix_quality_exp
-        operations:
-          - action: aggregate_labels
-            aggregation_type: sum
-            label_set: []
-          - action: experimental_scale_value
-            experimental_scale: 90.0
-            
-      - include: "system\\.memory\\..*"
-        match_type: regexp
-        action: insert
-        new_name: phoenix_quality_hybrid
-        operations:
-          - action: aggregate_labels
-            aggregation_type: sum
-            label_set: []
-          - action: experimental_scale_value
-            experimental_scale: 93.0
-  
-  # Schema-aligned threshold metrics
-  metricstransform/thresholds:
-    transforms:
-      - include: "process\\.runtime\\..*"
-        match_type: regexp
-        action: insert
-        new_name: phoenix_threshold_moderate
-        operations:
-          - action: aggregate_labels
-            aggregation_type: sum
-            label_set: []
-          - action: experimental_scale_value
-            experimental_scale: 300.0
-            
-      - include: "process\\.runtime\\..*"
-        match_type: regexp
-        action: insert
-        new_name: phoenix_threshold_adaptive
-        operations:
-          - action: aggregate_labels
-            aggregation_type: sum
-            label_set: []
-          - action: experimental_scale_value
-            experimental_scale: 375.0
-            
-      - include: "process\\.runtime\\..*"
-        match_type: regexp
-        action: insert
-        new_name: phoenix_threshold_ultra
-        operations:
-          - action: aggregate_labels
-            aggregation_type: sum
-            label_set: []
-          - action: experimental_scale_value
-            experimental_scale: 450.0
-  
-  # Optimization mode simulation - alternates between modes for testing
-  metricstransform/opt_mode:
-    transforms:
-      - include: "system\\.cpu\\..*"
-        match_type: regexp
-        action: insert
-        new_name: phoenix_opt_mode
-        operations:
-          - action: aggregate_labels
-            aggregation_type: sum
-            label_set: []
-          - action: experimental_scale_value
-            experimental_scale: 0.0 # 0=moderate, 1=adaptive, 2=ultra
-  
-  # Dashboard-ready consolidated metrics
-  metricstransform/consolidated:
-    transforms:
-      # Phoenix system CPU time seconds total - core metric used by dashboards
-      - include: "system\\.cpu\\.time"
-        match_type: regexp
-        action: insert
-        new_name: phoenix_system_cpu_time_seconds_total
-        operations:
-          - action: aggregate_labels
-            aggregation_type: sum
-            label_set: []
-          - action: add_label
-            new_label: opt_mode
-            new_value: "0"
-          - action: add_label
-            new_label: threshold_moderate
-            new_value: "300"
-          - action: add_label
-            new_label: threshold_adaptive
-            new_value: "375"
-          - action: add_label
-            new_label: threshold_ultra
-            new_value: "450"
-  
-  # Basic batch processing
   batch:
     send_batch_size: 1000
     timeout: 10s
 
 exporters:
+  # Export metrics for consumption
   prometheus:
-    endpoint: 0.0.0.0:9999
-    namespace: phoenix
-    send_timestamps: true
-    metric_expiration: 180m
-    resource_to_telemetry_conversion:
-      enabled: true
-  
-  # Debug exporter for development
+    endpoint: "0.0.0.0:9999"
+    metric_expiration: 30m
+    
+  # Send to main collector for processing
+  otlp/to_main:
+    endpoint: http://otelcol-main:4317
+    tls:
+      insecure: true
+    
   debug:
-    verbosity: detailed
+    verbosity: basic
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+    
+  pprof:
+    endpoint: 0.0.0.0:1777
 
 service:
+  extensions: [health_check, pprof]
+  
   pipelines:
     metrics:
       receivers: [hostmetrics, prometheus/main_collector]
-      processors: [
-        resourcedetection, 
-        metricstransform/timeseries_simulation, 
-        metricstransform/pipeline_performance, 
-        metricstransform/thresholds,
-        metricstransform/opt_mode, 
-        metricstransform/consolidated,
-        batch
-      ]
-      exporters: [prometheus, debug]
-  
+      processors: [resourcedetection, resource/synthetic, batch]
+      exporters: [prometheus, otlp/to_main, debug]
+
   telemetry:
-    metrics:
-      level: detailed
-      address: 0.0.0.0:8899
     logs:
       level: info
+    metrics:
+      address: 0.0.0.0:8899

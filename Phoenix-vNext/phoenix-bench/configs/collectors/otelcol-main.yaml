@@ -1,25 +1,10 @@
-# Config sources with improved reliability
-config_sources:
-  ctlfile:
-    path: /etc/otelcol/control_signals/opt_mode.yaml
-    watch: true
-    format: yaml # Expects YAML format
-    reload_delay: 10s # Debounce rapid file changes
-    schema: # Basic schema validation for the control file
-      type: object
-      properties:
-        mode: { type: string, enum: ["moderate", "ultra", "adaptive"] }
-        last_updated: { type: string, format: date-time }
-        config_version: { type: integer }
-        correlation_id: { type: string }
-        reason: { type: string }
-        optimization_level: { type: integer, minimum: 0, maximum: 100 }
-      required: [mode, last_updated, config_version, correlation_id]
+# Simplified OpenTelemetry Collector Configuration for Phoenix-vNext
+# Compatible with otel/opentelemetry-collector-contrib:0.103.0
 
 receivers:
   hostmetrics:
     collection_interval: 30s
-    root_path: /host # Corresponds to mount /proc:/host/proc
+    root_path: /host
     scrapers:
       cpu: {}
       memory: {}
@@ -27,53 +12,33 @@ receivers:
       filesystem: {}
       disk: {}
       load: {}
+  
   hostmetrics/hires:
     collection_interval: 5s
     root_path: /host
     scrapers:
-      cpu: {} # CPU metrics for hires
+      cpu: {}
       memory: {}
-  otlp/control: # Receives control signals/feedback from observer or other tools
+  
+  otlp/control:
     protocols:
       grpc:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
-  filelog/control: # Monitors the control file for changes as log entries
-    include: [ "/etc/otelcol/control_signals/opt_mode.yaml" ]
-    start_at: end # Process only new changes
-    include_file_path: true
-    operators: # Parse the YAML content of the file
-      - type: yaml_parser
-        parse_from: body # Assuming the file content is the body of the log
-
-connectors: # Used to fan out data from ingest pipeline to multiple processing pipelines
-  replicate/fanout_to_main_pipelines:
-    pipelines:
-      - metrics/full
-      - metrics/opt
-      - metrics/ultra
-      - metrics/exp
-      - metrics/hybrid
-      # Add metrics/family/* if they are also primary data paths
-      # - metrics/family/system_cpu
-      # - metrics/family/system_memory
-      # - metrics/family/process
-      # - metrics/family/phoenix
-      # - metrics/default
-
 
 processors:
-  memory_limiter: # Protects the collector
+  memory_limiter:
     check_interval: 5s
-    limit_percentage: 80 # Adjusted from original for safety
-    spike_limit_percentage: 25 # Adjusted from original
-  resource/add_tags: # Common tags for all metrics
+    limit_percentage: 80
+    spike_limit_percentage: 25
+  
+  resource/add_tags:
     attributes:
       - key: benchmark.id
         value: phoenix-vnext
         action: insert
-      - key: service.name # Identifies this collector instance or the benchmarked service
+      - key: service.name
         value: "phoenix-observability"
         action: insert
       - key: service.version
@@ -82,87 +47,31 @@ processors:
       - key: deployment.environment
         value: development
         action: insert
-      - key: processing.correlation_id # Initial correlation ID
-        value: initial-main-collector
-        action: insert
-  cumulativetodelta: # Converts counters to deltas
-    metrics:
-      - process.cpu.time
-      - system.cpu.time # From 'cpu' scraper
-      - system.disk.io # Common for system.disk.io.read and system.disk.io.write
-      - system.disk.operations
-      - process.disk.io
-  batch: # Common batching for efficiency
+  
+  batch:
     send_batch_size: 1000
     timeout: 10s
-  transform/strip: # Basic cleanup, applied selectively or not at all if preserve_entity is used
-    metric_statements: # Changed from `statements` to `metric_statements` if it operates on metric attributes
-      - context: resource # Example: strip from resource attributes
-        statements:
-          - delete_key(attributes, "process.pid") # High cardinality if not aggregated
-          - delete_key(attributes, "container.id")
-          - delete_key(attributes, "process.command_line")
-  transform/preserve_entity: # Retains/creates entity identifying attributes
-    metric_statements:
-      - context: resource
-        statements:
-          # Create entity.guid for New Relic. Ensure host.name and service.name exist.
-          - set(attributes["entity.guid"], Concat(attributes["host.name"], ":", attributes["service.name"])) where attributes["host.name"] != nil and attributes["service.name"] != nil
-          - set(attributes["entity.name"], Concat("Host-", attributes["host.name"])) where attributes["host.name"] != nil
-          # Keep essential keys for entity linking and context.
-          # process.executable.name is a metric attribute, not resource usually.
-          # This processor acts on resource attributes.
-          - keep_keys(attributes, ["host.name", "service.name", "entity.guid", "entity.name", "deployment.environment", "benchmark.id", "processing.correlation_id", "observability.mode", "optimization_level", "opt_version", "last_updated"])
-  transform/mode_attr: # Adds attributes from the control file to resources
-    metric_statements:
-      - context: resource
-        statements:
-          - set(attributes["observability.mode"], GetPath(cfg("ctlfile"), "mode"))
-          - set(attributes["optimization_level"], ToString(GetPath(cfg("ctlfile"), "optimization_level"))) # Ensure string for attribute
-          - set(attributes["opt_version"], ToString(GetPath(cfg("ctlfile"), "config_version"))) # Ensure string for attribute
-          - set(attributes["correlation_id"], GetPath(cfg("ctlfile"), "correlation_id"))
-          - set(attributes["last_updated"], GetPath(cfg("ctlfile"), "last_updated"))
-          - set(attributes["optimization.reason"], GetPath(cfg("ctlfile"), "reason"))
-  resourcedetection: # Detects resource attributes like host.name, os.type
-    detectors: [env, system] # system detector for host.name, os.type; env for env vars
-    timeout: 30s # Increased timeout for detection
-    system: # Added system detector config
-      hostname_sources: [os, dns]
-  metrics_consistency: # Custom processor for metrics consistency logic
-    alignment_period: 60s
-    histogram_bucketer: exponential
-  resource/coherent_selector: # Adds attributes for routing or context
+
+  # Pipeline-specific processors
+  resource/pipeline_full:
     attributes:
-      - key: metric_family_id # May be used by routing/family_aware
-        from_attribute: metric.name # This is not a standard attribute, conceptual
-        action: insert
-      - key: host_id
-        from_attribute: host.name # Assumes host.name is a resource attribute
-        action: insert
-      - key: correlation_id # Ensure correlation_id is present on resources
-        from_attribute: processing.correlation_id # Copy from another resource attribute if needed
-        action: upsert
-  # Resource processors to tag data with pipeline context
-  resource/pipeline_selector_full:
-    attributes: 
       - key: pipeline.id
         value: "full"
         action: insert
-      - key: pipeline.source
-        value: "phoenix_benchmark"
+      - key: optimization.level
+        value: "0"
         action: insert
-  resource/pipeline_selector_opt:
-    attributes: 
+
+  resource/pipeline_opt:
+    attributes:
       - key: pipeline.id
         value: "opt"
         action: insert
       - key: optimization.level
         value: "moderate"
         action: insert
-      - key: pipeline.source
-        value: "phoenix_benchmark"
-        action: insert
-  resource/pipeline_selector_ultra:
+
+  resource/pipeline_ultra:
     attributes:
       - key: pipeline.id
         value: "ultra"
@@ -170,305 +79,148 @@ processors:
       - key: optimization.level
         value: "ultra"
         action: insert
-      - key: pipeline.source
-        value: "phoenix_benchmark"
-        action: insert
-  resource/pipeline_selector_exp:
+
+  resource/pipeline_exp:
     attributes:
       - key: pipeline.id
         value: "exp"
         action: insert
-      - key: algorithm
-        value: "space-saving"
+      - key: optimization.level
+        value: "experimental"
         action: insert
-      - key: pipeline.source
-        value: "phoenix_benchmark"
-        action: insert
-  resource/pipeline_selector_hybrid:
+
+  resource/pipeline_hybrid:
     attributes:
       - key: pipeline.id
         value: "hybrid"
         action: insert
-      - key: approach
-        value: "balanced"
+      - key: optimization.level
+        value: "hybrid"
         action: insert
-      - key: pipeline.source
-        value: "phoenix_benchmark"
-        action: insert
-  transform/feedback: # For metrics/control pipeline, to create feedback signals
-    metric_statements: # Assuming it operates on metrics received by otlp/control or filelog/control
-      - context: resource # Add these as resource attributes to the feedback metric
-        statements:
-          - set(attributes["feedback.applied_mode"], GetPath(cfg("ctlfile"), "mode"))
-          - set(attributes["feedback.applied_version"], ToString(GetPath(cfg("ctlfile"), "config_version")))
-          - set(attributes["feedback.acknowledgement_time"], Now()) # Now() is conceptual, use obsreport or an attribute
-  cardinality/estimator:
-    metric_name: phoenix.ts_active
-    mode: synchronous
-  cardinality/estimator_opt:
-    metric_name: phoenix.opt.ts_active
-    mode: synchronous
-  cardinality/estimator_ultra:
-    metric_name: phoenix.ultra.ts_active
-    mode: synchronous
-  cardinality/estimator_hybrid:
-    metric_name: phoenix.hybrid.ts_active
-    mode: synchronous
-  cardinality/estimator_exp:
-    metric_name: phoenix.exp.ts_active
-    mode: synchronous
-  # Optimized pipeline processors - Moderate Mode
-  filter/drop_noise_moderate:
+
+  # Filtering processors for optimization
+  filter/moderate:
+    metrics:
+      exclude:
+        match_type: regexp
+        metric_names:
+          - "^system\\.disk\\..*\\.debug$"
+
+  filter/aggressive:
     metrics:
       include:
         match_type: regexp
-        expression: "^(process|system|cpu|memory|disk|filesystem)\\.((?!debug).)*$"
-  metricstransform/opt_hist_moderate:
-    transforms:
-      - include: process.cpu.utilization
-        action: update
-        operations:
-          - action: aggregate_labels # Aggregate labels for specific metrics
-            label_set: [service.name, host.name] # Key labels to keep
-            aggregation_type: sum
-      - include: system.cpu.time # Example for scaling
-        action: update
-        operations:
-          - action: experimental_scale_value # If this processor and op exist
-            scale: 1000 # Example: convert seconds to milliseconds
-      - include: ".*_bucket" # Example for histogram buckets
-        match_type: regexp
-        action: update
-        operations:
-          - action: toggle_scalar_datatype # If this op exists
-  groupbyattrs/merge_moderate: # Group by these attributes to reduce cardinality
-    keys: [host.name, service.name, entity.guid] # entity.guid helps maintain entity context
-  filter/ultra_aggressive: # More aggressive filtering for Ultra mode
-    metrics: # Include only essential system and process CPU/memory metrics
-      include:
-        match_type: regexp
-        expression: "^(system|cpu|memory)\\.((?!debug).)*$|^(process\\.(cpu|memory))\\.((?!debug).)*$"
-  spacesaving/topk_exp: # For Experimental pipeline
-    dimensions: [process.executable.name] # Dimension for Top-K
-    k: 30
-  filter/hybrid_filter: # Filter for Hybrid mode
-    metrics:
-      include:
-        match_type: regexp
-        expression: "^(process|system|cpu|memory)\\.((?!debug).)*$|^disk\\.(io|ops)$"
-  metricstransform/hybrid_hist_config:
-    transforms:
-      - include: process.cpu.utilization
-        action: update
-        operations:
-          - action: aggregate_labels
-            label_set: [service.name, host.name, process.executable.name]
-            aggregation_type: sum
-  metricstransform/consistency_metrics_adder: # For adding consistency related tags
-    transforms:
-      - include: ".*" # Apply to all metrics
-        match_type: regexp
-        action: update
-        operations:
-          - action: add_label # This processor is metricstransform, so it adds labels to metrics
-            new_label: phoenix_pipeline_coherence
-            new_value: "1" # Placeholder value
-          - action: add_label
-            new_label: phoenix_correlation_id
-            new_value: "unknown" # Default if not available
-  # Routers
-  routing/family_aware: # Routes based on metric_family_id (conceptual attribute)
-    from_attribute: resource.metric_family_id # Attribute on the resource
-    table:
-      - prefix: "system.cpu" # If metric_family_id starts with "system.cpu"
-        pipelines: [metrics/family/system_cpu]
-      - prefix: "system.memory"
-        pipelines: [metrics/family/system_memory]
-      - prefix: "process"
-        pipelines: [metrics/family/process]
-      - prefix: "phoenix" # For phoenix.* internal metrics
-        pipelines: [metrics/family/phoenix]
-    default_pipelines: [metrics/default] # Fallback if no prefix matches
-  routing/bench_router: # This router is defined but not used in main fanout
-    from_attribute: resource.pipeline.id # Assumes pipeline.id is a resource attribute
-    table: # This table would route to the final destination pipelines
-      - value: "full"
-        pipelines: [metrics/full_final]
-      - value: "opt"
-        pipelines: [metrics/opt_final]
-      - value: "ultra"
-        pipelines: [metrics/ultra_final]
-      - value: "exp"
-        pipelines: [metrics/exp_final]
-      - value: "hybrid"
-        pipelines: [metrics/hybrid_final]
-    default_pipelines: [metrics/default]
+        metric_names:
+          - "^(system\\.(cpu|memory)|process\\.(cpu|memory))\\..*$"
 
 exporters:
-  otlphttp/full:
-    endpoint: https://otlp.nr-data.net/v1/metrics
-    headers: { api-key: "" } # Removed default dummy key
-  otlphttp/opt:
-    endpoint: https://otlp.nr-data.net/v1/metrics
-    headers: { api-key: "${NR_OPT_KEY}" }
-  otlphttp/ultra: # Added for ultra pipeline
-    endpoint: https://otlp.nr-data.net/v1/metrics
-    headers: { api-key: "${NR_ULTRA_KEY}" }
-  otlphttp/exp:
-    endpoint: https://otlp.nr-data.net/v1/metrics
-    headers: { api-key: "${NR_EXP_KEY}" }
-  otlphttp/hybrid: # Added for hybrid pipeline
-    endpoint: https://otlp.nr-data.net/v1/metrics
-    headers: { api-key: "${NR_HYBRID_KEY}" }
-  prometheusremotewrite/local:
-    endpoint: http://prometheus:9090/api/v1/write
-    resource_to_telemetry_conversion: { enabled: true } # Send resource attributes as labels
-    # add_metric_suffixes: false # Default is true, which is usually what Prometheus expects for type (_total, _sum, _count)
-  prometheus: # Main Prometheus exporter for collector's own and processed metrics
-    endpoint: 0.0.0.0:8888 # Exposes on all interfaces at port 8888
-    namespace: phoenix
-    send_timestamps: true
-    metric_expiration: 180m # How long Prometheus holds metrics without updates
-    resource_to_telemetry_conversion: { enabled: true }
-    const_labels: # Add these labels to all metrics exported by this instance
-      collector_version: "0.103.0"
-      environment: "development"
-  otlp/observer_feedback: # Sends data TO the observer collector
-    endpoint: otelcol-observer:4319 # Port for observer's OTLP receiver
-    tls: { insecure: true } # Assuming local network, no TLS
-  prometheus/consistency: # For metrics from metrics/family/* pipelines
-    endpoint: 0.0.0.0:8889
-    namespace: phoenix_coherence
-    send_timestamps: true
-    resource_to_telemetry_conversion: { enabled: true }
-  prometheus/feedback: # For metrics from metrics/control pipeline
-    endpoint: 0.0.0.0:8890
-    namespace: phoenix_feedback
-    resource_to_telemetry_conversion: { enabled: true }
+  prometheus:
+    endpoint: "0.0.0.0:8888"
+    metric_expiration: 180m
+    
+  prometheus/consistency:
+    endpoint: "0.0.0.0:8889"
+    metric_expiration: 180m
+    
+  prometheus/feedback:
+    endpoint: "0.0.0.0:8890"
+    metric_expiration: 180m
+
+  otlp/to_observer:
+    endpoint: http://otelcol-observer:4319
+    tls:
+      insecure: true
+
+  debug:
+    verbosity: basic
+
+  # New Relic exporters (using environment variables)
+  otlphttp/nr_full:
+    endpoint: https://otlp.nr-data.net:4318
+    headers:
+      api-key: "${NR_FULL_KEY}"
+
+  otlphttp/nr_opt:
+    endpoint: https://otlp.nr-data.net:4318
+    headers:
+      api-key: "${NR_OPT_KEY}"
+
+  otlphttp/nr_ultra:
+    endpoint: https://otlp.nr-data.net:4318
+    headers:
+      api-key: "${NR_ULTRA_KEY}"
+
+  otlphttp/nr_exp:
+    endpoint: https://otlp.nr-data.net:4318
+    headers:
+      api-key: "${NR_EXP_KEY}"
+
+  otlphttp/nr_hybrid:
+    endpoint: https://otlp.nr-data.net:4318
+    headers:
+      api-key: "${NR_HYBRID_KEY}"
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  
+  pprof:
+    endpoint: 0.0.0.0:1777
+    
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+  memory_ballast:
+    size_mib: 64
 
 service:
-  telemetry: # Collector's own operational metrics
-    metrics: { address: 0.0.0.0:8888 } # Same as the main prometheus exporter endpoint
+  extensions: [health_check, pprof, zpages, memory_ballast]
+  
+  pipelines:
+    # Full pipeline - baseline with minimal processing
+    metrics/full:
+      receivers: [hostmetrics, hostmetrics/hires]
+      processors: [memory_limiter, resource/add_tags, resource/pipeline_full, batch]
+      exporters: [prometheus, otlphttp/nr_full, otlp/to_observer]
+    
+    # Optimized pipeline - moderate optimization
+    metrics/opt:
+      receivers: [hostmetrics]
+      processors: [memory_limiter, resource/add_tags, resource/pipeline_opt, filter/moderate, batch]
+      exporters: [prometheus, otlphttp/nr_opt, otlp/to_observer]
+    
+    # Ultra pipeline - aggressive optimization
+    metrics/ultra:
+      receivers: [hostmetrics]
+      processors: [memory_limiter, resource/add_tags, resource/pipeline_ultra, filter/aggressive, batch]
+      exporters: [prometheus, otlphttp/nr_ultra, otlp/to_observer]
+    
+    # Experimental pipeline - testing new algorithms
+    metrics/exp:
+      receivers: [hostmetrics]
+      processors: [memory_limiter, resource/add_tags, resource/pipeline_exp, filter/moderate, batch]
+      exporters: [prometheus, otlphttp/nr_exp, otlp/to_observer]
+    
+    # Hybrid pipeline - balanced approach
+    metrics/hybrid:
+      receivers: [hostmetrics, hostmetrics/hires]
+      processors: [memory_limiter, resource/add_tags, resource/pipeline_hybrid, filter/moderate, batch]
+      exporters: [prometheus, otlphttp/nr_hybrid, otlp/to_observer]
+    
+    # Control pipeline - receives control signals
+    metrics/control:
+      receivers: [otlp/control]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus/feedback, debug]
+    
+    # Consistency checking pipeline
+    metrics/consistency:
+      receivers: [hostmetrics]
+      processors: [memory_limiter, resource/add_tags, batch]
+      exporters: [prometheus/consistency]
+
+  telemetry:
     logs:
       level: info
-      development: false
-      encoding: json
-  pipelines:
-    # Pipeline 0: Common Intake and Fan-out
-    metrics/ingest:
-      receivers: [hostmetrics, hostmetrics/hires]
-      processors:
-        - memory_limiter # Apply early
-        - resourcedetection # Detect resource attributes first
-        - resource/add_tags # Add common static tags
-        - transform/mode_attr # Add dynamic mode attributes from control file
-        - resource/coherent_selector # Adds family_id, host_id - useful if routing/family_aware is used next
-        - cumulativetodelta
-        - cardinality/estimator # General cardinality estimation
-      exporters: [replicate/fanout_to_main_pipelines] # Fan out to all processing pipelines
-
-    # Main Data Processing Pipelines (receive from replicate/fanout_to_main_pipelines)
-    metrics/full:
-      receivers: [replicate/fanout_to_main_pipelines]
-      processors: [resource/pipeline_selector_full, metricstransform/consistency_metrics_adder, batch]
-      exporters: [otlphttp/full, prometheusremotewrite/local, otlp/observer_feedback] # Send to NR, local Prom, and back to observer
-    
-    metrics/opt: # Moderate optimization
-      receivers: [replicate/fanout_to_main_pipelines]
-      processors:
-        - resource/pipeline_selector_opt
-        - filter/drop_noise_moderate # Apply mode-specific filtering if observability.mode == 'moderate'
-        - metricstransform/opt_hist_moderate
-        - groupbyattrs/merge_moderate
-        - transform/preserve_entity # Preserve entity info after potential stripping/aggregation
-        - cardinality/estimator_opt
-        - metricstransform/consistency_metrics_adder
-        - batch
-      exporters: [otlphttp/opt, prometheusremotewrite/local]
-    
-    metrics/ultra:
-      receivers: [replicate/fanout_to_main_pipelines]
-      processors:
-        - resource/pipeline_selector_ultra
-        - filter/ultra_aggressive # More aggressive filtering
-        - metricstransform/opt_hist_moderate # Reuse moderate histogram settings or define ultra specific
-        - groupbyattrs/merge_moderate # Reuse moderate grouping or define ultra specific
-        - transform/preserve_entity
-        - cardinality/estimator_ultra
-        - metricstransform/consistency_metrics_adder
-        - batch
-      exporters: [otlphttp/ultra, prometheusremotewrite/local]
-    
-    metrics/exp:
-      receivers: [replicate/fanout_to_main_pipelines]
-      processors:
-        - resource/pipeline_selector_exp
-        - spacesaving/topk_exp
-        - transform/preserve_entity
-        - cardinality/estimator_exp
-        - metricstransform/consistency_metrics_adder
-        - batch
-      exporters: [otlphttp/exp, prometheusremotewrite/local]
-    
-    metrics/hybrid:
-      receivers: [replicate/fanout_to_main_pipelines]
-      processors:
-        - resource/pipeline_selector_hybrid
-        - filter/hybrid_filter
-        - metricstransform/hybrid_hist_config
-        - spacesaving/topk_exp # Optionally reuse or use different Top-K settings
-        - transform/preserve_entity
-        - cardinality/estimator_hybrid
-        - metricstransform/consistency_metrics_adder
-        - batch
-      exporters: [otlphttp/hybrid, prometheusremotewrite/local]
-
-    # Control and Feedback Pipeline
-    metrics/control: # Processes signals from observer or file changes
-      receivers: [otlp/control, filelog/control]
-      processors: [transform/feedback, batch] # Creates feedback metrics
-      exporters: [prometheus/feedback, otlp/observer_feedback] # Exports feedback to local Prom and back to observer
-
-    # Auxiliary Pipelines for Family-based Routing (if routing/family_aware is used from metrics/ingest)
-    metrics/family/system_cpu:
-      # receivers: [] # Would be fed by routing/family_aware if it were configured in metrics/ingest
-      processors: [batch, metrics_consistency] # Assuming metrics_consistency is a processor
-      exporters: [prometheus/consistency]
-    metrics/family/system_memory:
-      processors: [batch, metrics_consistency]
-      exporters: [prometheus/consistency]
-    metrics/family/process:
-      processors: [batch, metrics_consistency]
-      exporters: [prometheus/consistency]
-    metrics/family/phoenix: # For internal phoenix.* metrics
-      processors: [batch, metrics_consistency]
-      exporters: [prometheus/consistency]
-    metrics/default: # Fallback for routing/family_aware
-      processors: [batch, metrics_consistency]
-      exporters: [prometheus/consistency]
-    
-    # Final processing pipelines for bench_router (if used)
-    metrics/full_final:
-      processors: [batch]
-      exporters: [otlphttp/full]
-    metrics/opt_final:
-      processors: [batch]
-      exporters: [otlphttp/opt]
-    metrics/ultra_final:
-      processors: [batch]
-      exporters: [otlphttp/ultra]
-    metrics/exp_final:
-      processors: [batch]
-      exporters: [otlphttp/exp]
-    metrics/hybrid_final:
-      processors: [batch]
-      exporters: [otlphttp/hybrid]
-
-  extensions:
-    health_check: # Default config: endpoint 0.0.0.0:13133
-      endpoint: 0.0.0.0:13133
-    pprof: # Default config: endpoint 0.0.0.0:1777
-      endpoint: 0.0.0.0:1777
-    zpages: # Default config: endpoint 0.0.0.0:55679
-      endpoint: 0.0.0.0:55679
-    memory_limiter: {} # Included in processors list, also needs to be an extension
+    metrics:
+      address: 0.0.0.0:8887
