@@ -1,28 +1,28 @@
-mode: ultra
-last_updated: '2025-05-22T07:05:03.082293+00:00'
-reason: 'Cardinality update: 4170 series (change: +105)'
-ts_count: 4170
-config_version: 1747897503
-correlation_id: observer-1747897503
-optimization_level: 100
+mode: moderate
+last_updated: '2025-05-22T07:10:03.857421+00:00'
+reason: "Mode change: adaptive \u2192 moderate (cardinality: 189)"
+ts_count: 189
+config_version: 1747897803
+correlation_id: observer-1747897803
+optimization_level: 0
 thresholds:
   moderate: 300.0
   adaptive: 375.0
   ultra: 450.0
 state:
-  previous_mode: ultra
-  transition_timestamp: '2025-05-22T07:05:03.082293+00:00'
+  previous_mode: adaptive
+  transition_timestamp: '2025-05-22T07:10:03.857421+00:00'
   transition_duration_seconds: 0
   stability_period_seconds: 300
-  mode_changes_total: 3
+  mode_changes_total: 5
 observer_metadata:
   cardinality_analysis:
-    total_phoenix_metrics: 4170
-    unique_time_series: 4170
-    reduction_potential: 3870.0 series
+    total_phoenix_metrics: 189
+    unique_time_series: 189
+    reduction_potential: 0 series
     sample_metrics:
-    - phoenix_full_process_phoenix_business_feature_usage_total#benchmark_id="phoenix-vnext",environment="prod",feature="checkout",focus="process",job="phoenix-metrics-generator",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",region="eu-west-1",service="service-10"
-    - phoenix_full_process_phoenix_system_memory_usage_bytes#benchmark_id="phoenix-vnext",environment="staging",focus="process",instance_type="t3.small",job="phoenix-metrics-generator",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",region="eu-west-1",service="service-20"
     - phoenix_full_process_system_cpu_time_seconds_total#cpu="cpu9",focus="process",job="phoenix-synthetic-generator",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",state="wait"
-    - phoenix_full_process_phoenix_http_requests_total#benchmark_id="phoenix-vnext",endpoint="/api/v3/endpoint-24",environment="staging",focus="process",job="phoenix-metrics-generator",method="POST",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",region="us-east-1",service="service-15",status_code="503"
-    - phoenix_full_process_phoenix_http_requests_total#benchmark_id="phoenix-vnext",endpoint="/api/v1/endpoint-24",environment="staging",focus="process",job="phoenix-metrics-generator",method="GET",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",region="ap-southeast-1",service="service-13",status_code="403"
+    - phoenix_full_process_system_cpu_time_seconds_total#cpu="cpu1",focus="process",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",state="nice"
+    - phoenix_full_process_system_cpu_time_seconds_total#cpu="cpu8",focus="process",job="phoenix-synthetic-generator",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",state="nice"
+    - phoenix_full_process_system_cpu_time_seconds_total#cpu="cpu0",focus="process",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",state="wait"
+    - phoenix_full_process_system_cpu_time_seconds_total#cpu="cpu1",focus="process",job="phoenix-synthetic-generator",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",state="steal"

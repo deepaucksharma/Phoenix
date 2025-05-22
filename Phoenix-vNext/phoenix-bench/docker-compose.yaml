@@ -29,7 +29,7 @@ services:
       NR_PROCESS_OPT_KEY: ${NR_OPT_KEY:-}  
       NR_PROCESS_ULTRA_KEY: ${NR_ULTRA_KEY:-}
     volumes:
-      - ./configs/collectors/otelcol-integrated.yaml:/etc/otelcol/otelcol-main.yaml:ro
+      - ./configs/collectors/otelcol-main.yaml:/etc/otelcol/otelcol-main.yaml:ro
       - ./configs/control_signals:/etc/otelcol/control_signals:rw
       - ./configs/processors:/etc/otelcol/processors:ro
       - /proc:/host/proc:ro
@@ -66,7 +66,7 @@ services:
       - ./configs/collectors/otelcol-observer.yaml:/etc/otelcol/otelcol-observer.yaml:ro
       - ./configs/control_signals:/control_out:rw
     ports:
-      - "8891:8891" # Self-metrics for otelcol-observer
+      - "8892:8891" # Self-metrics for otelcol-observer
       - "4319:4319" # OTLP receiver gRPC from main (otlp/from_main_collector)
       - "4320:4320" # OTLP receiver HTTP from main
       - "13134:13133" # Health_check for observer (mapping to different host port)
