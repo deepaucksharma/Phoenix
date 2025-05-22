@@ -671,18 +671,9 @@
   "refresh": "10s",
   "schemaVersion": 39,
   "style": "dark",
-  "tags": [
-    "phoenix-vnext",
-    "opentelemetry",
-    "5-pipeline"
-  ],
-  "templating": {
-    "list": []
-  },
-  "time": {
-    "from": "now-15m",
-    "to": "now"
-  },
+  "tags": ["phoenix-vnext", "opentelemetry", "5-pipeline"],
+  "templating": { "list": [] },
+  "time": { "from": "now-15m", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
   "title": "Phoenix-vNext 5-Pipeline Dashboard",

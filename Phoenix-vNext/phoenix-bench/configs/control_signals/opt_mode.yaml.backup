@@ -1,0 +1,28 @@
+mode: ultra
+last_updated: '2025-05-22T05:09:38.265159+00:00'
+reason: 'Cardinality update: 2138 series (change: +545)'
+ts_count: 2138
+config_version: 1747890578
+correlation_id: observer-1747890578
+optimization_level: 100
+thresholds:
+  moderate: 300.0
+  adaptive: 375.0
+  ultra: 450.0
+state:
+  previous_mode: ultra
+  transition_timestamp: '2025-05-22T05:09:38.265159+00:00'
+  transition_duration_seconds: 0
+  stability_period_seconds: 300
+  mode_changes_total: 3
+observer_metadata:
+  cardinality_analysis:
+    total_phoenix_metrics: 2138
+    unique_time_series: 2138
+    reduction_potential: 1838.0 series
+    sample_metrics:
+    - phoenix_http_requests_total#benchmark_id="phoenix-vnext",endpoint="/api/v3/endpoint-9",environment="staging",job="phoenix-metrics-generator",method="POST",region="us-west-2",service="service-1",status_code="400"
+    - phoenix_user_activity_total#action="purchase",benchmark_id="phoenix-vnext",environment="test",job="phoenix-metrics-generator",service="service-17",user_id="user-0404"
+    - phoenix_business_feature_usage_total#benchmark_id="phoenix-vnext",environment="dev",feature="checkout",job="phoenix-metrics-generator",region="us-west-2",service="service-12"
+    - phoenix_user_activity_total#action="purchase",benchmark_id="phoenix-vnext",environment="staging",job="phoenix-metrics-generator",service="service-3",user_id="user-0019"
+    - phoenix_business_feature_usage_total#benchmark_id="phoenix-vnext",environment="prod",feature="search",job="phoenix-metrics-generator",region="eu-west-1",service="service-18"

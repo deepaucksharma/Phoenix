@@ -33,9 +33,11 @@ services:
       - /etc:/host/etc:ro
       - ./data/otelcol_main:/data
     ports:
-      - "8888:8888" # Main Prometheus exporter & service.telemetry
-      - "8889:8889" # prometheus/consistency
-      - "8890:8890" # prometheus/feedback
+      - "8888:8888" # Full pipeline Prometheus exporter
+      - "8889:8889" # Opt pipeline Prometheus exporter
+      - "8890:8890" # Ultra pipeline Prometheus exporter
+      - "8895:8895" # Exp pipeline Prometheus exporter
+      - "8896:8896" # Hybrid pipeline Prometheus exporter
       - "4317:4317" # otlp/control gRPC
       - "4318:4318" # otlp/control HTTP
       - "13133:13133" # health_check extension
@@ -103,11 +105,13 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_PROVISIONING_PATH: /etc/grafana/provisioning
-      # GF_INSTALL_PLUGINS: # Add if specific plugins are needed beyond default
+      GF_AUTH_ANONYMOUS_ENABLED: "true"  # Allow anonymous access for easy viewing
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_USERS_DEFAULT_THEME: "light"
     volumes:
       - ./configs/monitoring/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
-      - ./configs/monitoring/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards_provider.yaml:ro # Changed to dashboards_provider.yaml
-      - ./configs/dashboards:/etc/grafana/provisioning/dashboards/ # Mount the whole dashboards directory
+      - ./configs/monitoring/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards_provider.yaml:ro
+      - ./configs/dashboards:/etc/grafana/provisioning/dashboards:ro # Mount the dashboards directory as read-only
       - ./data/grafana:/var/lib/grafana
     ports: ["3000:3000"]
     restart: unless-stopped

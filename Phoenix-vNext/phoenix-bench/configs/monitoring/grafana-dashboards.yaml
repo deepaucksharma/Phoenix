@@ -9,3 +9,4 @@ providers:
     options:
       path: /etc/grafana/provisioning/dashboards # Directory where dashboard JSON files are mounted
       foldersFromFilesStructure: false # If true, creates Grafana folders based on subdirs in path
+      folder: 'Phoenix-vNext Monitoring' # Organize all dashboards in one folder

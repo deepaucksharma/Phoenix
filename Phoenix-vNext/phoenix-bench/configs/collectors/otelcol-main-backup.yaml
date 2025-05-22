@@ -1,6 +1,24 @@
 # Simplified OpenTelemetry Collector Configuration for Phoenix-vNext
 # Compatible with otel/opentelemetry-collector-contrib:0.103.0
 
+# Config sources with improved reliability
+config_sources:
+  ctlfile:
+    path: ${CONTROL_SIGNAL_PATH:/etc/otelcol/control_signals/opt_mode.yaml}
+    watch: true
+    format: yaml # Expects YAML format
+    reload_delay: 10s # Debounce rapid file changes
+    schema: # Basic schema validation for the control file
+      type: object
+      properties:
+        mode: { type: string, enum: ["moderate", "ultra", "adaptive"] }
+        last_updated: { type: string, format: date-time }
+        config_version: { type: integer }
+        correlation_id: { type: string }
+        reason: { type: string }
+        optimization_level: { type: integer, minimum: 0, maximum: 100 }
+      required: [mode, last_updated, config_version, correlation_id]
+
 receivers:
   hostmetrics:
     collection_interval: 30s
@@ -26,6 +44,14 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
+        
+  filelog/control: # Monitors the control file for changes as log entries
+    include: [ "${CONTROL_SIGNAL_PATH:/etc/otelcol/control_signals/opt_mode.yaml}" ]
+    start_at: end # Process only new changes
+    include_file_path: true
+    operators: # Parse the YAML content of the file
+      - type: yaml_parser
+        parse_from: body # Assuming the file content is the body of the log
 
 processors:
   memory_limiter:
@@ -113,19 +139,18 @@ processors:
   # Aggressive optimization - only keep core metrics
   filter/aggressive:
     metrics:
-      exclude:
+      include:
         match_type: regexp
         metric_names:
-          - "^system\\.(disk|filesystem)\\..*$"
-          - "^process\\..*\\.(threads|file_descriptor).*$"
+          - "^(system\\.(cpu|memory)\\.|process\\.(cpu|memory)\\.|phoenix_.*)\\..*$"
   
-  # Ultra aggressive - only core system metrics
+  # Ultra aggressive - only phoenix metrics and basic system metrics
   filter/ultra_aggressive:
     metrics:
       include:
         match_type: regexp  
         metric_names:
-          - "^(system_(cpu|memory)_.*|process_(cpu|memory)_.*)$"
+          - "^(phoenix_.*|system_cpu_.*|system_memory_usage).*$"
   
   # Top-K filter simulation for experimental pipeline (most important metrics only)
   filter/topk_simulation:
@@ -133,7 +158,7 @@ processors:
       include:
         match_type: regexp
         metric_names:
-          - "^(system_(cpu|memory|load)_.*|process_(cpu|memory)_.*|up)$"
+          - "^(phoenix_.*|system_(cpu|memory)_.*)$"
 
 exporters:
   # Full pipeline exporter
@@ -168,6 +193,32 @@ exporters:
 
   debug:
     verbosity: basic
+
+  # New Relic exporters (using environment variables)
+  otlphttp/nr_full:
+    endpoint: https://otlp.nr-data.net:4318
+    headers:
+      api-key: "${NR_FULL_KEY}"
+
+  otlphttp/nr_opt:
+    endpoint: https://otlp.nr-data.net:4318
+    headers:
+      api-key: "${NR_OPT_KEY}"
+
+  otlphttp/nr_ultra:
+    endpoint: https://otlp.nr-data.net:4318
+    headers:
+      api-key: "${NR_ULTRA_KEY}"
+
+  otlphttp/nr_exp:
+    endpoint: https://otlp.nr-data.net:4318
+    headers:
+      api-key: "${NR_EXP_KEY}"
+
+  otlphttp/nr_hybrid:
+    endpoint: https://otlp.nr-data.net:4318
+    headers:
+      api-key: "${NR_HYBRID_KEY}"
 
 extensions:
   health_check:

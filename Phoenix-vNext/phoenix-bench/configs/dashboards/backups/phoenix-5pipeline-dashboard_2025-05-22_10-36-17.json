@@ -23,9 +23,7 @@
         "iconColor": "red",
         "name": "Mode Changes",
         "showIn": 0,
-        "tags": [
-          "mode-change"
-        ],
+        "tags": ["mode-change"],
         "titleFormat": "Mode Change"
       }
     ]

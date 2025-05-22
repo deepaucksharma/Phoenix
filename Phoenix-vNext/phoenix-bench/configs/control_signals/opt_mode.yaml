@@ -1,30 +1,28 @@
-# Optimization mode control file with enhanced structure
-# This file is read by otelcol-main and written by otelcol-observer
-# Changes trigger pipeline configuration updates
-
-# Mode configuration - determines active pipeline optimization level
-mode: "moderate"
-
-# Metadata for tracking and coordination
-last_updated: "2025-05-22T20:00:00Z"
-reason: "schema_alignment"
-ts_count: 0
-config_version: 1
-correlation_id: "init-phoenix-vnext-1747946400"
-
-# Fine-grained optimization level (0-100)
-# 0-25: moderate, 26-75: adaptive, 76-100: ultra
-optimization_level: 0
-
-# Current thresholds (aligned with otelcol-main schema)
+mode: ultra
+last_updated: '2025-05-22T05:09:40.145610+00:00'
+reason: 'Cardinality update: 2138 series (change: +273)'
+ts_count: 2138
+config_version: 1747890580
+correlation_id: observer-1747890580
+optimization_level: 100
 thresholds:
   moderate: 300.0
   adaptive: 375.0
   ultra: 450.0
-
-# State transition information for debugging and audit
 state:
-  previous_mode: "initial"
-  transition_timestamp: "2025-05-22T20:00:00Z"
+  previous_mode: ultra
+  transition_timestamp: '2025-05-22T05:09:40.145610+00:00'
   transition_duration_seconds: 0
-  stability_period_seconds: 300  # Don't change mode again for 5 minutes
+  stability_period_seconds: 300
+  mode_changes_total: 3
+observer_metadata:
+  cardinality_analysis:
+    total_phoenix_metrics: 2138
+    unique_time_series: 2138
+    reduction_potential: 1838.0 series
+    sample_metrics:
+    - phoenix_http_requests_total#benchmark_id="phoenix-vnext",endpoint="/api/v2/endpoint-12",environment="test",job="phoenix-metrics-generator",method="POST",region="us-west-2",service="service-4",status_code="200"
+    - phoenix_http_requests_total#benchmark_id="phoenix-vnext",endpoint="/api/v1/endpoint-15",environment="staging",job="phoenix-metrics-generator",method="PATCH",region="us-west-2",service="service-10",status_code="400"
+    - phoenix_system_cpu_usage_percent#benchmark_id="phoenix-vnext",environment="dev",instance_type="c5.xlarge",job="phoenix-metrics-generator",region="us-west-2",service="service-2"
+    - phoenix_user_activity_total#action="logout",benchmark_id="phoenix-vnext",environment="test",job="phoenix-metrics-generator",service="service-16",user_id="user-0399"
+    - phoenix_business_feature_usage_total#benchmark_id="phoenix-vnext",environment="prod",feature="search",job="phoenix-metrics-generator",region="eu-west-1",service="service-15"
