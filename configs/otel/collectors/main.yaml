@@ -42,17 +42,17 @@ processors:
     metric_statements:
       - context: metric
         statements:
-          - delete_label_value(attributes, "process_pid") where name matches ".*cpu_time.*"
-          - delete_label_value(attributes, "process_command_line") where name matches ".*cpu_time.*"
+          - delete_key(attributes, "process_pid") where IsMatch(name, ".*cpu_time.*")
+          - delete_key(attributes, "process_command_line") where IsMatch(name, ".*cpu_time.*")
 
   # Aggressive cardinality reduction for experimental pipeline  
   transform/experimental:
     metric_statements:
       - context: metric
         statements:
-          - delete_label_value(attributes, "process_pid") where name matches ".*"
-          - delete_label_value(attributes, "process_command_line") where name matches ".*"
-          - delete_label_value(attributes, "process_owner") where name matches ".*"
+          - delete_key(attributes, "process_pid")
+          - delete_key(attributes, "process_command_line")
+          - delete_key(attributes, "process_owner")
 
 exporters:
   prometheus/full:
@@ -101,15 +101,15 @@ service:
   pipelines:
     metrics/full:
       receivers: [otlp]
-      processors: [resourcedetection, resource, batch]
+      processors: [resourcedetection, resource/full, batch]
       exporters: [prometheus/full, logging]
 
     metrics/optimized:
       receivers: [otlp]
-      processors: [resourcedetection, resource, batch]
+      processors: [resourcedetection, resource/optimized, transform/optimized, batch]
       exporters: [prometheus/optimized]
 
     metrics/experimental:
       receivers: [otlp]
-      processors: [resourcedetection, resource, batch]
+      processors: [resourcedetection, resource/experimental, transform/experimental, batch]
       exporters: [prometheus/experimental]
