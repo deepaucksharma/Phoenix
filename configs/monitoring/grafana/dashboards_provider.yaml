@@ -1,0 +1,23 @@
+# This file tells Grafana where to find dashboard definitions ON DISK inside the container.
+# It's used by Grafana's provisioning system.
+# It should point to the directory mounted in docker-compose.yaml for dashboards.
+
+apiVersion: 1
+
+providers:
+  - name: 'PhoenixV3UltimateDashboards' # A unique name for this provider
+    orgId: 1 # Default organization ID
+    # The folder name under which these dashboards will appear in Grafana UI
+    folder: 'Phoenix v3 - Ultimate Process Metrics Stack'
+    type: file # Indicates dashboards are loaded from files
+    disableDeletion: false # If true, dashboards removed from disk are not removed from Grafana
+    editable: true # Allow dashboards to be edited in Grafana UI (set to false for strict GitOps)
+    updateIntervalSeconds: 30 # How often Grafana scans for new/updated dashboards
+    allowUiUpdates: true # Allow users to save changes from UI to the dashboard definition on disk (requires write permissions for Grafana process)
+    options:
+      # Path to the directory where dashboard JSON files are located inside the Grafana container.
+      # This path must match the target of the volume mount in docker-compose.yaml for Grafana's dashboards.
+      path: /var/lib/grafana/dashboards # Standard Grafana dashboards path
+      # If `foldersFromFilesStructure: true`, Grafana would create subfolders based on directory structure in `path`.
+      # We are using a single folder specified above, so set to false.
+      foldersFromFilesStructure: false

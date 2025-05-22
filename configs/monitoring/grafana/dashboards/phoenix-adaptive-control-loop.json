@@ -1,0 +1,86 @@
+{
+  "title": "Phoenix v3 - Adaptive Control Loop Analysis",
+  "uid": "phoenix-v3-adaptive-control-loop",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1, "datasource": {"type": "grafana", "uid": "-- Grafana --"}, "enable": true, "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts", "type": "dashboard"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "title": "Row 1: Control State & KPI", "type": "row", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "title": "Current Optimisation Profile (from Control File)",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus_phoenix_v3" },
+      "targets": [{"expr": "max by (optimisation_profile) (phoenix_observer_kpi_store_control_file_info{field=\"optimisation_profile\", job=\"otelcol-observer-metrics\"})"}],
+      "gridPos": { "x": 0, "y": 1, "w": 8, "h": 4 },
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "fieldConfig": {"defaults": {"mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}}}
+    },
+    {
+      "title": "Optimised Pipeline TS Count (Control KPI)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus_phoenix_v3" },
+      "targets": [
+        {"expr": "phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{phoenix_pipeline_label=\"optimised\", job=\"otelcol-observer-metrics\"}", "legendFormat": "Optimised Output TS"},
+        {"expr": "phoenix_observer_kpi_store_control_file_info{field=\"conservative_max_ts\", job=\"otelcol-observer-metrics\"}", "legendFormat": "Target: Conservative Max TS"},
+        {"expr": "phoenix_observer_kpi_store_control_file_info{field=\"aggressive_min_ts\", job=\"otelcol-observer-metrics\"}", "legendFormat": "Target: Aggressive Min TS"}
+      ],
+      "gridPos": { "x": 8, "y": 1, "w": 16, "h": 7 },
+      "fieldConfig": {
+        "defaults":{"custom":{"lineWidth":2,"drawStyle":"line"}}, 
+        "overrides": [
+          {"matcher":{"id":"byName","options":"Target: Conservative Max TS"},"properties":[{"id":"custom.lineStyle","value":{"dash":[10,10],"fill":"dash"}}]},
+          {"matcher":{"id":"byName","options":"Target: Aggressive Min TS"},"properties":[{"id":"custom.lineStyle","value":{"dash":[10,10],"fill":"dash"}}]}
+        ]
+      }
+    },
+    {
+      "title": "Row 2: PID-Lite Conceptual Components", "type": "row", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 8 }
+    },
+    {
+      "title": "PID Error (Conceptual: Target Opt TS - Current Opt TS)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus_phoenix_v3" },
+      "targets": [
+        {"expr": "phoenix_control_script_pid_error_term_info{job=\"control-loop-actuator-metrics\"}", "legendFormat": "Conceptual Error (Target - Actual Opt TS)"}
+      ],
+      "gridPos": { "x": 0, "y": 9, "w": 12, "h": 6 }
+    },
+    {
+      "title": "Control Profile Transition History",
+      "type": "table",
+      "datasource": { "type": "prometheus", "uid": "prometheus_phoenix_v3" },
+      "targets": [
+        {"expr": "phoenix_control_config_version{job=\"control-loop-actuator-metrics\"}", "format": "table", "instant": false}
+      ],
+      "gridPos": { "x": 12, "y": 9, "w": 12, "h": 6 }
+    },
+    {
+      "title": "Hysteresis Window (Profile Stability)",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus_phoenix_v3" },
+      "targets": [
+        {"expr": "phoenix_control_script_active_profile_code_info{job=\"control-loop-actuator-metrics\"}", "legendFormat": "{{optimisation_profile}}"}
+      ],
+      "description": "Shows active profile. Stability period prevents rapid changes (default 2x CHECK_INTERVAL). Shaded regions on Optimised Pipeline TS chart show hysteresis bands.",
+      "gridPos": { "x": 0, "y": 15, "w": 24, "h": 5 },
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"}
+    }
+  ],
+  "refresh": "30s", "schemaVersion": 37, "style": "dark",
+  "tags": ["phoenix-v3", "ultimate-stack", "control-loop", "adaptive"],
+  "templating": { "list": [] }, "time": { "from": "now-3h", "to": "now" }, "timepicker": {},
+  "timezone": "browser", "version": 1
+}

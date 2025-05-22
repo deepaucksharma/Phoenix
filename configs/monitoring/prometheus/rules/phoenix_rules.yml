@@ -85,7 +85,7 @@ groups:
           description: "In 'aggressive' profile, Experimental pipeline ({{ $labels.instance }} TS: {{ $value }}) output should be lower than or similar to Optimised. This might indicate misconfiguration or unexpected data flow."
 
       - alert: OtelcolMainHighCPU
-        expr: sum(rate(container_cpu_usage_seconds_total{name=~"phoenix-bench-otelcol-main-.*"}[5m])) * 100 > (${OTELCOL_MAIN_GOMAXPROCS:-1} * 0.9 * 100) # 90% of 1 vCPU limit from spec
+        expr: sum(rate(container_cpu_usage_seconds_total{name=~"phoenix-vnext-otelcol-main-.*"}[5m])) * 100 > 90 # 90% of 1 vCPU limit from spec
         for: 10m
         labels: {severity: warning, team: sre, component: otelcol_main}
         annotations:
@@ -93,7 +93,7 @@ groups:
           description: "otelcol-main container CPU usage is {{ $value | printf "%.1f" }}% of its allocated GOMAXPROCS, which is above 90% for 10 minutes."
 
       - alert: OtelcolMainHighMemory
-        expr: container_memory_usage_bytes{name=~"phoenix-bench-otelcol-main-.*"} / (1024*1024) > (${OTELCOL_MAIN_MEMORY_LIMIT_MIB:-1024} * 0.85) # 85% of its RAM limit
+        expr: container_memory_usage_bytes{name=~"phoenix-vnext-otelcol-main-.*"} / (1024*1024) > 870 # 85% of 1024MiB RAM limit
         for: 10m
         labels: {severity: critical, team: sre, component: otelcol_main}
         annotations:
@@ -102,7 +102,7 @@ groups:
 
       # Similar alerts for otelcol-observer
       - alert: OtelcolObserverHighCPU
-        expr: sum(rate(container_cpu_usage_seconds_total{name=~"phoenix-bench-otelcol-observer-.*"}[5m])) * 100 > (0.5 * 0.9) # 90% of 0.5 vCPU limit
+        expr: sum(rate(container_cpu_usage_seconds_total{name=~"phoenix-vnext-otelcol-observer-.*"}[5m])) * 100 > 45 # 90% of 0.5 vCPU limit
         for: 5m
         labels: {severity: warning, team: sre, component: otelcol_observer}
         annotations:
@@ -110,7 +110,7 @@ groups:
           description: "otelcol-observer container CPU usage is {{ $value | printf "%.2f" }}%."
 
       - alert: OtelcolObserverHighMemory
-        expr: container_memory_usage_bytes{name=~"phoenix-bench-otelcol-observer-.*"} / (1024*1024) > (${OTELCOL_OBSERVER_MEMORY_LIMIT_MIB:-256} * 0.9)
+        expr: container_memory_usage_bytes{name=~"phoenix-vnext-otelcol-observer-.*"} / (1024*1024) > 230 # 90% of 256MiB RAM limit
         for: 5m
         labels: {severity: warning, team: sre, component: otelcol_observer}
         annotations:
