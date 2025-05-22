@@ -1,0 +1,39 @@
+# Runtime data directories
+data/
+
+# Environment files
+.env
+
+# Go build artifacts
+apps/synthetic-generator/generator
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go test files
+*.test
+*.out
+
+# Go module cache
+go.sum
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+
+# Docker volumes
+prometheus_data/
+grafana_data/
+otelcol_data/

@@ -10,6 +10,8 @@ set -euo pipefail # Strict mode
 PROM_API_ENDPOINT="${PROMETHEUS_URL:-http://prometheus:9090}/api/v1"
 CONTROL_FILE_PATH="${CONTROL_SIGNAL_FILE:-/app/control_signals/optimization_mode.yaml}"
 TEMPLATE_FILE_PATH="${OPT_MODE_TEMPLATE_PATH:-/app/optimization_mode_template.yaml}"
+LOCK_FILE="/tmp/phoenix_control_lock"
+LOCK_TIMEOUT=30  # seconds to wait for lock before timing out
 
 # PID-lite "Set Point" for the 'optimised' pipeline's active time series count
 # This is informational for now, as the script uses fixed thresholds for profile switching.
@@ -21,6 +23,9 @@ CONSERVATIVE_MAX_TS_THRESHOLD="${THRESHOLD_OPTIMIZATION_CONSERVATIVE_MAX_TS:-150
 AGGRESSIVE_MIN_TS_THRESHOLD="${THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS:-25000}"
 # "balanced" profile is used for TS counts between these two.
 
+# Added hysteresis factor to prevent oscillation when metrics are near thresholds
+HYSTERESIS_FACTOR="${HYSTERESIS_FACTOR:-0.1}"  # 10% hysteresis zone around thresholds
+
 # Conceptual PID-lite Gains (not directly used for threshold adjustment in this script version)
 # KP="${PID_KP:-0.20}" # Proportional gain
 # KI="${PID_KI:-0.05}" # Integral gain
@@ -29,18 +34,53 @@ AGGRESSIVE_MIN_TS_THRESHOLD="${THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS:-25000}"
 STABILITY_PERIOD_SECONDS="${ADAPTIVE_CONTROLLER_STABILITY_SECONDS:-120}"
 CORRELATION_ID_PREFIX="${CORRELATION_ID_PREFIX:-pv3ux}"
 
-# Metric names as exposed by otelcol-observer's Prometheus endpoint (after relabeling)
-# These query the 'phoenix_observer_kpi_store' namespace and 'phoenix_pipeline_output_cardinality_estimate' metric name
-# with a 'phoenix_pipeline_label' to distinguish them.
-METRIC_FULL_TS_QUERY='phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{phoenix_pipeline_label="full_fidelity",job="otelcol-observer-metrics"}'
-METRIC_OPTIMISED_TS_QUERY='phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{phoenix_pipeline_label="optimised",job="otelcol-observer-metrics"}'
-METRIC_EXPERIMENTAL_TS_QUERY='phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{phoenix_pipeline_label="experimental",job="otelcol-observer-metrics"}'
-
 # --- Logging ---
 log_ts() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 log_info() { echo "[$(log_ts)] [CTL] INFO: $*"; }
 log_warn() { echo "[$(log_ts)] [CTL] WARN: $*"; }
 log_error() { echo "[$(log_ts)] [CTL] ERROR: $*"; }
+log_debug() { echo "[$(log_ts)] [CTL] DEBUG: $*"; }
+
+# --- Lock management ---
+acquire_lock() {
+    local timeout=$LOCK_TIMEOUT
+    local start_time=$(date +%s)
+    local end_time=$((start_time + timeout))
+    
+    while [ $(date +%s) -lt $end_time ]; do
+        if ( set -o noclobber; echo "$$" > "$LOCK_FILE" ) 2> /dev/null; then
+            # Lock acquired
+            log_debug "Lock acquired: $LOCK_FILE"
+            return 0
+        fi
+        
+        # Check if lock is stale (owner process no longer exists)
+        if [ -f "$LOCK_FILE" ]; then
+            local lock_pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
+            if [ -n "$lock_pid" ] && ! ps -p "$lock_pid" > /dev/null; then
+                log_warn "Removing stale lock from PID $lock_pid"
+                rm -f "$LOCK_FILE"
+                continue
+            fi
+        fi
+        
+        log_debug "Waiting for lock ($LOCK_FILE)..."
+        sleep 1
+    done
+    
+    log_error "Failed to acquire lock after $timeout seconds"
+    return 1
+}
+
+release_lock() {
+    if [ -f "$LOCK_FILE" ] && [ "$(cat "$LOCK_FILE" 2>/dev/null)" = "$$" ]; then
+        rm -f "$LOCK_FILE"
+        log_debug "Lock released: $LOCK_FILE"
+    fi
+}
+
+# Ensure lock is released even if script crashes
+trap release_lock EXIT
 
 # --- Helper to query Prometheus ---
 query_prometheus_value() {
@@ -49,27 +89,53 @@ query_prometheus_value() {
   local response_file="/tmp/prom_response_$$.json"
   local value
   local http_status
+  local retry_count=3
+  local retry_delay=2
 
   # log_info "Querying Prometheus: $query_string"
-  http_status=$(curl -s -m 10 -G "${PROM_API_ENDPOINT}/query" \
-    --data-urlencode "query=${query_string}" \
-    -o "$response_file" \
-    -w "%{http_code}")
+  for ((attempt=1; attempt <= retry_count; attempt++)); do
+    http_status=$(curl -s -m 10 -G "${PROM_API_ENDPOINT}/query" \
+      --data-urlencode "query=${query_string}" \
+      -o "$response_file" \
+      -w "%{http_code}")
+
+    if [[ "$http_status" -eq 200 ]]; then
+      value=$(jq -r '.data.result[0].value[1] // "null"' "$response_file")
+      if [[ "$value" != "null" && -n "$value" ]]; then
+        # Success - we have a valid value
+        break
+      fi
+    fi
+    
+    if [[ "$attempt" -lt "$retry_count" ]]; then
+      log_warn "Prometheus query attempt $attempt/$retry_count failed. Retrying in ${retry_delay}s..."
+      sleep "$retry_delay"
+    fi
+  done
 
   if [[ "$http_status" -ne 200 ]]; then
     log_warn "Prometheus query failed for '$query_string'. HTTP Status: $http_status. Assuming default: $default_value. Response: $(cat $response_file || echo 'empty')"
     value="$default_value"
-  else
-    value=$(jq -r '.data.result[0].value[1] // "null"' "$response_file")
-    if [[ "$value" == "null" || -z "$value" ]]; then
-      # log_warn "Metric for '$query_string' not found or no data. Assuming default: $default_value."
-      value="$default_value"
+  elif [[ "$value" == "null" || -z "$value" ]]; then
+    log_warn "Metric for '$query_string' not found or no data after $retry_count attempts. Assuming default: $default_value."
+    value="$default_value"
+  fi
+  
+  rm -f "$response_file"
+  
+  # Enhanced validation and sanitization
+  if [[ -n "$value" ]]; then
+    # Ensure it's a number for bc, stripping potential scientific notation if jq doesn't handle it well
+    sanitized_value=$(echo "$value" | awk '{printf "%.0f", $1}')
+    if [[ "$sanitized_value" =~ ^[0-9]+$ ]]; then
+      echo "$sanitized_value"
+      return 0
+    else
+      log_warn "Value '$value' is not a valid number. Using default: $default_value"
     fi
   fi
-  rm -f "$response_file"
-  # Ensure it's a number for bc, stripping potential scientific notation if jq doesn't handle it well
-  sanitized_value=$(echo "$value" | awk '{printf "%.0f", $1}')
-  [[ "$sanitized_value" =~ ^[0-9]+$ ]] && echo "$sanitized_value" || echo "$default_value"
+  
+  echo "$default_value"
 }
 
 # --- Main Controller Logic ---
@@ -128,7 +194,7 @@ if [[ "$CURRENT_FULL_TS" =~ ^[0-9]+(\.[0-9]+)?$ && $(echo "$CURRENT_FULL_TS > 0"
 fi
 log_info "Current Cost Reduction Ratio (Opt vs Full): $CURRENT_COST_REDUCTION_RATIO"
 
-# 4. PID-lite logic: Determine desired optimisation_profile based on CURRENT_OPTIMISED_TS
+# 4. PID-lite logic with hysteresis for stable transitions
 PROPOSED_PROFILE=""
 TRIGGER_REASON_TEXT=""
 
@@ -137,17 +203,57 @@ CONSERVATIVE_MAX_TS_NUM=$(echo "$CONSERVATIVE_MAX_TS_THRESHOLD" | bc)
 AGGRESSIVE_MIN_TS_NUM=$(echo "$AGGRESSIVE_MIN_TS_THRESHOLD" | bc)
 CURRENT_OPTIMISED_TS_NUM=$(echo "$CURRENT_OPTIMISED_TS" | bc)
 
-if (( $(echo "$CURRENT_OPTIMISED_TS_NUM > $AGGRESSIVE_MIN_TS_NUM" | bc -l) )); then
-  PROPOSED_PROFILE="aggressive"
-  TRIGGER_REASON_TEXT="Optimised TS ($CURRENT_OPTIMISED_TS_NUM) > Aggressive Min TS ($AGGRESSIVE_MIN_TS_NUM)"
-elif (( $(echo "$CURRENT_OPTIMISED_TS_NUM < $CONSERVATIVE_MAX_TS_NUM" | bc -l) )); then
-  PROPOSED_PROFILE="conservative"
-  TRIGGER_REASON_TEXT="Optimised TS ($CURRENT_OPTIMISED_TS_NUM) < Conservative Max TS ($CONSERVATIVE_MAX_TS_NUM)"
-else
-  PROPOSED_PROFILE="balanced"
-  TRIGGER_REASON_TEXT="Optimised TS ($CURRENT_OPTIMISED_TS_NUM) in balanced range [$CONSERVATIVE_MAX_TS_NUM - $AGGRESSIVE_MIN_TS_NUM]"
+# Calculate hysteresis zone boundaries to prevent oscillation near thresholds
+HYSTERESIS_FACTOR_NUM=$(echo "$HYSTERESIS_FACTOR" | bc -l)
+CONSERVATIVE_MAX_WITH_HYSTERESIS=$(echo "$CONSERVATIVE_MAX_TS_NUM * (1 + $HYSTERESIS_FACTOR_NUM)" | bc -l)
+AGGRESSIVE_MIN_WITH_HYSTERESIS=$(echo "$AGGRESSIVE_MIN_TS_NUM * (1 - $HYSTERESIS_FACTOR_NUM)" | bc -l)
+
+# Apply hysteresis differently depending on current profile
+# This creates a "sticky" effect that prevents rapid oscillation
+if [[ "$PREV_OPTIMIZATION_PROFILE" == "conservative" ]]; then
+    # When in conservative mode, require more evidence to leave it
+    if (( $(echo "$CURRENT_OPTIMISED_TS_NUM > $CONSERVATIVE_MAX_WITH_HYSTERESIS" | bc -l) )); then
+        if (( $(echo "$CURRENT_OPTIMISED_TS_NUM > $AGGRESSIVE_MIN_TS_NUM" | bc -l) )); then
+            PROPOSED_PROFILE="aggressive"
+            TRIGGER_REASON_TEXT="Optimised TS ($CURRENT_OPTIMISED_TS_NUM) > Aggressive Min TS ($AGGRESSIVE_MIN_TS_NUM)"
+        else
+            PROPOSED_PROFILE="balanced"
+            TRIGGER_REASON_TEXT="Optimised TS ($CURRENT_OPTIMISED_TS_NUM) > Conservative Max TS with hysteresis ($CONSERVATIVE_MAX_WITH_HYSTERESIS)"
+        fi
+    else
+        PROPOSED_PROFILE="conservative"
+        TRIGGER_REASON_TEXT="Optimised TS ($CURRENT_OPTIMISED_TS_NUM) < Conservative Max TS with hysteresis ($CONSERVATIVE_MAX_WITH_HYSTERESIS)"
+    fi
+elif [[ "$PREV_OPTIMIZATION_PROFILE" == "aggressive" ]]; then
+    # When in aggressive mode, require more evidence to leave it
+    if (( $(echo "$CURRENT_OPTIMISED_TS_NUM < $AGGRESSIVE_MIN_WITH_HYSTERESIS" | bc -l) )); then
+        if (( $(echo "$CURRENT_OPTIMISED_TS_NUM < $CONSERVATIVE_MAX_TS_NUM" | bc -l) )); then
+            PROPOSED_PROFILE="conservative"
+            TRIGGER_REASON_TEXT="Optimised TS ($CURRENT_OPTIMISED_TS_NUM) < Conservative Max TS ($CONSERVATIVE_MAX_TS_NUM)"
+        else
+            PROPOSED_PROFILE="balanced"
+            TRIGGER_REASON_TEXT="Optimised TS ($CURRENT_OPTIMISED_TS_NUM) < Aggressive Min TS with hysteresis ($AGGRESSIVE_MIN_WITH_HYSTERESIS)"
+        fi
+    else
+        PROPOSED_PROFILE="aggressive"
+        TRIGGER_REASON_TEXT="Optimised TS ($CURRENT_OPTIMISED_TS_NUM) > Aggressive Min TS with hysteresis ($AGGRESSIVE_MIN_WITH_HYSTERESIS)"
+    fi
+else # balanced profile
+    # Standard logic for balanced profile
+    if (( $(echo "$CURRENT_OPTIMISED_TS_NUM > $AGGRESSIVE_MIN_TS_NUM" | bc -l) )); then
+        PROPOSED_PROFILE="aggressive"
+        TRIGGER_REASON_TEXT="Optimised TS ($CURRENT_OPTIMISED_TS_NUM) > Aggressive Min TS ($AGGRESSIVE_MIN_TS_NUM)"
+    elif (( $(echo "$CURRENT_OPTIMISED_TS_NUM < $CONSERVATIVE_MAX_TS_NUM" | bc -l) )); then
+        PROPOSED_PROFILE="conservative"
+        TRIGGER_REASON_TEXT="Optimised TS ($CURRENT_OPTIMISED_TS_NUM) < Conservative Max TS ($CONSERVATIVE_MAX_TS_NUM)"
+    else
+        PROPOSED_PROFILE="balanced"
+        TRIGGER_REASON_TEXT="Optimised TS ($CURRENT_OPTIMISED_TS_NUM) in balanced range [$CONSERVATIVE_MAX_TS_NUM - $AGGRESSIVE_MIN_TS_NUM]"
+    fi
 fi
+
 log_info "Proposed Profile based on Optimised TS: $PROPOSED_PROFILE. Reason: $TRIGGER_REASON_TEXT"
+log_info "Hysteresis factor: $HYSTERESIS_FACTOR_NUM, Conservative Max with hysteresis: $CONSERVATIVE_MAX_WITH_HYSTERESIS, Aggressive Min with hysteresis: $AGGRESSIVE_MIN_WITH_HYSTERESIS"
 
 # 5. Apply Hysteresis (Stability Control for profile changes)
 EFFECTIVE_PROFILE="$PROPOSED_PROFILE"
@@ -178,21 +284,51 @@ fi
 # and the profile tag is used by main collector to filter/route internally.
 
 # 7. Write to control file
-if ! [[ "$PREV_CONFIG_VERSION" =~ ^[0-9]+$ ]]; then PREV_CONFIG_VERSION=0; fi
-NEW_VERSION=$((PREV_CONFIG_VERSION + 1))
-NEW_CORRELATION_ID="${CORRELATION_ID_PREFIX_VAL}-$(date +%s)-v${NEW_VERSION}"
-WRITE_TIMESTAMP_ISO=$(log_ts)
-
-log_info "Writing to control file: $CONTROL_FILE"
-log_info "  Effective Profile: $EFFECTIVE_PROFILE, Version: $NEW_VERSION, Correlation: $NEW_CORRELATION_ID"
-log_info "  Experimental Pipeline to be Enabled by Collector: $EXPERIMENTAL_PIPELINE_ENABLED"
-
-CONTROL_FILE_TEMP="${CONTROL_FILE}.tmp_actuator_$$"
-if [ ! -f "$TEMPLATE_FILE" ]; then
-  log_error "Template file $TEMPLATE_FILE not found. Cannot write control file."
+# Acquire lock before updating the control file
+if ! acquire_lock; then
+  log_error "Failed to acquire lock. Aborting control file update."
   exit 1
 fi
 
+# Validate config version is a number
+if ! [[ "$PREV_CONFIG_VERSION" =~ ^[0-9]+$ ]]; then PREV_CONFIG_VERSION=0; fi
+NEW_VERSION=$((PREV_CONFIG_VERSION + 1))
+NEW_CORRELATION_ID="${CORRELATION_ID_PREFIX}-$(date +%s)-v${NEW_VERSION}"
+WRITE_TIMESTAMP_ISO=$(log_ts)
+
+log_info "Writing to control file: $CONTROL_FILE_PATH"
+log_info "  Effective Profile: $EFFECTIVE_PROFILE, Version: $NEW_VERSION, Correlation: $NEW_CORRELATION_ID"
+log_info "  Experimental Pipeline to be Enabled by Collector: $EXPERIMENTAL_PIPELINE_ENABLED"
+
+# Create parent directory if it doesn't exist
+CONTROL_DIR=$(dirname "$CONTROL_FILE_PATH")
+if [ ! -d "$CONTROL_DIR" ]; then
+  log_info "Creating control file directory: $CONTROL_DIR"
+  mkdir -p "$CONTROL_DIR" || {
+    log_error "Failed to create directory $CONTROL_DIR"
+    release_lock
+    exit 1
+  }
+fi
+
+# Ensure template file exists
+if [ ! -f "$TEMPLATE_FILE_PATH" ]; then
+  log_error "Template file $TEMPLATE_FILE_PATH not found. Cannot write control file."
+  release_lock
+  exit 1
+fi
+
+# Check if yq is available
+if ! command -v yq &> /dev/null; then
+  log_error "yq command not found. Cannot update YAML file."
+  release_lock
+  exit 1
+fi
+
+# Create a unique temporary file in the same directory
+CONTROL_FILE_TEMP="$(dirname "$CONTROL_FILE_PATH")/.$(basename "$CONTROL_FILE_PATH").tmp_${RANDOM}_$$"
+
+# Update the YAML file
 yq eval ".optimization_profile = \"$EFFECTIVE_PROFILE\" | \
          .config_version = $NEW_VERSION | \
          .correlation_id = \"$NEW_CORRELATION_ID\" | \
@@ -206,15 +342,26 @@ yq eval ".optimization_profile = \"$EFFECTIVE_PROFILE\" | \
          .thresholds.aggressive_min_ts = $(echo "$AGGRESSIVE_MIN_TS_THRESHOLD" | bc) | \
          .pipelines.experimental_enabled = $EXPERIMENTAL_PIPELINE_ENABLED | \
          .last_profile_change_timestamp = \"$TIMESTAMP_OF_LAST_ACTUAL_PROFILE_CHANGE_FOR_FILE\" \
-        " "$TEMPLATE_FILE" > "$CONTROL_FILE_TEMP"
+        " "$TEMPLATE_FILE_PATH" > "$CONTROL_FILE_TEMP"
 
-if [ $? -eq 0 ]; then
-  mv "$CONTROL_FILE_TEMP" "$CONTROL_FILE"
-  chmod 644 "$CONTROL_FILE"
-  log_info "Control file successfully updated."
+if [ $? -eq 0 ] && [ -s "$CONTROL_FILE_TEMP" ]; then
+  # Validate the generated YAML file
+  if yq eval '.' "$CONTROL_FILE_TEMP" &>/dev/null; then
+    # Atomic file replacement
+    mv "$CONTROL_FILE_TEMP" "$CONTROL_FILE_PATH"
+    chmod 644 "$CONTROL_FILE_PATH" # Ensure it's readable by other processes
+    sync # Ensure file is written to disk
+    log_info "Control file successfully updated."
+  else
+    log_error "Generated YAML is invalid. Control file not updated."
+    rm -f "$CONTROL_FILE_TEMP"
+  fi
 else
   log_error "Failed to update control file using yq. Temporary file not moved. Error: $?"
   rm -f "$CONTROL_FILE_TEMP"
 fi
+
+# Release the lock
+release_lock
 
 log_info "Adaptive controller cycle finished."

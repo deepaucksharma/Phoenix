@@ -6,9 +6,11 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -97,21 +99,114 @@ func initMeterProvider(ctx context.Context) (*sdkmetric.MeterProvider, error) {
 
 	log.Printf("INFO (Generator): OTLP Exporter targeting: %s (from OTEL_EXPORTER_OTLP_ENDPOINT: %s)", exporterEndpoint, otlpEndpointWithScheme)
 
-	exporter, err := otlpmetrichttp.New(ctx,
-		otlpmetrichttp.WithEndpoint(exporterEndpoint),
-		otlpmetrichttp.WithInsecure(),
-		otlpmetrichttp.WithCompression(otlpmetrichttp.GzipCompression),
-		otlpmetrichttp.WithTimeout(15*time.Second),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("synthetic-generator: failed to create OTLP metric exporter: %w", err)
+	// Add retry configuration with backoff
+	var exporter *otlpmetrichttp.Exporter
+	maxRetries := 5
+
+	for i := 0; i < maxRetries; i++ {
+		var err error
+		exporter, err = otlpmetrichttp.New(ctx,
+			otlpmetrichttp.WithEndpoint(exporterEndpoint),
+			otlpmetrichttp.WithInsecure(),
+			otlpmetrichttp.WithCompression(otlpmetrichttp.GzipCompression),
+			otlpmetrichttp.WithTimeout(15*time.Second),
+		)
+
+		if err == nil {
+			break // Successfully created exporter
+		}
+
+		if i == maxRetries-1 {
+			return nil, fmt.Errorf("synthetic-generator: failed to create OTLP metric exporter after %d attempts: %w", maxRetries, err)
+		}
+
+		retryDelay := time.Duration(1<<uint(i)) * time.Second // Exponential backoff
+		log.Printf("WARN (Generator): Failed to create OTLP exporter (attempt %d/%d): %v. Retrying in %v...",
+			i+1, maxRetries, err, retryDelay)
+		time.Sleep(retryDelay)
 	}
 
+	// Get resource configuration with fallback mechanisms
+	res, err := createResource()
+	if err != nil {
+		log.Printf("WARN (Generator): Failed to create resource: %v. Using default resource.", err)
+		res = resource.Default()
+	}
+
+	// Set up the meter provider with memory management constraints
+	memLimit := getMemoryLimit()
+	log.Printf("INFO (Generator): Configuring with memory limit: %d bytes", memLimit)
+
 	mp := sdkmetric.NewMeterProvider(
-		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(10*time.Second))),
-		sdkmetric.WithResource(resource.Default()),
+		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter,
+			sdkmetric.WithInterval(10*time.Second),
+			sdkmetric.WithTimeout(30*time.Second),
+		)),
+		sdkmetric.WithResource(res),
+		// Set reasonable memory limits for collection
+		sdkmetric.WithView(sdkmetric.NewView(
+			sdkmetric.Instrument{Scope: instrumentation.Scope{Name: "*"}},
+			sdkmetric.Stream{AggregationTemporality: sdkmetric.CumulativeTemporality},
+		)),
 	)
 	return mp, nil
+}
+
+// createResource creates an OpenTelemetry resource with proper error handling
+func createResource() (*resource.Resource, error) {
+	// Create a base resource from environment variables
+	envRes, err := resource.New(context.Background(),
+		resource.WithFromEnv(),
+		resource.WithProcess(),
+		resource.WithOS(),
+		resource.WithContainer(),
+		resource.WithHost(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create resource from environment: %w", err)
+	}
+
+	// Add custom attributes
+	customRes, err := resource.Merge(
+		envRes,
+		resource.NewWithAttributes(
+			semconv.SchemaURL,
+			attribute.String("instrumentation.provider", "synthetic-generator-v3-gu"),
+			attribute.String("benchmark.id", os.Getenv("BENCHMARK_ID")),
+			attribute.String("deployment.environment", os.Getenv("DEPLOYMENT_ENV")),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to merge resources: %w", err)
+	}
+
+	return customRes, nil
+}
+
+// getMemoryLimit determines reasonable memory limits based on container constraints
+func getMemoryLimit() int64 {
+	// Default memory limit (500 MB)
+	defaultLimit := int64(500 * 1024 * 1024)
+
+	// Try to read cgroup memory limit if available
+	content, err := os.ReadFile("/sys/fs/cgroup/memory/memory.limit_in_bytes")
+	if err != nil {
+		return defaultLimit
+	}
+
+	limitStr := strings.TrimSpace(string(content))
+	limit, err := strconv.ParseInt(limitStr, 10, 64)
+	if err != nil {
+		return defaultLimit
+	}
+
+	// If limit is unreasonably high (or unlimited), use default
+	if limit > 8*1024*1024*1024 || limit <= 0 {
+		return defaultLimit
+	}
+
+	// Use 80% of the container memory limit
+	return int64(float64(limit) * 0.8)
 }
 
 func generateProcessMetricAttributes(p *processState) attribute.Set {
@@ -144,7 +239,7 @@ func observeProcessMemory(_ context.Context, observer metric.Float64Observer) er
 	defer activeProcessesMutex.RUnlock()
 	for _, hostProcs := range activeProcesses {
 		for _, proc := range hostProcs {
-			observer.Observe(proc.memUsageBytes, metric.WithResource(proc.otelResource), metric.WithAttributeSet(proc.metricAttrs))
+			observer.Observe(proc.memUsageBytes, metric.WithAttributeSet(proc.metricAttrs))
 		}
 	}
 	return nil
@@ -155,7 +250,7 @@ func observeProcessThreads(_ context.Context, observer metric.Float64Observer) e
 	defer activeProcessesMutex.RUnlock()
 	for _, hostProcs := range activeProcesses {
 		for _, proc := range hostProcs {
-			observer.Observe(proc.threadCount, metric.WithResource(proc.otelResource), metric.WithAttributeSet(proc.metricAttrs))
+			observer.Observe(proc.threadCount, metric.WithAttributeSet(proc.metricAttrs))
 		}
 	}
 	return nil
@@ -166,60 +261,174 @@ func observeProcessFDs(_ context.Context, observer metric.Float64Observer) error
 	defer activeProcessesMutex.RUnlock()
 	for _, hostProcs := range activeProcesses {
 		for _, proc := range hostProcs {
-			observer.Observe(proc.openFDCount, metric.WithResource(proc.otelResource), metric.WithAttributeSet(proc.metricAttrs))
+			observer.Observe(proc.openFDCount, metric.WithAttributeSet(proc.metricAttrs))
 		}
 	}
 	return nil
 }
 
-func main() {
-	ctx := context.Background()
-	initSeedData()
+func cleanupResources(ctx context.Context, mp *sdkmetric.MeterProvider) {
+	log.Println("INFO (Generator): Shutting down and cleaning up resources...")
 
+	// Clear process maps to free memory
+	activeProcessesMutex.Lock()
+	for hostname := range activeProcesses {
+		activeProcesses[hostname] = nil
+	}
+	activeProcesses = nil
+	activeProcessesMutex.Unlock()
+
+	// Shutdown meter provider gracefully
+	if mp != nil {
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+
+		if err := mp.Shutdown(ctx); err != nil {
+			log.Printf("ERROR (Generator): Failed to shutdown meter provider: %v", err)
+		}
+	}
+
+	log.Println("INFO (Generator): Cleanup completed")
+}
+
+func setupGracefulShutdown(ctx context.Context, cancel context.CancelFunc, mp *sdkmetric.MeterProvider) {
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		sig := <-sigs
+		log.Printf("INFO (Generator): Received signal %v, initiating graceful shutdown", sig)
+		cancel()
+		cleanupResources(context.Background(), mp)
+	}()
+}
+
+// monitorResourceUsage periodically checks and logs resource usage
+func monitorResourceUsage(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			var mem runtime.MemStats
+			runtime.ReadMemStats(&mem)
+
+			log.Printf("INFO (Generator): Resource usage - Goroutines: %d, Alloc: %.2f MB, Sys: %.2f MB",
+				runtime.NumGoroutine(),
+				float64(mem.Alloc)/1024/1024,
+				float64(mem.Sys)/1024/1024)
+
+			// Check if active processes map is growing too large
+			activeProcessesMutex.RLock()
+			totalActiveProcs := 0
+			for _, procs := range activeProcesses {
+				totalActiveProcs += len(procs)
+			}
+			activeProcessesMutex.RUnlock()
+
+			log.Printf("INFO (Generator): Active processes count: %d", totalActiveProcs)
+
+			// Force garbage collection if memory usage is high
+			if mem.Alloc > 400*1024*1024 { // 400 MB
+				log.Println("INFO (Generator): High memory usage detected, running garbage collection")
+				runtime.GC()
+			}
+		}
+	}
+}
+
+func main() {
+	// Create a cancellable context for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	
+	// Initialize random seed data
+	initSeedData()
+	
+	log.Println("INFO (Generator): Phoenix vNext Synthetic Generator starting up...")
+
+	// Load and validate configuration from environment variables with defaults
 	processCountPerHostStr := os.Getenv("SYNTHETIC_PROCESS_COUNT_PER_HOST")
-	processCountPerHost, _ := strconv.Atoi(processCountPerHostStr)
-	if processCountPerHost <= 0 {
+	processCountPerHost, err := strconv.Atoi(processCountPerHostStr)
+	if err != nil || processCountPerHost <= 0 {
+		if processCountPerHostStr != "" {
+			log.Printf("WARN (Generator): Invalid SYNTHETIC_PROCESS_COUNT_PER_HOST value '%s', using default: 150", processCountPerHostStr)
+		}
 		processCountPerHost = 150
 	}
 
 	hostCountStr := os.Getenv("SYNTHETIC_HOST_COUNT")
-	hostCount, _ := strconv.Atoi(hostCountStr)
-	if hostCount <= 0 {
+	hostCount, err := strconv.Atoi(hostCountStr)
+	if err != nil || hostCount <= 0 {
+		if hostCountStr != "" {
+			log.Printf("WARN (Generator): Invalid SYNTHETIC_HOST_COUNT value '%s', using default: 3", hostCountStr)
+		}
 		hostCount = 3
 	}
 
 	metricRateSStr := os.Getenv("SYNTHETIC_METRIC_EMIT_INTERVAL_S")
-	metricRateS, _ := strconv.Atoi(metricRateSStr)
-	if metricRateS <= 0 {
+	metricRateS, err := strconv.Atoi(metricRateSStr)
+	if err != nil || metricRateS <= 0 {
+		if metricRateSStr != "" {
+			log.Printf("WARN (Generator): Invalid SYNTHETIC_METRIC_EMIT_INTERVAL_S value '%s', using default: 15", metricRateSStr)
+		}
 		metricRateS = 15
 	}
-
+	
+	// Initialize OpenTelemetry meter provider with error handling
 	mp, err := initMeterProvider(ctx)
 	if err != nil {
-		log.Fatalf("Failed to initialize meter provider: %v", err)
+		log.Fatalf("ERROR (Generator): Failed to initialize meter provider: %v", err)
 	}
 	otel.SetMeterProvider(mp)
-	defer func() {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		if err := mp.Shutdown(shutdownCtx); err != nil {
-			log.Printf("Error shutting down meter provider: %v", err)
-		}
-	}()
+	
+	// Setup graceful shutdown handler
+	setupGracefulShutdown(ctx, cancel, mp)
+	
+	// Start resource usage monitoring in background
+	go monitorResourceUsage(ctx, 60*time.Second)
 
 	meter := otel.Meter("phoenix.v3.ultimate.synthetic.generator")
+	// Create metrics with proper error handling
+	createMetric := func(name, description, unit string) (metric.Float64Counter, error) {
+		counter, err := meter.Float64Counter(
+			name,
+			metric.WithDescription(description),
+			metric.WithUnit(unit),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create %s counter: %w", name, err)
+		}
+		return counter, nil
+	}
+	
+	// Create all required metrics
 	var instErr error
-	processCPUCounter, instErr = meter.Float64Counter("process.cpu.time", metric.WithDescription("Cumulative CPU time consumed by the process, reported as delta"), metric.WithUnit("s"))
+	processCPUCounter, instErr = createMetric(
+		"process.cpu.time",
+		"Cumulative CPU time consumed by the process, reported as delta",
+		"s")
 	if instErr != nil {
-		log.Fatalf("Failed to create process.cpu.time counter: %v", instErr)
+		log.Fatalf("ERROR (Generator): %v", instErr)
 	}
-	processDiskReadCounter, instErr = meter.Float64Counter("process.disk.io.read_bytes", metric.WithDescription("Cumulative disk read bytes, reported as delta"), metric.WithUnit("By"))
+	
+	processDiskReadCounter, instErr = createMetric(
+		"process.disk.io.read_bytes",
+		"Cumulative disk read bytes, reported as delta",
+		"By")
 	if instErr != nil {
-		log.Fatalf("Failed to create process.disk.io.read_bytes counter: %v", instErr)
+		log.Fatalf("ERROR (Generator): %v", instErr)
 	}
-	processDiskWriteCounter, instErr = meter.Float64Counter("process.disk.io.write_bytes", metric.WithDescription("Cumulative disk write bytes, reported as delta"), metric.WithUnit("By"))
+	
+	processDiskWriteCounter, instErr = createMetric(
+		"process.disk.io.write_bytes",
+		"Cumulative disk write bytes, reported as delta",
+		"By")
 	if instErr != nil {
-		log.Fatalf("Failed to create process.disk.io.write_bytes counter: %v", instErr)
+		log.Fatalf("ERROR (Generator): %v", instErr)
 	}
 
 	activeProcesses = make(map[string][]*processState)
@@ -321,7 +530,7 @@ func main() {
 		case <-ticker.C:
 			activeProcessesMutex.Lock()
 			var totalMetricPointsEmittedThisTick int64
-			for hostname, hostProcs := range activeProcesses {
+			for _, hostProcs := range activeProcesses {
 				for i := range hostProcs {
 					proc := hostProcs[i]
 
@@ -333,7 +542,7 @@ func main() {
 						cpuDelta *= 0.15
 					}
 					proc.cpuTimeTotal += cpuDelta
-					processCPUCounter.Add(ctx, cpuDelta, metric.WithResource(proc.otelResource), metric.WithAttributeSet(proc.metricAttrs))
+					processCPUCounter.Add(ctx, cpuDelta, metric.WithAttributeSet(proc.metricAttrs))
 					totalMetricPointsEmittedThisTick++
 
 					readDelta := rand.Float64() * 1024 * float64(5+rand.Intn(150))
@@ -344,8 +553,8 @@ func main() {
 					}
 					proc.diskReadBytes += readDelta
 					proc.diskWriteBytes += writeDelta
-					processDiskReadCounter.Add(ctx, readDelta, metric.WithResource(proc.otelResource), metric.WithAttributeSet(proc.metricAttrs))
-					processDiskWriteCounter.Add(ctx, writeDelta, metric.WithResource(proc.otelResource), metric.WithAttributeSet(proc.metricAttrs))
+					processDiskReadCounter.Add(ctx, readDelta, metric.WithAttributeSet(proc.metricAttrs))
+					processDiskWriteCounter.Add(ctx, writeDelta, metric.WithAttributeSet(proc.metricAttrs))
 					totalMetricPointsEmittedThisTick += 2
 
 					memChange := (rand.Float64() - 0.49) * float64(10+rand.Intn(30)) * 1024 * 1024
@@ -380,8 +589,8 @@ func main() {
 					}
 
 					if rand.Float32() < 0.0005 {
-						oldPID := proc.pid
-						oldExecName := proc.execName
+						_ = proc.pid
+						_ = proc.execName
 						proc.pid = 70000 + rand.Intn(30000)
 						if rand.Float32() < 0.05 {
 							baseName := strings.Split(proc.execName, "_v")[0]

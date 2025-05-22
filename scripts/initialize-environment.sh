@@ -26,6 +26,62 @@ if [ -f ".env" ]; then
 fi
 set +a
 
+# Validate critical environment variables
+validate_env_vars() {
+  local missing_vars=()
+  local placeholder_vars=()
+  
+  # Helper to check if a variable is set and not a placeholder
+  check_var() {
+    local var_name="$1"
+    local var_value="${!var_name}"
+    local placeholder="$2"
+    
+    if [[ -z "$var_value" ]]; then
+      missing_vars+=("$var_name")
+    elif [[ "$var_value" == *"$placeholder"* ]]; then
+      placeholder_vars+=("$var_name")
+    fi
+  }
+  
+  # Check required variables when exports are enabled
+  if [[ "$ENABLE_NR_EXPORT_FULL" == "true" ]]; then
+    check_var "NEW_RELIC_LICENSE_KEY_FULL" "YOUR_NR_INGEST_LICENSE_KEY"
+  fi
+  
+  if [[ "$ENABLE_NR_EXPORT_OPTIMISED" == "true" ]]; then
+    check_var "NEW_RELIC_LICENSE_KEY_OPTIMISED" "YOUR_NR_INGEST_LICENSE_KEY"
+  fi
+  
+  if [[ "$ENABLE_NR_EXPORT_EXPERIMENTAL" == "true" ]]; then
+    check_var "NEW_RELIC_LICENSE_KEY_EXPERIMENTAL" "YOUR_NR_INGEST_LICENSE_KEY"
+  fi
+  
+  # Report issues
+  if [[ ${#missing_vars[@]} -gt 0 ]]; then
+    echo "ERROR: The following required environment variables are not set:"
+    printf "  - %s\n" "${missing_vars[@]}"
+    return 1
+  fi
+  
+  if [[ ${#placeholder_vars[@]} -gt 0 ]]; then
+    echo "WARNING: The following environment variables still contain placeholder values:"
+    printf "  - %s\n" "${placeholder_vars[@]}"
+    echo "If you're exporting to New Relic, please update these values in your .env file."
+  fi
+  
+  return 0
+}
+
+# Run validation if any exports are enabled
+if [[ "$ENABLE_NR_EXPORT_FULL" == "true" || "$ENABLE_NR_EXPORT_OPTIMISED" == "true" || "$ENABLE_NR_EXPORT_EXPERIMENTAL" == "true" ]]; then
+  echo "INFO: Validating New Relic export configuration..."
+  validate_env_vars || {
+    echo "ERROR: Environment validation failed. Please update your .env file."
+    echo "       Continuing setup, but New Relic exports may not work properly."
+  }
+fi
+
 echo "INFO: Creating required data directories..."
 mkdir -p ./data/otelcol_main
 mkdir -p ./data/prometheus
