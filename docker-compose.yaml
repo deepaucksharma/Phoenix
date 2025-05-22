@@ -1,34 +1,6 @@
 version: "3.9"
 
 services:
-  ### Workload Generators: Provide diverse, sustained load ###
-  stress-ng-cpu-heavy:
-    image: alexeiled/stress-ng:latest # Pin version
-    command: >
-      stress-ng --cpu 0 --cpu-load 75 --cpu-method all 
-      --matrix 0 --matrix-size 128 --matrix-ops 100000
-      --mq 0 --mq-ops 50000
-      --process-name-prefix cpu_loadgen_ # As per spec for identification
-      --timeout 0s 
-    pid: host # For hostmetrics to see these processes
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits: { cpus: '2.0', memory: '1G' } # Adjusted from spec for more focused load
-
-  stress-ng-io-heavy:
-    image: alexeiled/stress-ng:latest
-    command: >
-      stress-ng --io 0 --io-ops 20000 
-      --hdd 0 --hdd-bytes 256M --hdd-ops 2500 # Reduced hdd load slightly
-      --process-name-prefix io_loadgen_
-      --timeout 0s
-    pid: host
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits: { cpus: '1.0', memory: '512M' }
-
   ### Main OpenTelemetry Collector (Phoenix Simulation) ###
   otelcol-main:
     image: otel/opentelemetry-collector-contrib:0.103.1 # Consistent version

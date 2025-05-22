@@ -32,17 +32,13 @@ phoenix-vnext/
 │   │   └── grafana/                  # Grafana datasources and dashboards
 │   └── control/                      # Control plane configurations
 │
-├── docs/                             # Comprehensive documentation
+├── docs/                             # Core documentation
 │   ├── README.md                     # Documentation index
 │   ├── ARCHITECTURE.md               # System design
-│   ├── DEPLOYMENT.md                 # Operations guide
-│   ├── DEVELOPMENT.md                # Developer guide
-│   ├── TROUBLESHOOTING.md            # Problem resolution
-│   ├── API.md                        # API reference
-│   └── monitoring-setup.md           # Monitoring setup guide
+│   └── TROUBLESHOOTING.md            # Problem resolution
 │
-├── scripts/                          # Operational scripts
-└── data/                            # Persistent data (gitignored)
+├── scripts/                          # Environment initialization
+└── data/                             # Runtime data (gitignored)
 ```
 
 ## 🚀 Quick Start
