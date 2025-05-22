@@ -1,9 +1,9 @@
 mode: ultra
-last_updated: '2025-05-22T05:09:40.145610+00:00'
-reason: 'Cardinality update: 2138 series (change: +273)'
-ts_count: 2138
-config_version: 1747890580
-correlation_id: observer-1747890580
+last_updated: '2025-05-22T07:05:03.082293+00:00'
+reason: 'Cardinality update: 4170 series (change: +105)'
+ts_count: 4170
+config_version: 1747897503
+correlation_id: observer-1747897503
 optimization_level: 100
 thresholds:
   moderate: 300.0
@@ -11,18 +11,18 @@ thresholds:
   ultra: 450.0
 state:
   previous_mode: ultra
-  transition_timestamp: '2025-05-22T05:09:40.145610+00:00'
+  transition_timestamp: '2025-05-22T07:05:03.082293+00:00'
   transition_duration_seconds: 0
   stability_period_seconds: 300
   mode_changes_total: 3
 observer_metadata:
   cardinality_analysis:
-    total_phoenix_metrics: 2138
-    unique_time_series: 2138
-    reduction_potential: 1838.0 series
+    total_phoenix_metrics: 4170
+    unique_time_series: 4170
+    reduction_potential: 3870.0 series
     sample_metrics:
-    - phoenix_http_requests_total#benchmark_id="phoenix-vnext",endpoint="/api/v2/endpoint-12",environment="test",job="phoenix-metrics-generator",method="POST",region="us-west-2",service="service-4",status_code="200"
-    - phoenix_http_requests_total#benchmark_id="phoenix-vnext",endpoint="/api/v1/endpoint-15",environment="staging",job="phoenix-metrics-generator",method="PATCH",region="us-west-2",service="service-10",status_code="400"
-    - phoenix_system_cpu_usage_percent#benchmark_id="phoenix-vnext",environment="dev",instance_type="c5.xlarge",job="phoenix-metrics-generator",region="us-west-2",service="service-2"
-    - phoenix_user_activity_total#action="logout",benchmark_id="phoenix-vnext",environment="test",job="phoenix-metrics-generator",service="service-16",user_id="user-0399"
-    - phoenix_business_feature_usage_total#benchmark_id="phoenix-vnext",environment="prod",feature="search",job="phoenix-metrics-generator",region="eu-west-1",service="service-15"
+    - phoenix_full_process_phoenix_business_feature_usage_total#benchmark_id="phoenix-vnext",environment="prod",feature="checkout",focus="process",job="phoenix-metrics-generator",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",region="eu-west-1",service="service-10"
+    - phoenix_full_process_phoenix_system_memory_usage_bytes#benchmark_id="phoenix-vnext",environment="staging",focus="process",instance_type="t3.small",job="phoenix-metrics-generator",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",region="eu-west-1",service="service-20"
+    - phoenix_full_process_system_cpu_time_seconds_total#cpu="cpu9",focus="process",job="phoenix-synthetic-generator",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",state="wait"
+    - phoenix_full_process_phoenix_http_requests_total#benchmark_id="phoenix-vnext",endpoint="/api/v3/endpoint-24",environment="staging",focus="process",job="phoenix-metrics-generator",method="POST",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",region="us-east-1",service="service-15",status_code="503"
+    - phoenix_full_process_phoenix_http_requests_total#benchmark_id="phoenix-vnext",endpoint="/api/v1/endpoint-24",environment="staging",focus="process",job="phoenix-metrics-generator",method="GET",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",region="ap-southeast-1",service="service-13",status_code="403"

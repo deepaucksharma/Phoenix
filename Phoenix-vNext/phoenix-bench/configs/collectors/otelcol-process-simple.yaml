@@ -1,0 +1,186 @@
+# Phoenix-vNext Simplified Process-Focused Configuration
+# Based on gap analysis - Phase 1: Process Focus with Basic Rollup
+
+receivers:
+  # Process-only collection
+  hostmetrics/process_only:
+    collection_interval: 30s
+    root_path: /host
+    scrapers:
+      process:
+        mute_process_name_error: true
+        # Include only meaningful process metrics
+        metrics:
+          process.cpu.time:
+            enabled: true
+          process.memory.usage:
+            enabled: true
+          process.memory.virtual:
+            enabled: true
+          process.disk.io:
+            enabled: true
+      # Add CPU and memory for host context  
+      cpu:
+        metrics:
+          system.cpu.time:
+            enabled: true
+      memory:
+        metrics:
+          system.memory.usage:
+            enabled: true
+
+  # OTLP receiver for synthetic data
+  otlp/control:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Basic process prioritization filter
+  filter/critical_processes:
+    metrics:
+      include:
+        match_type: regexp
+        expressions:
+          # Include critical database and cache processes
+          - 'process\..*'
+
+  # Simple attribute processor for business classification
+  attributes/process_priority:
+    actions: 
+      - key: phoenix.priority
+        value: "high"
+        action: insert
+      - key: phoenix.cardinality_tier
+        value: "process-focused"
+        action: insert
+
+  # Basic grouping for rollup
+  groupbyattrs/process_rollup:
+    keys: ["host.name", "process.executable.name", "phoenix.priority"]
+
+  # Resource processors for each pipeline
+  resource/add_tags:
+    attributes:
+      - key: phoenix.collector_version
+        value: "process-focused-v1.0"
+        action: insert
+      - key: phoenix.optimization_mode
+        value: "process-only"
+        action: insert
+
+  resource/pipeline_full:
+    attributes:
+      - key: phoenix.pipeline
+        value: "full"
+        action: insert
+      - key: phoenix.optimization_level
+        value: "0"
+        action: insert
+
+  resource/pipeline_opt:
+    attributes:
+      - key: phoenix.pipeline 
+        value: "opt"
+        action: insert
+      - key: phoenix.optimization_level
+        value: "25"
+        action: insert
+
+  resource/pipeline_ultra:
+    attributes:
+      - key: phoenix.pipeline
+        value: "ultra"
+        action: insert
+      - key: phoenix.optimization_level
+        value: "75"
+        action: insert
+
+  # Batch processors
+  batch:
+    timeout: 2s
+    send_batch_size: 1000
+
+exporters:
+  # Prometheus exporters for each pipeline
+  prometheus/full_process:
+    endpoint: "0.0.0.0:8888"
+    namespace: "phoenix_full_process"
+    const_labels:
+      pipeline: "full"
+      focus: "process"
+
+  prometheus/opt_process:
+    endpoint: "0.0.0.0:8889"
+    namespace: "phoenix_opt_process"
+    const_labels:
+      pipeline: "opt"
+      focus: "process"
+
+  prometheus/ultra_process:
+    endpoint: "0.0.0.0:8890"
+    namespace: "phoenix_ultra_process"
+    const_labels:
+      pipeline: "ultra"
+      focus: "process"
+
+  # Observer forwarding
+  otlp/to_observer:
+    endpoint: "otelcol-observer:4319"
+    tls:
+      insecure: true
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  pprof:
+    endpoint: 0.0.0.0:1777
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+service:
+  extensions: [health_check, pprof, zpages]
+  pipelines:
+    # Full pipeline - all process metrics
+    metrics/full:
+      receivers: [hostmetrics/process_only, otlp/control]
+      processors: [
+        attributes/process_priority,
+        resource/add_tags,
+        resource/pipeline_full,
+        batch
+      ]
+      exporters: [prometheus/full_process, otlp/to_observer]
+
+    # Optimized pipeline - filtered process metrics  
+    metrics/opt:
+      receivers: [hostmetrics/process_only, otlp/control]
+      processors: [
+        filter/critical_processes,
+        attributes/process_priority,
+        resource/add_tags,
+        resource/pipeline_opt,
+        batch
+      ]
+      exporters: [prometheus/opt_process, otlp/to_observer]
+
+    # Ultra pipeline - rolled up process metrics
+    metrics/ultra:
+      receivers: [hostmetrics/process_only, otlp/control]
+      processors: [
+        filter/critical_processes,
+        attributes/process_priority,
+        groupbyattrs/process_rollup,
+        resource/add_tags,
+        resource/pipeline_ultra,
+        batch
+      ]
+      exporters: [prometheus/ultra_process, otlp/to_observer]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8887

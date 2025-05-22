@@ -1,0 +1,507 @@
+# Phoenix-vNext Integrated Configuration
+# Combines core benchmarking with process-metrics optimization
+
+config_sources:
+  ctlfile:
+    path: /etc/otelcol/control_signals/opt_mode.yaml
+    watch: true
+    format: yaml
+    reload_delay: 10s
+    schema:
+      type: object
+      properties:
+        mode: { type: string, enum: ["moderate", "ultra", "adaptive"] }
+        last_updated: { type: string, format: date-time }
+        config_version: { type: integer }
+        correlation_id: { type: string }
+        reason: { type: string }
+        optimization_level: { type: integer, minimum: 0, maximum: 100 }
+      required: [mode, last_updated, config_version, correlation_id]
+
+receivers:
+  # Process-focused collection with intelligent filtering
+  hostmetrics/process_focused:
+    collection_interval: 60s
+    root_path: /host
+    scrapers:
+      process:
+        mute_process_name_error: true
+        # Exclude system processes that create cardinality noise
+        exclude:
+          names:
+            - "kworker/.*"
+            - "migration/.*" 
+            - "rcu_.*"
+            - "ksoftirqd/.*"
+            - "systemd-.*"
+            - "dbus.*"
+        # Include only meaningful process metrics
+        metrics:
+          process.cpu.time:
+            enabled: true
+          process.memory.usage:
+            enabled: true
+          process.memory.virtual:
+            enabled: true
+          process.disk.io:
+            enabled: true
+      # Note: Other scrapers are disabled by not including them
+  
+  # Standard system metrics (for non-process pipeline comparison)
+  hostmetrics:
+    collection_interval: 30s
+    root_path: /host
+    scrapers:
+      cpu: {}
+      memory: {}
+      filesystem: {}
+      disk: {}
+      load: {}
+  
+  # High-resolution metrics for time-sensitive data
+  hostmetrics/hires:
+    collection_interval: 5s
+    root_path: /host
+    scrapers:
+      cpu: {}
+      memory: {}
+  
+  # Control signals receiver
+  otlp/control:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  
+  # File-based control signal monitoring
+  filelog/control:
+    include: [ "/etc/otelcol/control_signals/opt_mode.yaml" ]
+    start_at: end
+    include_file_path: true
+    operators:
+      - type: yaml_parser
+        parse_from: body
+
+connectors:
+  # Fan out to all pipelines including process-focused ones
+  replicate/fanout_to_all_pipelines:
+    pipelines:
+      - metrics/full
+      - metrics/opt
+      - metrics/ultra
+      - metrics/exp
+      - metrics/hybrid
+      # Process-focused pipelines added
+      - metrics/process_full
+      - metrics/process_opt
+      - metrics/process_ultra
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+  
+  resource/add_tags:
+    attributes:
+      - key: benchmark.id
+        value: phoenix-vnext
+        action: insert
+      - key: service.name
+        value: "phoenix-observability"
+        action: insert
+      - key: service.version
+        value: "1.0.0"
+        action: insert
+      - key: deployment.environment
+        value: development
+        action: insert
+      - key: processing.correlation_id
+        value: initial-main-collector
+        action: insert
+  
+  # Process priority classification
+  transform/priority_tagger:
+    metric_statements:
+      - context: resource
+        statements:
+          # Critical database and cache processes
+          - set(attributes["phoenix.priority"], "critical") where attributes["process.executable.name"] matches "^(postgres|mysql|mysqld|redis-server|mongodb|mongod|elasticsearch|cassandra|clickhouse)$"
+          
+          # High-priority application servers
+          - set(attributes["phoenix.priority"], "high") where attributes["process.executable.name"] matches "^(java|nginx|apache2|httpd|node|python|ruby|php-fpm|gunicorn|uwsgi)$"
+          
+          # Medium-priority services and agents
+          - set(attributes["phoenix.priority"], "medium") where attributes["phoenix.priority"] == nil and attributes["process.executable.name"] matches ".*(agent|daemon|service|worker|queue).*"
+          
+          # Everything else is low priority
+          - set(attributes["phoenix.priority"], "low") where attributes["phoenix.priority"] == nil
+          
+          # Add business context
+          - set(attributes["phoenix.business_tier"], "data") where attributes["phoenix.priority"] == "critical"
+          - set(attributes["phoenix.business_tier"], "application") where attributes["phoenix.priority"] == "high"
+          - set(attributes["phoenix.business_tier"], "infrastructure") where attributes["phoenix.priority"] == "medium"
+          - set(attributes["phoenix.business_tier"], "system") where attributes["phoenix.priority"] == "low"
+  
+  # Rollup marker for process aggregation
+  transform/rollup_marker:
+    metric_statements:
+      - context: resource
+        statements:
+          # Mark low-priority processes for rollup
+          - set(attributes["phoenix.rollup_target"], "phoenix.others.low") where attributes["phoenix.priority"] == "low"
+          - set(attributes["phoenix.rollup_target"], "phoenix.others.medium") where attributes["phoenix.priority"] == "medium" and attributes["process.executable.name"] matches ".*worker.*"
+          
+          # Preserve critical and high priority processes individually
+          - set(attributes["phoenix.preserve_individual"], "true") where attributes["phoenix.priority"] in ["critical", "high"]
+  
+  # Actual rollup implementation with grouping
+  groupbyattrs/others_rollup:
+    keys: ["host.name", "service.name", "phoenix.priority", "phoenix.rollup_target", "phoenix.business_tier"]
+  
+  # Entity preservation for New Relic
+  transform/entity_preservation:
+    metric_statements:
+      - context: resource
+        statements:
+          # Create proper entity GUID for New Relic linking
+          - set(attributes["entity.guid"], Concat("HOST-", attributes["host.name"])) where attributes["host.name"] != nil
+          
+          # Set entity name for dashboard display  
+          - set(attributes["entity.name"], Concat("Process-", attributes["process.executable.name"])) where attributes["process.executable.name"] != nil
+          
+          # Entity type for New Relic categorization
+          - set(attributes["entity.type"], "HOST")
+          - set(attributes["instrumentation.provider"], "phoenix-process-metrics")
+          - set(attributes["telemetry.source"], "otel-process-collector")
+  
+  # Process-specific attribute sanitization
+  transform/attribute_sanitization:
+    metric_statements:
+      - context: resource
+        statements:
+          # Remove high-cardinality attributes that cause explosions
+          - delete_key(attributes, "process.pid")
+          - delete_key(attributes, "process.parent_pid")
+          - delete_key(attributes, "container.id")
+          - delete_key(attributes, "process.command_line")
+          - delete_key(attributes, "process.owner")
+  
+  # Process filter based on priority
+  filter/intelligent_process_filter:
+    metrics:
+      exclude:
+        match_type: expr
+        expressions:
+          # Drop low-priority processes with high PID churn
+          - 'attributes["phoenix.priority"] == "low" and attributes["process.executable.name"] matches "^(sh|bash|grep|awk|sed|sleep|cat|ls|ps)$"'
+          
+          # Drop system processes that provide little business value
+          - 'attributes["process.executable.name"] matches "^(kthread|watchdog|systemd|init|kernel).*$"'
+          
+          # Drop processes with very short lifespans (< 5 seconds typically)
+          - 'attributes["process.executable.name"] matches "^(find|sort|cut|tr|head|tail|wc)$"'
+  
+  # Include essential standard processors from original config
+  cumulativetodelta:
+    metrics:
+      - process.cpu.time
+      - system.cpu.time
+      - system.disk.io
+      - system.disk.operations
+      - process.disk.io
+
+  batch:
+    send_batch_size: 1000
+    timeout: 10s
+  
+  transform/mode_attr:
+    metric_statements:
+      - context: resource
+        statements:
+          - set(attributes["observability.mode"], GetPath(cfg("ctlfile"), "mode"))
+          - set(attributes["optimization_level"], ToString(GetPath(cfg("ctlfile"), "optimization_level")))
+          - set(attributes["opt_version"], ToString(GetPath(cfg("ctlfile"), "config_version")))
+          - set(attributes["correlation_id"], GetPath(cfg("ctlfile"), "correlation_id"))
+          - set(attributes["last_updated"], GetPath(cfg("ctlfile"), "last_updated"))
+          - set(attributes["optimization.reason"], GetPath(cfg("ctlfile"), "reason"))
+  
+  resourcedetection:
+    detectors: [env, system]
+    timeout: 30s
+    system:
+      hostname_sources: [os, dns]
+  
+  # Cardinality estimators
+  cardinality/estimator:
+    metric_name: phoenix.ts_active
+    mode: synchronous
+  
+  cardinality/estimator_opt:
+    metric_name: phoenix.opt.ts_active
+    mode: synchronous
+  
+  cardinality/estimator_ultra:
+    metric_name: phoenix.ultra.ts_active
+    mode: synchronous
+  
+  cardinality/process_full:
+    metric_name: phoenix.process.full.ts_active
+    mode: synchronous
+  
+  cardinality/process_opt:
+    metric_name: phoenix.process.opt.ts_active
+    mode: synchronous
+  
+  cardinality/process_ultra:
+    metric_name: phoenix.process.ultra.ts_active
+    mode: synchronous
+  
+  # Pipeline selectors for identification
+  resource/pipeline_selector_full:
+    attributes: 
+      - key: pipeline.id
+        value: "full"
+        action: insert
+      - key: pipeline.source
+        value: "phoenix_benchmark"
+        action: insert
+  
+  resource/pipeline_selector_opt:
+    attributes: 
+      - key: pipeline.id
+        value: "opt"
+        action: insert
+      - key: optimization.level
+        value: "moderate"
+        action: insert
+      - key: pipeline.source
+        value: "phoenix_benchmark"
+        action: insert
+  
+  resource/pipeline_selector_ultra:
+    attributes:
+      - key: pipeline.id
+        value: "ultra"
+        action: insert
+      - key: optimization.level
+        value: "ultra"
+        action: insert
+      - key: pipeline.source
+        value: "phoenix_benchmark"
+        action: insert
+  
+  # Process pipeline identifiers
+  resource/pipeline_process_full:
+    attributes:
+      - key: pipeline.id  
+        value: "process_full"
+        action: insert
+      - key: pipeline.source
+        value: "phoenix_process"
+        action: insert
+  
+  resource/pipeline_process_opt:
+    attributes:
+      - key: pipeline.id
+        value: "process_opt"
+        action: insert
+      - key: optimization.level
+        value: "moderate_process"
+        action: insert
+      - key: pipeline.source
+        value: "phoenix_process"
+        action: insert
+  
+  resource/pipeline_process_ultra:
+    attributes:
+      - key: pipeline.id
+        value: "process_ultra"
+        action: insert
+      - key: optimization.level
+        value: "ultra_process"
+        action: insert
+      - key: pipeline.source
+        value: "phoenix_process"
+        action: insert
+
+exporters:
+  otlphttp/full:
+    endpoint: https://otlp.nr-data.net/v1/metrics
+    headers: { api-key: "${NR_FULL_KEY}" }
+  
+  otlphttp/opt:
+    endpoint: https://otlp.nr-data.net/v1/metrics
+    headers: { api-key: "${NR_OPT_KEY}" }
+  
+  otlphttp/ultra:
+    endpoint: https://otlp.nr-data.net/v1/metrics
+    headers: { api-key: "${NR_ULTRA_KEY}" }
+  
+  otlphttp/process_full:
+    endpoint: https://otlp.nr-data.net/v1/metrics
+    headers: { api-key: "${NR_PROCESS_FULL_KEY}" }
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+  
+  otlphttp/process_opt:
+    endpoint: https://otlp.nr-data.net/v1/metrics
+    headers: { api-key: "${NR_PROCESS_OPT_KEY}" }
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+  
+  otlphttp/process_ultra:
+    endpoint: https://otlp.nr-data.net/v1/metrics
+    headers: { api-key: "${NR_PROCESS_ULTRA_KEY}" }
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+  
+  prometheusremotewrite/local:
+    endpoint: http://prometheus:9090/api/v1/write
+    resource_to_telemetry_conversion: { enabled: true }
+  
+  prometheus:
+    endpoint: 0.0.0.0:8888
+    namespace: phoenix
+    send_timestamps: true
+    metric_expiration: 180m
+    resource_to_telemetry_conversion: { enabled: true }
+    const_labels:
+      collector_version: "0.103.0"
+      environment: "development"
+  
+  prometheus/process_full:
+    endpoint: 0.0.0.0:8889
+    namespace: phoenix_process_full
+    send_timestamps: true
+    resource_to_telemetry_conversion: { enabled: true }
+  
+  prometheus/process_opt:
+    endpoint: 0.0.0.0:8890
+    namespace: phoenix_process_opt
+    send_timestamps: true
+    resource_to_telemetry_conversion: { enabled: true }
+  
+  prometheus/process_ultra:
+    endpoint: 0.0.0.0:8891
+    namespace: phoenix_process_ultra
+    send_timestamps: true
+    resource_to_telemetry_conversion: { enabled: true }
+  
+  otlp/observer_feedback:
+    endpoint: otelcol-observer:4319
+    tls: { insecure: true }
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  pprof:
+    endpoint: 0.0.0.0:1777
+  zpages:
+    endpoint: 0.0.0.0:55679
+  memory_ballast:
+    size_mib: 256
+
+service:
+  extensions: [health_check, pprof, zpages, memory_ballast]
+  
+  telemetry:
+    metrics: { address: 0.0.0.0:8888 }
+    logs:
+      level: info
+      development: false
+      encoding: json
+  
+  pipelines:
+    # Common intake pipeline
+    metrics/ingest:
+      receivers: [hostmetrics, hostmetrics/hires]
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource/add_tags
+        - transform/mode_attr
+        - cumulativetodelta
+        - cardinality/estimator
+      exporters: [replicate/fanout_to_all_pipelines]
+    
+    # Process-focused intake pipeline (separate from general metrics)
+    metrics/ingest_process:
+      receivers: [hostmetrics/process_focused]
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource/add_tags
+        - transform/mode_attr
+        - transform/priority_tagger  # Add priority classification early
+        - cumulativetodelta
+      exporters: [replicate/fanout_to_all_pipelines]
+    
+    # Standard benchmarking pipelines (unchanged)
+    metrics/full:
+      receivers: [replicate/fanout_to_all_pipelines]
+      processors: [resource/pipeline_selector_full, batch]
+      exporters: [otlphttp/full, prometheusremotewrite/local, otlp/observer_feedback]
+    
+    metrics/opt:
+      receivers: [replicate/fanout_to_all_pipelines]
+      processors:
+        - resource/pipeline_selector_opt
+        - cardinality/estimator_opt
+        - batch
+      exporters: [otlphttp/opt, prometheusremotewrite/local]
+    
+    metrics/ultra:
+      receivers: [replicate/fanout_to_all_pipelines]
+      processors:
+        - resource/pipeline_selector_ultra
+        - cardinality/estimator_ultra
+        - batch
+      exporters: [otlphttp/ultra, prometheusremotewrite/local]
+    
+    # Process-focused pipelines (now active)
+    metrics/process_full:
+      receivers: [replicate/fanout_to_all_pipelines]
+      processors:
+        - resource/pipeline_process_full
+        - transform/entity_preservation
+        - cardinality/process_full
+        - batch
+      exporters: [otlphttp/process_full, prometheus/process_full]
+    
+    metrics/process_opt:
+      receivers: [replicate/fanout_to_all_pipelines]
+      processors:
+        - resource/pipeline_process_opt
+        - filter/intelligent_process_filter
+        - transform/attribute_sanitization
+        - transform/entity_preservation
+        - cardinality/process_opt
+        - batch
+      exporters: [otlphttp/process_opt, prometheus/process_opt]
+    
+    metrics/process_ultra:
+      receivers: [replicate/fanout_to_all_pipelines]
+      processors:
+        - resource/pipeline_process_ultra
+        - filter/intelligent_process_filter
+        - transform/rollup_marker
+        - groupbyattrs/others_rollup
+        - transform/attribute_sanitization
+        - transform/entity_preservation
+        - cardinality/process_ultra
+        - batch
+      exporters: [otlphttp/process_ultra, prometheus/process_ultra]
+    
+    # Control and feedback pipeline (unchanged)
+    metrics/control:
+      receivers: [otlp/control, filelog/control]
+      processors: [batch]
+      exporters: [otlp/observer_feedback]

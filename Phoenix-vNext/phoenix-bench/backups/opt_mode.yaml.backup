@@ -1,0 +1,28 @@
+mode: ultra
+last_updated: '2025-05-22T06:44:55.407298+00:00'
+reason: 'Cardinality update: 4302 series (change: +128)'
+ts_count: 4302
+config_version: 1747896295
+correlation_id: observer-1747896295
+optimization_level: 100
+thresholds:
+  moderate: 300.0
+  adaptive: 375.0
+  ultra: 450.0
+state:
+  previous_mode: ultra
+  transition_timestamp: '2025-05-22T06:44:55.407298+00:00'
+  transition_duration_seconds: 0
+  stability_period_seconds: 300
+  mode_changes_total: 7
+observer_metadata:
+  cardinality_analysis:
+    total_phoenix_metrics: 4302
+    unique_time_series: 4302
+    reduction_potential: 4002.0 series
+    sample_metrics:
+    - phoenix_full_process_phoenix_user_activity_total#action="logout",benchmark_id="phoenix-vnext",environment="staging",focus="process",job="phoenix-metrics-generator",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",service="service-19",user_id="user-0165"
+    - phoenix_full_process_system_cpu_time_seconds_total#cpu="cpu5",focus="process",job="phoenix-synthetic-generator",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",state="interrupt"
+    - phoenix_full_process_phoenix_business_feature_usage_total#benchmark_id="phoenix-vnext",environment="staging",feature="checkout",focus="process",job="phoenix-metrics-generator",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",region="eu-west-1",service="service-11"
+    - phoenix_full_process_phoenix_system_cpu_usage_percent#benchmark_id="phoenix-vnext",environment="dev",focus="process",instance_type="t3.medium",job="phoenix-metrics-generator",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",region="us-west-2",service="service-2"
+    - phoenix_full_process_phoenix_http_requests_total#benchmark_id="phoenix-vnext",endpoint="/api/v1/endpoint-15",environment="dev",focus="process",job="phoenix-metrics-generator",method="GET",phoenix_cardinality_tier="process-focused",phoenix_priority="high",pipeline="full",region="us-east-1",service="service-5",status_code="400"

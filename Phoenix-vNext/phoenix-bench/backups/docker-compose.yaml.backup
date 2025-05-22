@@ -24,23 +24,18 @@ services:
     environment:
       HOST_PROC: /host/proc
       CONTROL_SIGNAL_PATH: /etc/otelcol/control_signals/opt_mode.yaml
-      # NR keys for process metrics
-      NR_PROCESS_FULL_KEY: ${NR_FULL_KEY:-}
-      NR_PROCESS_OPT_KEY: ${NR_OPT_KEY:-}  
-      NR_PROCESS_ULTRA_KEY: ${NR_ULTRA_KEY:-}
+      # NR keys, BENCHMARK_ID, DEPLOYMENT_ENV, CORRELATION_ID will be loaded from .env
     volumes:
-      - ./configs/collectors/otelcol-integrated.yaml:/etc/otelcol/otelcol-main.yaml:ro
+      - ./configs/collectors/otelcol-process-optimized.yaml:/etc/otelcol/otelcol-main.yaml:ro
       - ./configs/control_signals:/etc/otelcol/control_signals:rw
-      - ./configs/processors:/etc/otelcol/processors:ro
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /etc:/host/etc:ro
       - ./data/otelcol_main:/data
     ports:
       - "8888:8888" # Full pipeline Prometheus exporter
-      - "8889:8889" # Process Full Prometheus exporter
-      - "8890:8890" # Process Opt Prometheus exporter
-      - "8891:8891" # Process Ultra Prometheus exporter
+      - "8889:8889" # Opt pipeline Prometheus exporter
+      - "8890:8890" # Ultra pipeline Prometheus exporter
       - "8895:8895" # Exp pipeline Prometheus exporter
       - "8896:8896" # Hybrid pipeline Prometheus exporter
       - "4317:4317" # otlp/control gRPC

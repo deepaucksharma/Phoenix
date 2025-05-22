@@ -1,0 +1,40 @@
+{
+  "timestamp": "2025-05-22T10:57:03.981457",
+  "analysis_type": "process-focused-cardinality",
+  "pipelines": {
+    "Full (Baseline)": {
+      "total_series": 3813,
+      "unique_metrics": 21,
+      "processes": "set()",
+      "metric_types": "{'15m', 'up', 'bytes', 'scraped', 'added', '1m', 'seconds', '5m', 'relabeling', 'total', 'info', 'percent'}",
+      "pipeline": "Full (Baseline)"
+    },
+    "Optimized": {
+      "total_series": 3813,
+      "unique_metrics": 21,
+      "processes": "set()",
+      "metric_types": "{'15m', 'up', 'bytes', 'scraped', 'added', '1m', 'seconds', '5m', 'relabeling', 'total', 'info', 'percent'}",
+      "pipeline": "Optimized"
+    },
+    "Ultra (Rollup)": {
+      "total_series": 3813,
+      "unique_metrics": 21,
+      "processes": "set()",
+      "metric_types": "{'15m', 'up', 'bytes', 'scraped', 'added', '1m', 'seconds', '5m', 'relabeling', 'total', 'info', 'percent'}",
+      "pipeline": "Ultra (Rollup)"
+    }
+  },
+  "reductions": {
+    "optimized_reduction_pct": 0.0,
+    "ultra_reduction_pct": 0.0,
+    "target_reduction_pct": 60,
+    "target_achieved": false
+  },
+  "processes": [],
+  "summary": {
+    "baseline_series": 3813,
+    "optimized_series": 3813,
+    "ultra_series": 3813,
+    "total_processes": 0
+  }
+}
