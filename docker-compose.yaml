@@ -159,6 +159,40 @@ services:
       resources:
         limits: { cpus: '0.5', memory: '512M' }
 
+  ### Prometheus Pushgateway for synthetic metrics ###
+  pushgateway:
+    image: prom/pushgateway:latest
+    container_name: phoenix-pushgateway
+    ports:
+      - "9091:9091"
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=9091"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9091/-/healthy"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+
+  ### Metric Generator Service ###
+  metric-generator:
+    image: alpine:latest
+    container_name: phoenix-metric-generator
+    volumes:
+      - ./scripts/phoenix-metric-generator.sh:/app/metric-generator.sh:ro
+    environment:
+      - PROMETHEUS_PUSHGATEWAY=http://pushgateway:9091
+    command: |
+      sh -c "
+        apk add --no-cache bash curl bc &&
+        chmod +x /app/metric-generator.sh &&
+        /app/metric-generator.sh
+      "
+    depends_on:
+      pushgateway: {condition: service_healthy}
+    restart: unless-stopped
+
 volumes:
   prometheus_data:
   grafana_data:
