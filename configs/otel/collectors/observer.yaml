@@ -38,11 +38,7 @@ processors:
   resourcedetection:
     detectors: [system, env]
 
-  transform:
-    metric_statements:
-      - context: metric
-        statements:
-          - set(name, "phoenix_pipeline_output_cardinality_estimate") where name matches "phoenix_.*_output_ts_active"
+  # Note: Transform processor removed for now - using direct prometheus export instead
 
 exporters:
   prometheus:
@@ -75,5 +71,5 @@ service:
   pipelines:
     metrics:
       receivers: [prometheus]
-      processors: [resourcedetection, transform, batch]
+      processors: [resourcedetection, batch]
       exporters: [prometheus, logging]

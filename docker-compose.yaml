@@ -36,16 +36,11 @@ services:
     pid: host # As per spec, for hostmetrics.process to see all processes.
     env_file: .env # Loads all variables from .env file
     environment:
-      # HOST_PROC & HOST_SYS are set by root_path in hostmetrics receiver now
-      CONTROL_SIGNALS_PATH_IN_CONTAINER: /etc/otelcol/control/optimization_mode.yaml # For config_sources
-      OTEL_MAIN_MEMBALLAST_MIB_ENV: ${OTELCOL_MAIN_MEMBALLAST_MIB:-640} # For ballast extension
-      # New Relic keys are now directly referenced in main.yaml using ${env:VAR}
       GOMAXPROCS: ${OTELCOL_MAIN_GOMAXPROCS:-4}
-      GOMEMLIMIT: ${OTELCOL_MAIN_MEMORY_LIMIT_MIB:-2560MiB} # Consistent naming
+      GOMEMLIMIT: ${OTELCOL_MAIN_MEMORY_LIMIT_MIB:-2560MiB}
     volumes:
       - ./configs/otel/collectors/main.yaml:/etc/otelcol/config.yaml:ro
       - ./configs/control:/etc/otelcol/control:ro # Main only READS control signals
-      - ./configs/otel/processors:/etc/otelcol/processors:ro # For <% include %> directives
       - /proc:/hostfs/proc:ro # Standard mount for host /proc
       - /sys:/hostfs/sys:ro   # Standard mount for host /sys
       - /etc/hostname:/hostfs/etc/hostname:ro # For host.name detection by resourcedetection
@@ -77,7 +72,6 @@ services:
     command: ["--config=/etc/otelcol/config.yaml"]
     env_file: .env
     environment:
-      OTEL_OBSERVER_MEMBALLAST_MIB_ENV: ${OTELCOL_OBSERVER_MEMBALLAST_MIB:-64}
       GOMAXPROCS: ${OTELCOL_OBSERVER_GOMAXPROCS:-1}
       GOMEMLIMIT: ${OTELCOL_OBSERVER_MEMORY_LIMIT_MIB:-256MiB}
     volumes:
@@ -108,6 +102,15 @@ services:
       dockerfile: Dockerfile.actuator
     # user: "${TARGET_COLLECTOR_UID}:${TARGET_COLLECTOR_GID}"
     env_file: .env
+    command: 
+      - -c
+      - |
+        chmod +x /app/update-control-file.sh
+        while true; do
+          echo "Running control loop iteration..."
+          /app/update-control-file.sh || echo "Control script failed, retrying in 60s..."
+          sleep ${ADAPTIVE_CONTROLLER_INTERVAL_SECONDS:-60}
+        done
     volumes:
       - ./configs/control:/app/control_signals:rw # Script WRITES to control_signals
       - ./apps/control-actuator/update-control-file.sh:/app/update-control-file.sh:ro # Script source

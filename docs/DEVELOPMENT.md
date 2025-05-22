@@ -95,16 +95,12 @@ phoenix-vnext/
 │   ├── control/                       # Dynamic control signals
 │   │   ├── optimization_mode.yaml     # Current control state
 │   │   └── optimization_mode_template.yaml # Control template
-│   ├── dashboards/                    # Grafana dashboards
 │   ├── monitoring/                    # Monitoring stack configs
-│   │   ├── grafana/                   # Grafana provisioning
+│   │   ├── grafana/                   # Grafana provisioning and dashboards
 │   │   └── prometheus/                # Prometheus config and rules
-│   └── otel/                          # OpenTelemetry configurations
-│       ├── collectors/                # Main and observer configs
-│       │   ├── main.yaml              # Main collector config
-│       │   └── observer.yaml          # Observer collector config
-│       └── processors/                # Processor configurations
-│           └── common_intake_processors.yaml
+│   └── otel/collectors/               # OpenTelemetry configurations
+│       ├── main.yaml                  # Main collector config (3 pipelines)
+│       └── observer.yaml              # Observer collector config
 ├── data/                              # Persistent data (gitignored)
 ├── docs/                              # Documentation
 ├── scripts/                           # Operational scripts
