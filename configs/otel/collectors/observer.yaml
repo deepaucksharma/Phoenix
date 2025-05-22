@@ -1,0 +1,112 @@
+# Phoenix v3 Ultimate Stack - Observer OTel Collector Configuration
+# Revision 2025-05-22 · v3.0-final-uX
+# Role: Scrapes cardinality estimates & other KPIs from otelcol-main's pipeline outputs.
+#       Exposes these aggregated/processed KPIs via its own Prometheus endpoint.
+#       The external `update-control-file.sh` script queries this observer's endpoint.
+
+receivers:
+  prometheus/main_pipeline_kpis:
+    config:
+      scrape_configs:
+        - job_name: 'otelcol-main-full-output-kpis'
+          scrape_interval: 15s # Align with main's collection or slightly faster
+          static_configs: [{targets: ['otelcol-main:8888']}] # Full pipeline Prometheus output
+          metric_relabel_configs:
+            - {source_labels: [__name__], regex: '^phoenix_full_final_output_phoenix_full_output_ts_active$', action: keep}
+            - {source_labels: [job], target_label: "source_job", action: replace} # Preserve original job
+            - {target_label: "phoenix_pipeline_label", replacement: "full_fidelity"} # Add pipeline label
+            - {regex: "phoenix_full_final_output_phoenix_full_output_ts_active", replacement: "phoenix_pipeline_output_cardinality_estimate", target_label: "__name__"} # Normalize metric name
+
+        - job_name: 'otelcol-main-opt-output-kpis'
+          scrape_interval: 15s
+          static_configs: [{targets: ['otelcol-main:8889']}] # Optimised pipeline Prometheus output
+          metric_relabel_configs:
+            - {source_labels: [__name__], regex: '^phoenix_opt_final_output_phoenix_optimised_output_ts_active$', action: keep}
+            - {source_labels: [job], target_label: "source_job", action: replace}
+            - {target_label: "phoenix_pipeline_label", replacement: "optimised"}
+            - {regex: "phoenix_opt_final_output_phoenix_optimised_output_ts_active", replacement: "phoenix_pipeline_output_cardinality_estimate", target_label: "__name__"}
+
+        - job_name: 'otelcol-main-exp-output-kpis'
+          scrape_interval: 15s
+          static_configs: [{targets: ['otelcol-main:8890']}] # Experimental pipeline Prometheus output
+          metric_relabel_configs:
+            - {source_labels: [__name__], regex: '^phoenix_exp_final_output_phoenix_experimental_output_ts_active$', action: keep}
+            - {source_labels: [job], target_label: "source_job", action: replace}
+            - {target_label: "phoenix_pipeline_label", replacement: "experimental"}
+            - {regex: "phoenix_exp_final_output_phoenix_experimental_output_ts_active", replacement: "phoenix_pipeline_output_cardinality_estimate", target_label: "__name__"}
+        
+        # Scrape the control file parameters exposed as metrics by otelcol-main (if it does so)
+        # This assumes otelcol-main's :8888 telemetry endpoint also exposes metrics reflecting cfg("ctlfile...")
+        - job_name: 'otelcol-main-control-signal-metrics'
+          scrape_interval: 15s
+          static_configs: [{targets: ['otelcol-main:8888']}]
+          metric_relabel_configs:
+            # Example: if otelcol-main creates a gauge from the control file's config_version
+            - {source_labels: [__name__], regex: 'phoenix_main_applied_control_config_version', action: keep}
+            - {source_labels: [__name__], target_label: "original_metric_name", replacement: "phoenix.main.applied_control_config_version"}
+            # Add similar for phoenix_main_applied_optimisation_profile_is_<profile_name> if exposed
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: '${ENV:OTELCOL_OBSERVER_MEMORY_LIMIT_MIB*0.80 ?: 204}'
+    spike_limit_mib: '${ENV:OTELCOL_OBSERVER_MEMORY_LIMIT_MIB*0.25 ?: 64}'
+
+  resourcedetection/observer:
+    detectors: [env]
+    timeout: 2s
+
+  resource/observer_tags: # Tag metrics processed by this observer
+    attributes:
+      - {key: service.name, value: "phoenix-v3-observer-service", action: upsert}
+      - {key: benchmark.id, value: "${BENCHMARK_ID}", action: upsert} # Inherit from .env
+      - {key: component.type, value: "observer_collector", action: upsert}
+
+  # This processor calculates the cost_reduction_ratio as per spec
+  metricstransform/calculate_derived_kpis:
+    error_mode: ignore
+    transforms:
+      - include: phoenix_pipeline_output_cardinality_estimate # Acts on the normalized metric
+        action: insert # Create a new metric for the ratio
+        # This is complex: requires getting two labels (full and opt) of the *same metric name*
+        # and performing math. Standard metricstransform is not ideal for this.
+        # This logic is better suited for Prometheus Recording Rules or the update-control-file.sh script.
+        # For this OTel config, we can only really pass through the raw cardinalities.
+        # The update-control-file.sh will perform the ratio calculation.
+        # We can, however, aggregate all pipeline cardinalities into a single metric with different labels.
+        # (Already done by scrape relabeling if __name__ is made common and pipeline_strategy_source is a label)
+
+  batch:
+    send_batch_size: 256 # Smaller batches for KPIs
+    timeout: 5s
+
+exporters:
+  prometheus: # Expose all received & processed KPIs for update-control-file.sh script
+    endpoint: "0.0.0.0:9888" # Observer's Prometheus endpoint
+    namespace: "phoenix_observer_kpi_store" # Namespace for metrics exposed BY observer
+    resource_to_telemetry_conversion: {enabled: true}
+    send_timestamps: true
+    metric_expiration: 2m # KPIs should update frequently
+
+  logging/observer_kpi_log_sampled:
+    loglevel: info
+    verbosity: normal
+    sampling_initial: 2
+    sampling_thereafter: 20 # Log KPIs every ~20 batches for debugging
+
+service:
+  extensions: [health_check, pprof, zpages, memory_limiter]
+  telemetry: # Observer's own operational metrics
+    metrics: {address: ":9888"} # Expose on its own Prometheus endpoint
+    logs: {level: info, sampling: {initial: 10, thereafter: 1000}}
+
+  pipelines:
+    metrics/kpi_processing_and_exposure:
+      receivers: [prometheus/main_pipeline_kpis]
+      processors:
+        - memory_limiter
+        - resourcedetection/observer
+        - resource/observer_tags
+        # - metricstransform/calculate_derived_kpis # This logic moved to script
+        - batch
+      exporters: [prometheus, logging/observer_kpi_log_sampled]

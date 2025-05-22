@@ -1,0 +1,76 @@
+# Prometheus Configuration for Phoenix v3 Ultimate Stack
+# Revision 2025-05-22 · v3.0-final-uX
+
+global:
+  scrape_interval: 15s # Default scrape interval
+  evaluation_interval: 30s # How often to evaluate rules
+
+# Alertmanager configuration (if you were using Alertmanager)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['alertmanager:9093'] # If Alertmanager service was present
+
+# Load rule files from this directory.
+rule_files:
+  - "/etc/prometheus_rules/phoenix_rules.yml" # Path inside Prometheus container
+
+scrape_configs:
+  - job_name: 'otelcol-main-telemetry-full'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['otelcol-main:8888'] # Full pipeline output AND collector's own operational telemetry
+    # This endpoint has metrics with namespace "phoenix_full_final_output" AND collector's own (no namespace or 'otelcol')
+    # No specific relabeling needed here if Grafana queries use the full names including namespace.
+    # We add a job label to distinguish this scrape target.
+    relabel_configs:
+      - source_labels: []
+        target_label: otel_pipeline_view
+        replacement: "full_and_collector_self"
+
+  - job_name: 'otelcol-main-optimised'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['otelcol-main:8889'] # Optimised pipeline output (namespace "phoenix_opt_final_output")
+    relabel_configs:
+      - source_labels: []
+        target_label: otel_pipeline_view
+        replacement: "optimised"
+
+  - job_name: 'otelcol-main-experimental'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['otelcol-main:8890'] # Experimental pipeline output (namespace "phoenix_exp_final_output")
+    relabel_configs:
+      - source_labels: []
+        target_label: otel_pipeline_view
+        replacement: "experimental"
+
+  - job_name: 'otelcol-observer-metrics'
+    scrape_interval: 10s # Observer might update its KPIs faster
+    static_configs:
+      - targets: ['otelcol-observer:9888'] # Observer's exposed KPIs (namespace "phoenix_observer_kpi_store")
+    relabel_configs:
+      - source_labels: []
+        target_label: otel_component
+        replacement: "observer"
+
+  - job_name: 'synthetic-metrics-generator' # If generator exposes its own /metrics
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['synthetic-metrics-generator:8899'] # As per its docker-compose port for self-metrics
+    relabel_configs:
+      - source_labels: []
+        target_label: otel_component
+        replacement: "synthetic_generator_self"
+  
+  - job_name: 'control-loop-actuator' # If actuator script were to expose metrics (e.g., via textfile collector)
+    # This is advanced. For now, actuator is observed via its logs and the control file.
+    # scrape_interval: 30s
+    # static_configs:
+    #   - targets: ['control-loop-actuator:9100'] # Hypothetical port
+
+  - job_name: 'prometheus' # Prometheus self-monitoring
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['localhost:9090']

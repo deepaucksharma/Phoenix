@@ -1,0 +1,323 @@
+# Phoenix v3 Ultimate Process-Metrics Stack - Main OTel Collector Configuration
+# Revision 2025-05-22 · v3.0-final-uX
+
+config_sources:
+  ctlfile_optimization_mode: # Renamed for clarity
+    path: ${CONTROL_SIGNALS_PATH_IN_CONTAINER:/etc/otelcol/control/optimization_mode.yaml}
+    watch: true
+    reload_delay: 10s # Time to wait after a file change before attempting reload
+
+receivers:
+  hostmetrics/process_focus: # Renamed for clarity
+    collection_interval: 15s # As per spec for this version
+    root_path: /hostfs # Standardized from /hostfs/proc
+    scrapers:
+      process: # The 'processes' scraper is for per-process, 'process' is for total count
+        metrics:
+          process.cpu.time: {enabled: true}
+          process.memory.usage: {enabled: true} # RSS
+          process.disk.io: {enabled: true}
+          process.threads: {enabled: true}
+          process.open_file_descriptors: {enabled: true}
+        # Mute common system/noise processes statically
+        mute_process_name_error: true
+        exclude_processes_regex:
+          - "^(kworker/.*|migration/.*|rcu_.*|ksoftirqd/.*)$"
+          - "^(systemd.*|dbus-daemon|accounts-daemon|packagekitd|rsyslogd|journald)$"
+          - "^(Xorg|gdm-.*|gnome-shell|gsd-.*|pulseaudio|pipewire.*|ibus-.*|evolution-.*)$"
+          - "^(atop|htop|篠田るか|stress-ng|otelcol.*|prometheus|grafana|control-loop-actuator|dockerd)$"
+          - "^(containerd-shim-runc-v2|runc|docker-proxy)$"
+          - "^(snapd|multipassd|ModemManager|NetworkManager|agetty|irqbalance)$"
+          - "^(anacron|cron|atd)$"
+        resource_attributes: # Attributes to extract if available
+          process.executable.name: {enabled: true}
+          process.command_line: {enabled: true}
+          process.owner: {enabled: true}
+          process.pid: {enabled: true} # Collected initially, stripped based on pipeline logic
+          # process.parent_pid: {enabled: true} # Collected, stripped globally
+
+  otlp: # For synthetic metrics from our Go generator
+    protocols:
+      http: {endpoint: "0.0.0.0:4318"}
+      # grpc: {endpoint: "0.0.0.0:4317"} # Enable if synthetic generator uses gRPC
+
+processors:
+  # Common processors applied to all metrics first in metrics/common_intake
+  <% include /etc/otelcol/processors/common_intake_processors.yaml %>
+
+  # Pipeline-specific processor chains (these will be included in their respective pipelines)
+  # Example of how they might be structured if using includes:
+  # optim_pipeline_chain: <% include /etc/otelcol/processors/optimised_pipeline_processors.yaml %>
+  # exp_pipeline_chain: <% include /etc/otelcol/processors/experimental_pipeline_processors.yaml %>
+  # For this dump, processors will be defined inline in pipelines for clarity.
+
+  # --- Full Fidelity Pipeline Processors ---
+  resource/tag_pipeline_full:
+    attributes:
+      - {key: phoenix.pipeline.strategy, value: "full_fidelity", action: upsert}
+  transform/full_attribute_management: # Keep most attributes, strip only PIDs
+    error_mode: ignore
+    metric_statements:
+      - context: resource
+        statements:
+          - delete_key(attributes, "process.pid")
+          - delete_key(attributes, "process.parent_pid")
+  cardinality/estimator_full:
+    metric_name: "phoenix_full_output_ts_active" # Corrected metric name
+    mode: stream
+    attributes: [host.name, service.name, "process.executable.name", "phoenix.priority", "k8s.pod.name", "k8s.namespace.name", "container.id"] # Full set for baseline
+
+  # --- Optimised Pipeline Processors ---
+  resource/tag_pipeline_optimised:
+    attributes:
+      - {key: phoenix.pipeline.strategy, value: "optimised", action: upsert}
+  filter/optimised_selection: # As per spec: drop ~60-70% of low-value
+    metrics: # This filter keeps metrics that match, others are dropped (default filter behavior)
+      metric_name: "process.cpu.time" # Base decision on a key metric
+      # OTTL expression to select processes to KEEP for the optimised pipeline
+      expression: |
+        resource.attributes["phoenix.priority"] == "critical" OR
+        (resource.attributes["phoenix.priority"] == "high" AND metric.double_value > 0.05) OR
+        (resource.attributes["phoenix.priority"] == "medium" AND metric.double_value > 0.1)
+        # Low priority processes are implicitly dropped by this filter if not critical/high/medium meeting thresholds.
+  transform/optimised_rollup_prep: # Prepares for rollup (for those NOT dropped by filter/optimised_selection)
+                                  # This is tricky. This transform applies to what PASSES the filter.
+                                  # To rollup what's DROPPED, you need a different path or "negation" filter.
+                                  # For this simulation, we'll assume this transform acts on what REMAINS,
+                                  # and the "others" rollup is for specific low-priority items that might still pass.
+    error_mode: ignore
+    metric_statements:
+      - context: resource
+        statements:
+          # If a medium priority process has low CPU (but still passed the filter due to other reasons, or if filter was broader), mark for rollup.
+          - set(attributes["phoenix.aggregate_marker"], "true") where resource.attributes["phoenix.priority"] == "medium" AND GetFloat(metric.datapoints[0],"process.cpu.time_value_placeholder") < 0.05 # Needs actual metric value
+          - set(attributes["process.executable.name"], Concat([resource.attributes["phoenix.priority"],"_others_optimised"], "")) where attributes["phoenix.aggregate_marker"] == "true"
+          - set(attributes["rollup.process.count"], 1) where attributes["phoenix.aggregate_marker"] == "true"
+  groupbyattrs/optimised_rollup:
+    keys: [host.name, service.name, "process.executable.name", "phoenix.pipeline.strategy", "phoenix.optimisation_profile", "phoenix.priority"]
+    aggregation_type: sum
+    # aggregations: # Example for averaging gauges if needed
+    #   - metric_name_prefix: process.memory
+    #     function: average
+  transform/optimised_attribute_cleanup: # As per spec
+    error_mode: ignore
+    metric_statements:
+      - context: resource
+        statements:
+          - delete_key(attributes, "process.command_line") where attributes["phoenix.priority"] != "critical"
+          - delete_key(attributes, "process.owner") where attributes["phoenix.priority"] == "low" # Should be medium_generic or similar based on priority_engine
+          - delete_key(attributes, "container.id") # Generally strip for optimised
+          - keep_keys(attributes, GetPath(cfg("ctlfile_optimization_mode"), "optimised_pipeline_keep_attributes", ["host.name", "service.name", "process.executable.name", "phoenix.pipeline.strategy", "phoenix.optimisation_profile", "phoenix.priority", "phoenix.aggregate_marker", "rollup.process.count", "benchmark.id", "deployment.environment", "k8s.pod.name", "k8s.namespace.name", "phoenix.control.correlation_id"])) # Default list
+  cardinality/estimator_optimised: # Corrected metric name
+    metric_name: "phoenix_optimised_output_ts_active"
+    mode: stream
+    attributes: [host.name, service.name, "process.executable.name", "phoenix.priority", "phoenix.aggregate_marker"]
+
+  # --- Experimental Pipeline Processors ---
+  resource/tag_pipeline_experimental:
+    attributes:
+      - {key: phoenix.pipeline.strategy, value: "experimental_topk", action: upsert}
+  # Using experimental_spacesavingprocessor (assuming 0.103.1 has a stable version or equivalent)
+  # If this specific processor is not available, this section would use very aggressive static filters
+  # and more complex transform/groupbyattrs to simulate dynamic Top-K based on an external list from ctlfile.
+  experimental_spacesavingprocessor/topk_cpu_experimental:
+    k_value: '${ToInt(GetPath(cfg("ctlfile_optimization_mode"), "advanced_phoenix_parameters.target_k_value_for_experimental_topk", 15))}' # Highly conceptual direct sourcing
+    # More realistically, this K would be fixed for this "aggressive profile" pipeline.
+    # k_value: 15 # Static K for this aggressive experimental path
+    dimensions: ["process.executable.name", "custom.service.tier_simulated"] # Perform Top-K on unique combinations of these
+    metric_source: "process.cpu.time" # Rank by this metric's value
+    action_on_non_topk: drop # Drop metrics not in the Top-K
+    add_is_topk_attribute: true # Adds 'is_topk: true' for kept items
+    # This processor should ideally output its own coverage metric.
+
+  transform/experimental_rollup_marker: # For items dropped by spacesaving (conceptual)
+                                        # This would require a separate stream of "dropped" items from spacesaving.
+                                        # Simpler: items that are NOT critical and are NOT 'is_topk: true' (if spacesaving could tag input before dropping)
+    error_mode: ignore
+    metric_statements:
+      - context: resource # Assume this runs on a replicated stream *before* spacesaving drops.
+        statements:
+          - set(attributes["phoenix.aggregate_marker"], "true") where attributes["phoenix.priority"] NOT IN ("critical") AND attributes["is_topk"] != "true" # is_topk would be set by a preceding processor or spacesaving itself if it could tag originals
+          - set(attributes["process.executable.name"], "phoenix.others.experimental_aggressive") where attributes["phoenix.aggregate_marker"] == "true"
+          - set(attributes["rollup.process.count"], 1) where attributes["phoenix.aggregate_marker"] == "true"
+  groupbyattrs/experimental_rollup:
+    keys: [host.name, service.name, "process.executable.name", "phoenix.pipeline.strategy", "phoenix.optimisation_profile"]
+    aggregation_type: sum
+  transform/experimental_attribute_cleanup: # Most aggressive stripping
+    error_mode: ignore
+    metric_statements:
+      - context: resource
+        statements:
+          - keep_keys(attributes, ["host.name", "service.name", "process.executable.name", "phoenix.pipeline.strategy", "phoenix.optimisation_profile", "phoenix.priority", "phoenix.aggregate_marker", "rollup.process.count", "benchmark.id"])
+  cardinality/estimator_experimental: # Corrected metric name
+    metric_name: "phoenix_experimental_output_ts_active"
+    mode: stream
+    attributes: [host.name, service.name, "process.executable.name", "phoenix.priority", "phoenix.aggregate_marker"]
+
+  # Final batcher common to all pipelines (applied in each pipeline definition)
+  batch/final_export_batcher:
+    send_batch_size: 8192
+    timeout: 10s # Increased timeout as per spec
+    send_batch_max_size: 16384 # Allow larger batches
+
+exporters:
+  # To New Relic - distinct for each pipeline. Assumes ENABLE_NR_EXPORT_* are "true" or "false" strings.
+  otlphttp/newrelic_full:
+    endpoint: '${env:NEW_RELIC_OTLP_ENDPOINT}'
+    headers: {"api-key": "${env:NEW_RELIC_LICENSE_KEY_FULL}"}
+    sending_queue: {enabled: true, queue_size: 2000, num_consumers: 3}
+    retry_on_failure: {enabled: true, initial_interval: 10s, max_interval: 90s, max_elapsed_time: 15m}
+    compression: gzip
+    # No direct enabled flag in exporter; managed by routing to null or pipeline filtering.
+
+  otlphttp/newrelic_optimised:
+    endpoint: '${env:NEW_RELIC_OTLP_ENDPOINT}'
+    headers: {"api-key": "${env:NEW_RELIC_LICENSE_KEY_OPTIMISED}"}
+    sending_queue: {enabled: true, queue_size: 2000, num_consumers: 3} # Increased consumers
+    retry_on_failure: {enabled: true, initial_interval: 5s, max_interval: 60s, max_elapsed_time: 10m}
+    compression: gzip
+
+  otlphttp/newrelic_experimental:
+    endpoint: '${env:NEW_RELIC_OTLP_ENDPOINT}'
+    headers: {"api-key": "${env:NEW_RELIC_LICENSE_KEY_EXPERIMENTAL}"}
+    sending_queue: {enabled: true, queue_size: 1000, num_consumers: 2} # Slightly smaller for experimental
+    retry_on_failure: {enabled: true, initial_interval: 5s, max_interval: 30s, max_elapsed_time: 5m}
+    compression: gzip
+
+  logging/dev_null_exporter: # A no-op exporter to effectively disable a path
+    loglevel: none # Or error, to only log if something unexpected happens
+
+  # Local Prometheus exporters for debugging each path's output
+  prometheus/output_full:
+    endpoint: "0.0.0.0:8888" # Also used for collector's own telemetry
+    namespace: "phoenix_full_final_output" # Match Prometheus scrape job
+    resource_to_telemetry_conversion: {enabled: true}
+    send_timestamps: true
+    metric_expiration: 5m # Shorter expiration for dynamic metrics
+  prometheus/output_optimised:
+    endpoint: "0.0.0.0:8889"
+    namespace: "phoenix_opt_final_output"
+    resource_to_telemetry_conversion: {enabled: true}
+    send_timestamps: true
+    metric_expiration: 5m
+  prometheus/output_experimental:
+    endpoint: "0.0.0.0:8890"
+    namespace: "phoenix_exp_final_output"
+    resource_to_telemetry_conversion: {enabled: true}
+    send_timestamps: true
+    metric_expiration: 5m
+
+  logging/debug_final_output_sampled:
+    loglevel: info
+    verbosity: basic # Basic is usually enough for sampled output
+    sampling_initial: 2 # Log first 2 batches from each pipeline
+    sampling_thereafter: 1000 # Then 1 in 1000
+
+connectors:
+  routing/fanout_to_pipelines: # Replaces replicate for clarity on intent
+    # This connector effectively replicates data to multiple downstream pipelines.
+    # It doesn't change the data itself.
+    # For "activating" one pipeline, filtering will be done at the start of each target pipeline.
+    default_pipelines: [] # No default, explicit routing to all three for A/B/C
+    table: # This setup sends ALL data to ALL three for parallel processing.
+      - statement: 'true' # Always true
+        pipelines:
+          - metrics/pipeline_full_fidelity
+          - metrics/pipeline_optimised
+          - metrics/pipeline_experimental_topk
+    # If we wanted to ACTIVATE only one based on profile, the table would be:
+    # table:
+    #   - statement: 'resource.attributes["phoenix.optimisation_profile"] == "conservative"'
+    #     pipelines: [metrics/pipeline_full_fidelity] # only send to full if conservative
+    #   - statement: 'resource.attributes["phoenix.optimisation_profile"] == "balanced"'
+    #     pipelines: [metrics/pipeline_optimised]
+    #   - statement: 'resource.attributes["phoenix.optimisation_profile"] == "aggressive"'
+    #     pipelines: [metrics/pipeline_experimental_topk]
+    # And then each pipeline would export to the *same* New Relic key.
+    # For this A/B/C setup, we use replicate and distinct NR keys.
+
+extensions:
+  health_check: { endpoint: "0.0.0.0:13133" }
+  pprof: { endpoint: "0.0.0.0:1777" }
+  zpages: { endpoint: "0.0.0.0:55679" }
+  memory_limiter: {} # Define the extension for the processor to use
+  memory_ballast: # As per spec for resource management
+    size_mib: ${OTEL_MAIN_MEMBALLAST_MIB_ENV}
+
+service:
+  extensions: [health_check, pprof, zpages, memory_limiter, memory_ballast]
+  telemetry:
+    metrics: {address: ":8888", level: detailed} # Collector's own operational metrics exposed on full_output endpoint
+    logs: {level: info, development: false, encoding: json, sampling: {initial: 5, thereafter: 200}}
+
+  pipelines:
+    metrics/common_intake: # All data starts here
+      receivers: [hostmetrics/process_focus, otlp] # OTLP for synthetic metrics
+      processors:
+        # Order is critical
+        - memory_limiter # Absolute first
+        - resourcedetection/common
+        - transform/common_intake_processing # Adds benchmark tags, dynamic profile tag from ctlfile
+        - cumulativetodelta
+        - transform/priority_engine # Sets phoenix.priority
+        - transform/global_pid_strip # Basic global stripping (PIDs if collected)
+      exporters: [routing/fanout_to_pipelines] # Fan out to the three main paths
+
+    # Path 1: Full Fidelity (Minimal Processing, mainly tagging for context)
+    metrics/pipeline_full_fidelity:
+      receivers: [routing/fanout_to_pipelines] # Input from fan-out
+      processors:
+        # Filter: Only process if profile is 'conservative' OR if explicit full fidelity export is enabled
+        # This ensures this pipeline only exports to its NR key when appropriate.
+        - filter: # Implicit name, should be e.g. filter/enable_full_path
+            error_mode: ignore
+            metrics:
+              metric_name: ".*" # Apply to all metrics
+              expression: 'resource.attributes["phoenix.optimisation_profile"] == "conservative" OR "${env:ENABLE_NR_EXPORT_FULL}" == "true"'
+        - memory_limiter # Path-specific context for limiter
+        - resource/tag_pipeline_full # Tag data as from this pipeline
+        - transform/full_attribute_management # Minimal stripping for full fidelity
+        - cardinality/estimator_full
+        - batch/final_export_batcher
+      exporters: [prometheus/output_full, otlphttp/newrelic_full, logging/debug_sampled_output_sampled]
+
+    # Path 2: Optimised (Static Rules simulating Top-K, Rollup, Attribute Stripping)
+    metrics/pipeline_optimised:
+      receivers: [routing/fanout_to_pipelines]
+      processors:
+        - filter: # Implicit name, e.g. filter/enable_optimised_path
+            error_mode: ignore
+            metrics:
+              metric_name: ".*"
+              expression: 'resource.attributes["phoenix.optimisation_profile"] IN ("conservative", "balanced") OR "${env:ENABLE_NR_EXPORT_OPTIMISED}" == "true"'
+        - memory_limiter
+        - resource/tag_pipeline_optimised
+        - filter/optimised_selection # Static Top-K sim
+        - transform/optimised_rollup_prep
+        - groupbyattrs/optimised_rollup
+        - transform/optimised_attribute_cleanup
+        - cardinality/estimator_optimised
+        - batch/final_export_batcher
+      exporters: [prometheus/output_optimised, otlphttp/newrelic_optimised, logging/debug_sampled_output_sampled]
+
+    # Path 3: Experimental (Actual SpaceSavingProcessor or very aggressive static rules)
+    metrics/pipeline_experimental_topk:
+      receivers: [routing/fanout_to_pipelines]
+      processors:
+        - filter: # Implicit name, e.g. filter/enable_experimental_path
+            error_mode: ignore
+            metrics:
+              metric_name: ".*"
+              expression: 'resource.attributes["phoenix.optimisation_profile"] == "aggressive" OR "${env:ENABLE_NR_EXPORT_EXPERIMENTAL}" == "true"'
+        - memory_limiter
+        - resource/tag_pipeline_experimental
+        # If experimental_spacesavingprocessor is available and configured:
+        - experimental_spacesavingprocessor/topk_cpu_experimental
+        # Else, simulate with very aggressive static filters:
+        # - filter/experimental_very_aggressive_selection: { ... }
+        - transform/experimental_rollup_marker # For items NOT in TopK
+        - groupbyattrs/experimental_rollup
+        - transform/experimental_attribute_cleanup
+        - cardinality/estimator_experimental
+        - batch/final_export_batcher
+      exporters: [prometheus/output_experimental, otlphttp/newrelic_experimental, logging/debug_sampled_output_sampled]
