@@ -246,3 +246,71 @@ groups:
             phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{phoenix_pipeline_label="optimised"} /
             phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{phoenix_pipeline_label="full_fidelity"}
           )
+
+  - name: phoenix_benchmark_metrics
+    interval: 30s
+    rules:
+      # Edge to NR ingest delta ratio
+      - record: phoenix_benchmark_ingest_delta_ratio
+        expr: |
+          abs(
+            (sum by (pipeline) (rate(phoenix_benchmark_nr_ingest_bytes[5m])) - 
+             sum by (pipeline) (rate(phoenix_edge_ingest_bytes[5m]))) /
+            sum by (pipeline) (rate(phoenix_edge_ingest_bytes[5m]))
+          )
+        labels:
+          comparison: "edge_vs_nr"
+
+      # Entity yield calculation
+      - record: phoenix_benchmark_entity_yield_calculated
+        expr: |
+          count by (pipeline) (
+            count by (entity_guid, pipeline) (
+              phoenix_exp_final_output_process_cpu_time_total
+            )
+          ) / 
+          count by (pipeline) (
+            count by (process_executable_name, host_name, pipeline) (
+              phoenix_exp_final_output_process_cpu_time_total
+            )
+          )
+
+      # Cost per active time series
+      - record: phoenix_benchmark_cost_per_ts_calculated
+        expr: |
+          # Assuming $0.00001 per time series per minute
+          0.00001 * 
+          phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate
+
+      # Validation pass/fail status
+      - record: phoenix_benchmark_validation_status
+        expr: |
+          (phoenix_benchmark_ingest_latency_seconds{percentile="p95"} <= 30) *
+          (phoenix_benchmark_cost_per_timeseries_usd <= 0.00001) *
+          (phoenix_benchmark_entity_yield_ratio >= 0.95) *
+          (phoenix_benchmark_feature_drift_percent >= -0.05)
+        labels:
+          validation: "composite_status"
+
+      # Memory efficiency score
+      - record: phoenix_benchmark_memory_efficiency
+        expr: |
+          1 - (
+            sum by (pipeline) (container_memory_usage_bytes{name=~".*otelcol-main.*"}) /
+            sum by (pipeline) (phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate) /
+            1024  # Bytes per time series
+          ) / 1000  # Target: < 1KB per TS
+
+      # Processing latency impact
+      - record: phoenix_benchmark_latency_impact
+        expr: |
+          histogram_quantile(0.95,
+            sum by (pipeline, le) (
+              rate(otelcol_processor_process_duration_seconds_bucket[5m])
+            )
+          ) - 
+          histogram_quantile(0.95,
+            sum by (le) (
+              rate(otelcol_processor_process_duration_seconds_bucket{processor="memory_limiter"}[5m])
+            )
+          )
