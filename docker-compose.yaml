@@ -20,6 +20,7 @@ services:
       - "8888:8888"   # Prometheus: Full pipeline output AND collector's own telemetry
       - "8889:8889"   # Prometheus: Optimised pipeline output
       - "8890:8890"   # Prometheus: Experimental pipeline output
+      - "8891:8891"   # Prometheus: Cardinality observatory output
       - "13133:13133" # health_check
       - "1777:1777"   # pprof (as per spec)
       - "55679:55679" # zpages (as per spec)
