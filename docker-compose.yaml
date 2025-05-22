@@ -3,7 +3,7 @@ version: "3.9"
 services:
   ### Workload Generators: Provide diverse, sustained load ###
   stress-ng-cpu-heavy:
-    image: polinux/stress-ng:0.17.05 # Pin version
+    image: alexeiled/stress-ng:latest # Pin version
     command: >
       stress-ng --cpu 0 --cpu-load 75 --cpu-method all 
       --matrix 0 --matrix-size 128 --matrix-ops 100000
@@ -17,7 +17,7 @@ services:
         limits: { cpus: '2.0', memory: '1G' } # Adjusted from spec for more focused load
 
   stress-ng-io-heavy:
-    image: polinux/stress-ng:0.17.05
+    image: alexeiled/stress-ng:latest
     command: >
       stress-ng --io 0 --io-ops 20000 
       --hdd 0 --hdd-bytes 256M --hdd-ops 2500 # Reduced hdd load slightly

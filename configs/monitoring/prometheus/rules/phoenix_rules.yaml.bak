@@ -56,8 +56,8 @@ groups:
         expr: phoenix:cost_reduction_ratio_optimised_vs_full < 0.40 and phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{phoenix_pipeline_label="full_fidelity", job="otelcol-observer-metrics"} > 1000 for 15m
         labels: {severity: warning, team: observability, component: phoenix_control_loop}
         annotations:
-          summary: "Phoenix optimised pipeline cost reduction is below 40% target (Currently: {{ $value | printf "%.2f" }})"
-          description: "The Optimised pipeline is not achieving the desired 40% cost reduction compared to Full Fidelity, and full fidelity has significant volume. Current reduction: {{ $value | printf "%.2f" }}. This might indicate an issue with optimised pipeline filters or unexpected data changes. Full Fidelity TS: {{ query "sum(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{phoenix_pipeline_label='full_fidelity', job='otelcol-observer-metrics'})" | first | value | printf "%.0f" }}."
+          summary: "Phoenix optimised pipeline cost reduction is below 40% target (Currently: {{ $value | printf \"%.2f\" }})"
+          description: "The Optimised pipeline is not achieving the desired 40% cost reduction compared to Full Fidelity, and full fidelity has significant volume. Current reduction: {{ $value | printf \"%.2f\" }}. This might indicate an issue with optimised pipeline filters or unexpected data changes. Full Fidelity TS: {{ query \"sum(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{phoenix_pipeline_label='full_fidelity', job='otelcol-observer-metrics'})\" | first | value | printf \"%.0f\" }}."
 
       - alert: PhoenixControlFileNotUpdating
         # If config_version hasn't changed in a while
