@@ -1,0 +1,203 @@
+openapi: 3.0.3
+info:
+  title: Phoenix Control Plane API
+  description: API for managing Phoenix adaptive control system
+  version: 1.0.0
+  contact:
+    name: Phoenix Team
+    url: https://github.com/deepaucksharma/Phoenix
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development
+
+paths:
+  /control:
+    get:
+      summary: Get current control mode
+      operationId: getControlMode
+      responses:
+        '200':
+          description: Current control mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ControlStatus'
+    
+    post:
+      summary: Override control mode
+      operationId: setControlMode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlRequest'
+      responses:
+        '200':
+          description: Control mode updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ControlResponse'
+        '400':
+          description: Invalid request
+        '409':
+          description: Conflict with current state
+
+  /status:
+    get:
+      summary: Get system status
+      operationId: getStatus
+      responses:
+        '200':
+          description: System status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStatus'
+
+  /metrics:
+    get:
+      summary: Get current KPI metrics
+      operationId: getMetrics
+      parameters:
+        - name: pipeline
+          in: query
+          schema:
+            type: string
+            enum: [full_fidelity, optimized, experimental_topk, observatory]
+      responses:
+        '200':
+          description: Current metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KPIMetrics'
+
+components:
+  schemas:
+    OptimizationMode:
+      type: string
+      enum:
+        - conservative
+        - balanced
+        - aggressive
+      description: Cardinality optimization profile
+
+    ControlStatus:
+      type: object
+      required:
+        - mode
+        - timestamp
+      properties:
+        mode:
+          $ref: '#/components/schemas/OptimizationMode'
+        timestamp:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          description: Reason for current mode
+
+    ControlRequest:
+      type: object
+      required:
+        - mode
+      properties:
+        mode:
+          $ref: '#/components/schemas/OptimizationMode'
+        duration_seconds:
+          type: integer
+          minimum: 60
+          maximum: 3600
+          description: Duration for override (60-3600 seconds)
+        reason:
+          type: string
+          description: Reason for override
+
+    ControlResponse:
+      type: object
+      required:
+        - success
+        - current_mode
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        current_mode:
+          $ref: '#/components/schemas/OptimizationMode'
+        previous_mode:
+          $ref: '#/components/schemas/OptimizationMode'
+
+    SystemStatus:
+      type: object
+      required:
+        - uptime_seconds
+        - current_mode
+        - pipelines
+      properties:
+        uptime_seconds:
+          type: integer
+        current_mode:
+          $ref: '#/components/schemas/OptimizationMode'
+        pipelines:
+          type: array
+          items:
+            $ref: '#/components/schemas/PipelineStatus'
+        recent_transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModeTransition'
+
+    PipelineStatus:
+      type: object
+      required:
+        - name
+        - healthy
+        - cardinality
+      properties:
+        name:
+          type: string
+        healthy:
+          type: boolean
+        cardinality:
+          type: integer
+        metrics_per_second:
+          type: number
+
+    KPIMetrics:
+      type: object
+      properties:
+        cardinality_estimate:
+          type: integer
+        cpu_utilization:
+          type: number
+          minimum: 0
+          maximum: 1
+        memory_utilization:
+          type: number
+          minimum: 0
+          maximum: 1
+        processing_latency_ms:
+          type: number
+        dropped_metrics_count:
+          type: integer
+
+    ModeTransition:
+      type: object
+      required:
+        - from_mode
+        - to_mode
+        - timestamp
+      properties:
+        from_mode:
+          $ref: '#/components/schemas/OptimizationMode'
+        to_mode:
+          $ref: '#/components/schemas/OptimizationMode'
+        timestamp:
+          type: string
+          format: date-time
+        reason:
+          type: string

@@ -1,0 +1,16 @@
+{
+  "name": "@phoenix/control-observer",
+  "version": "1.0.0",
+  "description": "Phoenix control plane observer service",
+  "private": true,
+  "scripts": {
+    "build": "echo 'Observer uses OTEL binary'",
+    "build:docker": "docker build -f Dockerfile -t phoenix-observer:latest .",
+    "test": "echo 'No tests for observer config'",
+    "lint": "yamllint config/*.yaml",
+    "dev": "docker-compose -f ../../../infrastructure/docker/compose/dev.yaml up observer"
+  },
+  "dependencies": {
+    "@phoenix/contracts": "workspace:*"
+  }
+}

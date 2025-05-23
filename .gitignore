@@ -1,22 +1,29 @@
-# Runtime data directories
-data/
+# Dependencies
+node_modules/
+vendor/
+.pnp
+.pnp.js
 
-# Environment files
-.env
-
-# Go build artifacts
-apps/synthetic-generator/generator
+# Build outputs
+dist/
+build/
+*.out
 *.exe
 *.dll
 *.so
 *.dylib
 
-# Go test files
-*.test
-*.out
+# Test coverage
+coverage/
+*.lcov
+.nyc_output/
 
-# Go module cache
-go.sum
+# Environment files
+.env
+.env.local
+.env.*.local
+config/environments/*/.env
+!config/environments/*/.env.example
 
 # IDE files
 .vscode/
@@ -24,20 +31,89 @@ go.sum
 *.swp
 *.swo
 *~
+.project
+.classpath
+.settings/
 
 # OS files
 .DS_Store
 Thumbs.db
 
-# Temporary files
-*.tmp
+# Logs
+logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
 
-# Debug collections
-debug-*/
-phoenix-debug-*.tar.gz
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
 
-# Docker volumes
-prometheus_data/
-grafana_data/
-otelcol_data/
+# Data directories
+data/
+prometheus-data/
+grafana-data/
+control-signals/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Docker
+.docker/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# Certificates
+*.pem
+*.key
+*.crt
+*.csr
+
+# Backup files
+*.backup
+*.bak
+backup/
+
+# Cache
+.cache/
+.turbo/
+.parcel-cache/
+
+# Package manager files
+yarn.lock
+package-lock.json
+pnpm-lock.yaml
+
+# Monitoring data
+monitoring/prometheus/data/
+monitoring/grafana/data/
+
+# Benchmark results
+benchmark-results/
+*.sqlite
+*.db
+
+# Generated files
+packages/contracts/dist/
+services/*/dist/
+tools/*/dist/
+
+# Documentation build
+docs/_build/
+docs/.docusaurus/
+docs/node_modules/

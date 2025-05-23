@@ -1,0 +1,159 @@
+# Phoenix Benchmark Configuration
+# This file configures the continuous validation system
+
+benchmark:
+  # Validation interval
+  validation_interval: 60s
+  
+  # Thresholds for pass/fail criteria
+  thresholds:
+    # Maximum acceptable end-to-end ingest latency (P95)
+    max_ingest_latency_p95: 30s
+    
+    # Minimum cost reduction vs baseline (65% = 35% of original cost)
+    min_cost_reduction: 0.65
+    
+    # Minimum entity yield (entities with metrics / pushed entities)
+    min_entity_yield: 0.95
+    
+    # Maximum feature coverage drift over 30 days
+    max_feature_drift: -0.05
+
+  # New Relic configuration
+  newrelic:
+    # API endpoint (US or EU)
+    api_endpoint: "https://api.newrelic.com"
+    
+    # Account ID for NerdGraph queries
+    account_id: "${NEW_RELIC_ACCOUNT_ID}"
+    
+    # API key with appropriate permissions
+    api_key: "${NEW_RELIC_API_KEY}"
+    
+    # NRDB query timeout
+    query_timeout: 30s
+
+  # Prometheus configuration
+  prometheus:
+    # Prometheus server URL
+    url: "http://prometheus:9090"
+    
+    # Query timeout
+    query_timeout: 30s
+
+  # Database configuration
+  database:
+    # SQLite database path
+    path: "/data/benchmark.db"
+    
+    # Retention period for results
+    retention_days: 90
+
+  # Alerting configuration
+  alerting:
+    # Enable webhook notifications
+    enabled: true
+    
+    # Webhook URL for notifications
+    webhook_url: "${BENCHMARK_WEBHOOK_URL}"
+    
+    # Minimum interval between alerts
+    alert_cooldown: 300s
+
+  # Machine learning configuration
+  ml:
+    # Enable ML-based anomaly detection
+    enabled: true
+    
+    # Anomaly detection sensitivity (0.0-1.0)
+    sensitivity: 0.7
+    
+    # Training window for baseline
+    training_window: 7d
+    
+    # Prediction horizon
+    prediction_horizon: 1h
+
+# Synthetic load profiles
+load_profiles:
+  default:
+    name: "default"
+    process_count_min: 500
+    process_count_max: 2000
+    host_count: 20
+    service_count: 10
+    spike_enabled: true
+    spike_probability: 0.1
+    spike_multiplier: 3.0
+    cardinality_explosion_prob: 0.05
+    anomaly_injection_prob: 0.2
+    metric_interval: 15s
+
+  stress:
+    name: "stress"
+    process_count_min: 2000
+    process_count_max: 5000
+    host_count: 50
+    service_count: 25
+    spike_enabled: true
+    spike_probability: 0.2
+    spike_multiplier: 5.0
+    cardinality_explosion_prob: 0.1
+    anomaly_injection_prob: 0.3
+    metric_interval: 10s
+
+  minimal:
+    name: "minimal"
+    process_count_min: 100
+    process_count_max: 200
+    host_count: 5
+    service_count: 3
+    spike_enabled: false
+    spike_probability: 0.0
+    spike_multiplier: 1.0
+    cardinality_explosion_prob: 0.0
+    anomaly_injection_prob: 0.0
+    metric_interval: 30s
+
+# Benchmark test scenarios
+test_scenarios:
+  - name: "baseline_validation"
+    description: "Validate baseline metrics collection"
+    duration: 5m
+    load_profile: "default"
+    validations:
+      - type: "latency"
+        threshold: 30s
+      - type: "entity_yield"
+        threshold: 0.95
+
+  - name: "cost_optimization"
+    description: "Validate cost reduction targets"
+    duration: 15m
+    load_profile: "default"
+    validations:
+      - type: "cost_reduction"
+        threshold: 0.65
+      - type: "signal_preservation"
+        threshold: 0.85
+
+  - name: "stress_test"
+    description: "Validate under high load"
+    duration: 30m
+    load_profile: "stress"
+    validations:
+      - type: "latency"
+        threshold: 60s
+      - type: "error_rate"
+        threshold: 0.01
+
+  - name: "cardinality_explosion"
+    description: "Validate cardinality explosion handling"
+    duration: 10m
+    load_profile: "default"
+    trigger_explosion: true
+    validations:
+      - type: "cardinality_limit"
+        threshold: 50000
+      - type: "memory_usage"
+        threshold: 1024  # MB

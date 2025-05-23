@@ -1,0 +1,153 @@
+version: '3.8'
+
+x-common-env: &common-env
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  ENVIRONMENT: ${ENVIRONMENT:-development}
+
+x-healthcheck: &default-healthcheck
+  interval: 20s
+  timeout: 5s
+  retries: 3
+  start_period: 10s
+
+services:
+  # Core Collector Service
+  collector:
+    image: phoenix-collector:${VERSION:-latest}
+    build:
+      context: ../../../services/collector
+      dockerfile: Dockerfile
+    container_name: phoenix-collector
+    ports:
+      - "4318:4318"    # OTLP ingestion
+      - "8888:8888"    # Full fidelity metrics
+      - "8889:8889"    # Optimized metrics
+      - "8890:8890"    # Experimental metrics
+      - "8891:8891"    # Observatory metrics
+      - "13133:13133"  # Health check
+    environment:
+      <<: *common-env
+      CONFIG_PATH: /etc/phoenix/main.yaml
+      CONTROL_FILE_PATH: /etc/phoenix/control/optimization_mode.yaml
+    volumes:
+      - collector-config:/etc/phoenix:ro
+      - control-signals:/etc/phoenix/control
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "curl", "-f", "http://localhost:13133"]
+    networks:
+      - phoenix-net
+
+  # Control Plane - Observer
+  observer:
+    image: phoenix-observer:${VERSION:-latest}
+    build:
+      context: ../../../services/control-plane/observer
+      dockerfile: Dockerfile
+    container_name: phoenix-observer
+    ports:
+      - "9888:9888"    # KPI metrics
+      - "13134:13134"  # Health check
+    environment:
+      <<: *common-env
+      CONFIG_PATH: /etc/phoenix/observer.yaml
+    volumes:
+      - observer-config:/etc/phoenix:ro
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "curl", "-f", "http://localhost:13134"]
+    networks:
+      - phoenix-net
+
+  # Control Plane - Actuator
+  actuator:
+    image: phoenix-actuator:${VERSION:-latest}
+    build:
+      context: ../../../services/control-plane/actuator
+      dockerfile: Dockerfile
+    container_name: phoenix-actuator
+    ports:
+      - "8080:8080"  # Control API
+    environment:
+      <<: *common-env
+      PROMETHEUS_URL: ${PROMETHEUS_URL:-http://prometheus:9090}
+      OBSERVER_METRIC_NAME: ${OBSERVER_METRIC_NAME:-phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate}
+      TARGET_OPTIMIZED_PIPELINE_TS_COUNT: ${TARGET_OPTIMIZED_PIPELINE_TS_COUNT:-20000}
+      THRESHOLD_OPTIMIZATION_CONSERVATIVE_MAX_TS: ${THRESHOLD_OPTIMIZATION_CONSERVATIVE_MAX_TS:-15000}
+      THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS: ${THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS:-25000}
+      ADAPTIVE_CONTROLLER_INTERVAL_SECONDS: ${ADAPTIVE_CONTROLLER_INTERVAL_SECONDS:-60}
+      ADAPTIVE_CONTROLLER_STABILITY_SECONDS: ${ADAPTIVE_CONTROLLER_STABILITY_SECONDS:-120}
+    volumes:
+      - control-signals:/etc/phoenix/control
+    networks:
+      - phoenix-net
+
+  # Monitoring - Prometheus
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_VERSION:-latest}
+    container_name: phoenix-prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    volumes:
+      - prometheus-config:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+    networks:
+      - phoenix-net
+
+  # Monitoring - Grafana
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION:-latest}
+    container_name: phoenix-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: ${GF_INSTALL_PLUGINS:-}
+    volumes:
+      - grafana-provisioning:/etc/grafana/provisioning:ro
+      - grafana-dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+    networks:
+      - phoenix-net
+
+  # Supporting Services
+  pushgateway:
+    image: prom/pushgateway:${PUSHGATEWAY_VERSION:-latest}
+    container_name: phoenix-pushgateway
+    ports:
+      - "9091:9091"
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "curl", "-f", "http://localhost:9091/-/healthy"]
+    networks:
+      - phoenix-net
+
+volumes:
+  collector-config:
+  observer-config:
+  control-signals:
+  prometheus-config:
+  prometheus-data:
+  grafana-provisioning:
+  grafana-dashboards:
+  grafana-data:
+
+networks:
+  phoenix-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16

@@ -1,190 +1,149 @@
-# Phoenix-vNext: 3-Pipeline Cardinality Optimization System
+# Phoenix - Adaptive Cardinality Optimization System
 
-Phoenix-vNext is an OpenTelemetry-based metrics collection and processing system that uses adaptive cardinality management with dynamic switching between optimization profiles based on metric volume and system performance.
+<div align="center">
+  <img src="docs/assets/phoenix-logo.png" alt="Phoenix Logo" width="200"/>
+  
+  [![CI](https://github.com/deepaucksharma/Phoenix/actions/workflows/ci.yml/badge.svg)](https://github.com/deepaucksharma/Phoenix/actions)
+  [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+  [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Compatible-orange)](https://opentelemetry.io/)
+</div>
 
-## 🏗️ Architecture Overview
+## Overview
 
-The system implements a 3-pipeline architecture for different cardinality optimization levels:
+Phoenix is an adaptive cardinality optimization system for OpenTelemetry metrics collection and processing. It dynamically manages metric cardinality through intelligent pipeline switching and optimization profiles.
 
-1. **Full Fidelity Pipeline** - Complete metrics collection baseline
-2. **Optimized Pipeline** - Moderate cardinality reduction with aggregation  
-3. **Experimental TopK Pipeline** - Advanced optimization using TopK sampling
+## 🏗️ Monorepo Structure
 
-## 📁 Project Structure
+This project is organized as a monorepo with clear separation of concerns:
 
 ```
-phoenix-vnext/
-├── README.md                          # This file
-├── docker-compose.yaml               # Main orchestration
-├── CLAUDE.md                          # Claude Code guidance
-├── .gitignore                         # Git ignore patterns
-│
-├── apps/                             # Application services
-│   ├── synthetic-generator/          # Go-based metrics generator
-│   └── control-actuator/             # Control plane actuator script
-│
-├── configs/
-│   ├── otel/collectors/              # OpenTelemetry collector configurations
-│   │   ├── main.yaml                 # Main collector (3 pipelines)
-│   │   └── observer.yaml             # Observer collector
-│   ├── monitoring/
-│   │   ├── prometheus/               # Prometheus configs and rules
-│   │   └── grafana/                  # Grafana datasources and dashboards
-│   └── control/                      # Control plane configurations
-│
-├── docs/                             # Core documentation
-│   ├── README.md                     # Documentation index
-│   ├── ARCHITECTURE.md               # System design
-│   └── TROUBLESHOOTING.md            # Problem resolution
-│
-├── scripts/                          # Environment initialization
-└── data/                             # Runtime data (gitignored)
+phoenix/
+├── packages/          # Shared libraries
+├── services/          # Microservices
+├── infrastructure/    # Deployment configs
+├── monitoring/        # Observability stack
+├── tools/            # Dev tools
+└── docs/             # Documentation
 ```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
+- Node.js >= 18.0.0
+- Docker and Docker Compose
+- Go 1.21+ (for generator services)
 
-- Docker Desktop with WSL2 integration enabled
-- 8GB+ RAM available for containers
-- Ports 3000, 4318, 8888-8890, 9090, 13133-13134 available
-
-### 1. Initialize Environment
-
+### Setup
 ```bash
-# Clone and navigate to project
-cd phoenix-reorganized
+# Clone the repository
+git clone https://github.com/deepaucksharma/Phoenix.git
+cd Phoenix
 
-# Initialize environment (creates .env, data directories, control files)
-./scripts/initialize-environment.sh
+# Install dependencies
+make install
 
-# Optional: Configure New Relic export (edit .env with your keys)
-# NEW_RELIC_LICENSE_KEY_FULL="your_key_here"
+# Setup environment
+make setup-env
+
+# Build all services
+make build
+make build-docker
 ```
 
-### 2. Start the System
-
+### Running Phoenix
 ```bash
-# Start all services
-docker-compose up -d
+# Development mode
+make deploy-dev
+
+# Check service health
+make health
 
 # View logs
-docker-compose logs -f otelcol-main
-docker-compose logs -f otelcol-observer
+make logs
+
+# Open monitoring dashboards
+make monitor
 ```
 
-### 3. Access Monitoring
+## 📦 Sub-Projects
 
-- **Grafana Dashboard**: http://localhost:3000 (admin/admin)
+### Packages (Shared Libraries)
+- **@phoenix/contracts** - API contracts and schemas
+- **@phoenix/common** - Shared utilities
+- **@phoenix/config** - Configuration management
+
+### Services
+- **@phoenix/collector** - Core OTEL collector with multi-pipeline processing
+- **@phoenix/control-observer** - Metrics observation service
+- **@phoenix/control-actuator** - Adaptive control logic
+- **@phoenix/generator-synthetic** - Synthetic metrics generator
+- **@phoenix/generator-complex** - Complex metrics generator
+- **@phoenix/validator** - Performance validation service
+
+### Infrastructure
+- Docker Compose configurations
+- Kubernetes manifests (coming soon)
+- Terraform modules (coming soon)
+
+## 🔧 Development
+
+### Working with the Monorepo
+```bash
+# Run specific service in dev mode
+cd services/collector && npm run dev
+
+# Run all services in dev mode
+npm run dev
+
+# Run tests across all packages
+npm test
+
+# Lint all code
+npm run lint
+```
+
+### Adding a New Service
+1. Create directory: `services/your-service/`
+2. Add standard structure (cmd/, internal/, api/, etc.)
+3. Create package.json with workspace dependency
+4. Update root package.json workspaces if needed
+
+## 📊 Architecture
+
+Phoenix uses a 3-pipeline architecture:
+1. **Full Fidelity** - Complete metrics without optimization
+2. **Optimized** - Moderate cardinality reduction
+3. **Experimental TopK** - Advanced optimization
+
+The control plane monitors metrics and dynamically switches between optimization profiles based on cardinality thresholds.
+
+## 🔍 Monitoring
+
+- **Grafana**: http://localhost:3000 (admin/admin)
 - **Prometheus**: http://localhost:9090
-- **Main Collector Metrics**: http://localhost:8888/metrics
-- **Observer Metrics**: http://localhost:9888/metrics
+- **Health Checks**: `make health`
 
-## 📊 System Components
+## 📚 Documentation
 
-### Core Services
+- [Architecture Overview](docs/architecture/ARCHITECTURE.md)
+- [API Documentation](docs/api/README.md)
+- [Development Guide](docs/guides/DEVELOPMENT.md)
+- [Deployment Guide](docs/guides/DEPLOYMENT.md)
 
-| Service | Description | Ports |
-|---------|-------------|-------|
-| **otelcol-main** | Main collector with 3 pipelines | 4318, 8888-8890, 13133 |
-| **otelcol-observer** | Control plane observer | 9888, 13134 |
-| **control-loop-actuator** | Adaptive controller script | - |
-| **synthetic-metrics-generator** | Load generator | - |
-| **prometheus** | Metrics storage | 9090 |
-| **grafana** | Visualization | 3000 |
+## 🤝 Contributing
 
-### Load Generators
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-| Service | Description | Resource Limits |
-|---------|-------------|-----------------|
-| **stress-ng-cpu-heavy** | CPU-intensive workload | 2 CPU, 1GB RAM |
-| **stress-ng-io-heavy** | I/O-intensive workload | 1 CPU, 512MB RAM |
+## 📄 License
 
-## 🎛️ Adaptive Control System
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-The observer uses a PID-like control algorithm that:
+## 🙏 Acknowledgments
 
-- Monitors metric cardinality and system performance
-- Automatically switches between optimization profiles:
-  - **Conservative**: < 15,000 time series
-  - **Balanced**: 15,000 - 25,000 time series  
-  - **Aggressive**: > 25,000 time series
-- Updates control signals in real-time
-- Maintains stability with configurable transition periods
-
-## 🔧 Configuration
-
-### Environment Variables
-
-Key variables in `.env`:
-
-```bash
-# Control thresholds
-TARGET_OPTIMIZED_PIPELINE_TS_COUNT=20000
-THRESHOLD_OPTIMIZATION_CONSERVATIVE_MAX_TS=15000
-THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS=25000
-
-# Resource limits
-OTELCOL_MAIN_MEMORY_LIMIT_MIB="1024"
-OTELCOL_MAIN_GOMAXPROCS="1"
-
-# Synthetic load
-SYNTHETIC_PROCESS_COUNT_PER_HOST=250
-SYNTHETIC_HOST_COUNT=3
-```
-
-### Control Signals
-
-The system uses dynamic control files in `configs/control/`:
-- `optimization_mode.yaml` - Current optimization state
-- `optimization_mode_template.yaml` - Template for control file
-
-## 🔍 Monitoring & Troubleshooting
-
-### Health Checks
-
-```bash
-# Check service health
-docker-compose ps
-
-# View specific service logs
-docker-compose logs -f [service-name]
-
-# Check collector endpoints
-curl http://localhost:13133  # Main collector health
-curl http://localhost:13134  # Observer health
-```
-
-### Key Metrics
-
-Monitor these metrics in Grafana:
-- `phoenix_pipeline_output_cardinality_estimate` - Pipeline cardinality
-- `otelcol_processor_batch_batch_send_size` - Batch processing
-- `process_memory_usage` - Process memory consumption
-- `process_cpu_time` - CPU utilization
-
-## 🛠️ Development
-
-### Testing Synthetic Data
-
-```bash
-# Generate synthetic metrics
-docker-compose up synthetic-metrics-generator
-
-# Update control signals manually
-./scripts/update-control-file.sh
-```
-
-### Adding New Processors
-
-1. Add processor config to `configs/otel/processors/`
-2. Include in pipeline via `configs/otel/collectors/main.yaml`
-3. Update documentation
-
-### Scaling Configuration
-
-Adjust resource limits in `docker-compose.yaml` and corresponding environment variables in `.env`.
-
-## 📝 License
-
-This project is part of the Phoenix-vNext Ultimate Stack and follows the same licensing terms.
+- OpenTelemetry community for the excellent collector
+- Prometheus and Grafana for monitoring capabilities
+- All contributors to this project
