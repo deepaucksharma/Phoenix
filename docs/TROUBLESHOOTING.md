@@ -1,10 +1,18 @@
 # Phoenix-vNext Troubleshooting Guide
 
-## Common Issues and Solutions
+## Table of Contents
 
-### Service Startup Issues
+- [Service Issues](#service-issues)
+- [Control System Issues](#control-system-issues)
+- [Pipeline Data Issues](#pipeline-data-issues)
+- [Performance Issues](#performance-issues)
+- [New Services Issues](#new-services-issues)
+- [Diagnostic Commands](#diagnostic-commands)
+- [Emergency Procedures](#emergency-procedures)
 
-#### Services Won't Start
+## Service Issues
+
+### Services Won't Start
 
 **Symptoms:**
 - `docker-compose up` fails
@@ -16,12 +24,13 @@
 # Check service status
 docker-compose ps
 
-# View service logs
-docker-compose logs otelcol-main
-docker-compose logs otelcol-observer
+# View specific service logs
+docker-compose logs control-actuator-go
+docker-compose logs anomaly-detector
+docker-compose logs benchmark-controller
 
 # Check port availability
-netstat -tulpn | grep -E ":(3000|4318|8888|9090|13133)"
+netstat -tulpn | grep -E ":(3000|4317|4318|8080|8081|8082|8083|8888|9090|13133)"
 ```
 
 **Solutions:**
@@ -29,13 +38,11 @@ netstat -tulpn | grep -E ":(3000|4318|8888|9090|13133)"
 1. **Port conflicts:**
 ```bash
 # Find processes using required ports
-sudo lsof -i :3000
-sudo lsof -i :4318
+sudo lsof -i :8081  # Control actuator
+sudo lsof -i :8082  # Anomaly detector
+sudo lsof -i :8083  # Benchmark controller
 
-# Kill conflicting processes
-sudo kill -9 <PID>
-
-# Or modify port mappings in docker-compose.yaml
+# Kill conflicting processes or change ports in docker-compose.yaml
 ```
 
 2. **Missing environment file:**
@@ -43,625 +50,357 @@ sudo kill -9 <PID>
 # Initialize environment
 ./scripts/initialize-environment.sh
 
-# Verify .env exists
-ls -la .env
+# Verify .env exists and has required variables
+grep -E "(NEW_RELIC|HYSTERESIS|TARGET_OPTIMIZED)" .env
 ```
 
-3. **Docker daemon issues:**
+3. **Go service build failures:**
 ```bash
-# Restart Docker Desktop
-sudo systemctl restart docker
+# Rebuild Go services
+docker-compose build control-actuator-go anomaly-detector benchmark-controller
 
-# Clean Docker state
-docker system prune -f
-docker volume prune -f
+# Check for missing dependencies
+cd apps/control-actuator-go && go mod tidy
 ```
 
-#### Configuration Validation Errors
+## Control System Issues
+
+### Go Control Actuator Not Working
 
 **Symptoms:**
-- Collectors fail to start with config errors
-- Invalid YAML syntax errors
+- Control mode not changing
+- No metrics at :8081/metrics
+- PID controller errors
 
 **Diagnosis:**
 ```bash
-# Validate YAML syntax
-yamllint configs/otel/collectors/main.yaml
+# Check control actuator health
+curl http://localhost:8081/metrics
 
-# Test configuration
-docker run --rm -v $(pwd)/configs/otel/collectors:/configs \
-  otel/opentelemetry-collector-contrib:0.103.1 \
-  --config=/configs/main.yaml --dry-run
+# View control actuator logs
+docker-compose logs -f control-actuator-go | grep -E "(error|warn|mode)"
+
+# Verify Prometheus connectivity
+docker-compose exec control-actuator-go curl http://prometheus:9090/-/healthy
 ```
 
 **Solutions:**
 
-1. **YAML syntax errors:**
+1. **Prometheus query failures:**
 ```bash
-# Fix indentation (use 2 spaces)
-# Remove tabs
-# Check for missing colons
+# Test the cardinality query manually
+curl "http://localhost:9090/api/v1/query?query=phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{pipeline=\"optimized\"}"
+
+# Check if metrics exist
+curl http://localhost:9090/api/v1/label/__name__/values | grep phoenix_observer
 ```
 
-2. **Missing processors:**
+2. **Configuration issues:**
 ```bash
-# Ensure all referenced processors are defined
-grep -r "processors:" configs/otel/collectors/main.yaml
-```
-
-3. **Environment variable issues:**
-```bash
-# Check environment variables are set
-docker-compose config
-```
-
-### Data Flow Issues
-
-#### No Metrics Appearing
-
-**Symptoms:**
-- Grafana dashboards show no data
-- Prometheus has no targets
-- Empty metrics endpoints
-
-**Diagnosis:**
-```bash
-# Check collector health
-curl http://localhost:13133
-curl http://localhost:13134
-
-# Check metrics endpoints
-curl http://localhost:8888/metrics | head -20
-curl http://localhost:8889/metrics | head -20
-curl http://localhost:8890/metrics | head -20
-
-# Check Prometheus targets
-curl http://localhost:9090/api/v1/targets
-```
-
-**Solutions:**
-
-1. **Hostmetrics not collecting:**
-```bash
-# Check host filesystem mounts
-docker-compose exec otelcol-main ls -la /hostfs/proc
-docker-compose exec otelcol-main ls -la /hostfs/sys
-
-# Verify process metrics are being generated
-curl http://localhost:8888/metrics | grep process_
-```
-
-2. **Synthetic generator not running:**
-```bash
-# Check synthetic generator status
-docker-compose logs synthetic-metrics-generator
-
-# Verify OTLP endpoint connectivity
-docker-compose exec synthetic-metrics-generator curl http://otelcol-main:4318
-```
-
-3. **Pipeline filtering too aggressive:**
-```bash
-# Check pipeline outputs
-for port in 8888 8889 8890; do
-  echo "Pipeline on port $port:"
-  curl -s http://localhost:$port/metrics | grep -v "^#" | wc -l
-done
-
-# Temporarily disable filters for debugging
-# Comment out filter processors in main.yaml
-```
-
-#### Missing Pipeline Data
-
-**Symptoms:**
-- Only one pipeline showing data
-- Cardinality estimates at zero
-- Control system not switching
-
-**Diagnosis:**
-```bash
-# Check pipeline-specific metrics
-curl http://localhost:8888/metrics | grep phoenix_full_output
-curl http://localhost:8889/metrics | grep phoenix_opt_output  
-curl http://localhost:8890/metrics | grep phoenix_exp_output
-
-# Check routing connector
-docker-compose logs otelcol-main | grep routing
-```
-
-**Solutions:**
-
-1. **Routing connector issues:**
-```bash
-# Verify routing configuration in main.yaml
-# Check that all pipelines are listed in routing table
-```
-
-2. **Pipeline filters blocking data:**
-```bash
-# Check filter expressions
-# Ensure environment variables are set correctly
-echo $ENABLE_NR_EXPORT_FULL
-echo $ENABLE_NR_EXPORT_OPTIMISED
-echo $ENABLE_NR_EXPORT_EXPERIMENTAL
-```
-
-### Control System Issues
-
-#### Control System Not Switching Profiles
-
-**Symptoms:**
-- `optimization_mode.yaml` never changes
-- Control actuator script errors
-- Thresholds not being respected
-
-**Diagnosis:**
-```bash
-# Check control actuator logs
-docker-compose logs control-loop-actuator
+# Verify environment variables
+docker-compose exec control-actuator-go env | grep -E "(TARGET|THRESHOLD|HYSTERESIS)"
 
 # Check control file permissions
 ls -la configs/control/optimization_mode.yaml
-
-# Verify Prometheus connectivity
-docker-compose exec control-loop-actuator curl http://prometheus:9090/-/healthy
+chmod 666 configs/control/optimization_mode.yaml
 ```
 
-**Solutions:**
-
-1. **Prometheus query issues:**
+3. **PID tuning needed:**
 ```bash
-# Test queries manually
-curl "http://localhost:9090/api/v1/query?query=phoenix_pipeline_output_cardinality_estimate"
+# Adjust PID parameters in .env
+HYSTERESIS_FACTOR=0.15  # Increase from 0.1
+ADAPTIVE_CONTROLLER_STABILITY_SECONDS=300  # Increase from 120
 
-# Check metric names
-curl http://localhost:9090/api/v1/label/__name__/values | grep phoenix
+# Restart control actuator
+docker-compose restart control-actuator-go
 ```
-
-2. **Script permissions:**
-```bash
-# Fix script permissions
-chmod +x apps/control-actuator/update-control-file.sh
-
-# Check volume mounts
-docker-compose exec control-loop-actuator ls -la /app/control_signals/
-```
-
-3. **Threshold configuration:**
-```bash
-# Verify threshold environment variables
-docker-compose exec control-loop-actuator env | grep THRESHOLD
-```
-
-#### Control System Oscillating
-
-**Symptoms:**
-- Rapid switching between profiles
-- Control file changing frequently
-- Unstable cardinality readings
-
-**Solutions:**
-
-1. **Add hysteresis:**
-```bash
-# Increase threshold gaps
-export THRESHOLD_OPTIMIZATION_CONSERVATIVE_MAX_TS=15000
-export THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS=30000  # Larger gap
-
-# Add minimum switch intervals
-# Modify control script to enforce cooldown periods
-```
-
-2. **Smooth cardinality estimates:**
-```bash
-# Use time-averaged queries in control script
-# Replace instant queries with rate() functions
-```
-
-## Control Loop Issues
-
-### Optimization Drift {#optimization-drift}
-
-**Symptom**: The `PhoenixOptimizationDrift` alert is triggered, indicating that the cost reduction ratio has fallen below the expected threshold (40%).
-
-**Possible Causes**:
-- Changes in telemetry patterns causing the optimization algorithms to be less effective
-- Misconfiguration of processing pipelines
-- Transient spikes in telemetry cardinality
-
-**Resolution Steps**:
-1. Check recent changes in data patterns by examining the `phoenix:cardinality_delta_percent` metric
-2. Verify the control loop logs using: `docker logs phoenix-control-actuator`
-3. Check control file settings: `cat /path/to/configs/control/optimization_mode.yaml`
-4. Consider adjusting thresholds in `.env` if the data patterns have permanently changed:
-   ```
-   THRESHOLD_OPTIMIZATION_CONSERVATIVE_MAX_TS=15000
-   THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS=25000
-   ```
-5. Restart the control actuator: `docker restart phoenix-control-actuator`
-
-### Controller Failure {#controller-failure}
-
-**Symptom**: The `PhoenixControllerFailure` alert is triggered, indicating that the controller hasn't updated metrics recently.
-
-**Possible Causes**:
-- Controller container crashed or is unresponsive
-- Network issues preventing controller from reaching Prometheus
-- Misconfigured controller endpoints
-
-**Resolution Steps**:
-1. Check if controller is running: `docker ps | grep phoenix-control-actuator`
-2. View controller logs: `docker logs phoenix-control-actuator`
-3. Check if controller can reach Prometheus:
-   ```bash
-   docker exec phoenix-control-actuator curl -s http://prometheus:9090/api/v1/query?query=up
-   ```
-4. Verify environment variables: `docker exec phoenix-control-actuator env | grep PROM`
-5. Restart the controller if necessary: `docker restart phoenix-control-actuator`
-
-### Configuration Write Failures {#config-write-failures}
-
-**Symptom**: The `PhoenixControllerConfigurationFailure` alert is triggered, indicating that the controller failed to update configuration files.
-
-**Possible Causes**:
-- Permission issues with the config directory
-- Disk space issues
-- File locking conflicts
-
-**Resolution Steps**:
-1. Check container permissions: `docker exec -it phoenix-control-actuator ls -la /app/control_signals/`
-2. Check disk space: `docker exec -it phoenix-control-actuator df -h`
-3. Check for lock files: `docker exec -it phoenix-control-actuator ls -la /tmp/phoenix_control_lock*`
-4. Verify template file exists: `docker exec -it phoenix-control-actuator ls -la /app/optimization_mode_template.yaml`
-5. Delete lock file if necessary (caution): `docker exec -it phoenix-control-actuator rm /tmp/phoenix_control_lock`
-6. Restart the controller: `docker restart phoenix-control-actuator`
 
 ### Control Loop Oscillation
 
-**Symptom**: The optimization profile switches back and forth between "conservative" and "balanced" or other profiles frequently.
+**Symptoms:**
+- Rapid mode switching
+- Stability score < 0.5
+- High transition count
 
-**Possible Causes**:
-- Metric values hover near threshold boundaries
-- Insufficient hysteresis in the controller logic
-- Stability period too short
+**Solutions:**
 
-**Resolution Steps**:
-1. Check the recent history of optimization profile changes:
-   ```bash
-   docker exec -it phoenix-control-actuator grep "Profile changing" /var/log/phoenix-actuator.log
-   ```
-2. Adjust the hysteresis factor (default is 0.1 or 10%):
-   ```bash
-   docker exec -it phoenix-control-actuator export HYSTERESIS_FACTOR=0.15
-   ```
-3. Increase the stability period:
-   ```bash
-   docker exec -it phoenix-control-actuator export ADAPTIVE_CONTROLLER_STABILITY_SECONDS=300
-   ```
+1. **Increase stability period:**
+```bash
+export ADAPTIVE_CONTROLLER_STABILITY_SECONDS=300
+docker-compose up -d control-actuator-go
+```
 
-## Pipeline Issues
+2. **Adjust hysteresis:**
+```bash
+export HYSTERESIS_FACTOR=0.2  # 20% band
+docker-compose up -d control-actuator-go
+```
 
-#### No Data in Pipeline
+3. **Monitor stability:**
+```bash
+# Watch stability score
+watch -n 5 'curl -s http://localhost:8081/metrics | jq ".stability_score"'
+```
+
+## Pipeline Data Issues
+
+### No Metrics in Pipelines
 
 **Symptoms:**
-- Metrics not appearing in Grafana
-- Empty Prometheus targets
-- No data from collector endpoints
+- Empty Prometheus endpoints
+- No data in Grafana
+- Zero cardinality estimates
 
 **Diagnosis:**
 ```bash
-# Check collector logs
-docker-compose logs otelcol-main | grep "error\|failed\|panic"
+# Check pipeline outputs
+for port in 8888 8889 8890; do
+  echo "Pipeline $port metrics count:"
+  curl -s http://localhost:$port/metrics | grep -v "^#" | wc -l
+done
 
-# Test direct endpoint access
-curl -v http://localhost:8888/metrics
-curl -v http://localhost:8889/metrics
-curl -v http://localhost:8890/metrics
-
-# Check Prometheus configuration
-curl -v http://localhost:9090/api/v1/config
+# Verify OTLP receiver
+docker-compose logs otelcol-main | grep "Started servers"
 ```
 
 **Solutions:**
 
-1. **Collector misconfiguration:**
+1. **Check shared processor configuration:**
 ```bash
-# Review collector configuration files
-cat configs/otel/collectors/main.yaml
+# Verify main-optimized.yaml is being used
+docker-compose exec otelcol-main ls /etc/otel-collector-config.yaml
 
-# Validate YAML syntax
-yamllint configs/otel/collectors/main.yaml
-
-# Test configuration with collector image
+# Test configuration
 docker run --rm -v $(pwd)/configs/otel/collectors:/configs \
-  otel/opentelemetry-collector-contrib:0.103.1 \
-  --config=/configs/main.yaml --dry-run
+  otel/opentelemetry-collector-contrib:0.91.0 \
+  --config=/configs/main-optimized.yaml --dry-run
 ```
 
-2. **Network issues:**
+2. **Verify routing:**
 ```bash
-# Check Docker network
-docker network ls
-docker network inspect phoenix-vnext_default
-
-# Test connectivity between containers
-docker-compose exec otelcol-main ping otelcol-observer
-docker-compose exec otelcol-observer ping otelcol-main
+# Check if routing connector is working
+docker-compose logs otelcol-main | grep "routing"
 ```
 
-3. **Prometheus scrape configuration:**
-```bash
-# Check scrape configs in Prometheus
-curl -s http://localhost:9090/api/v1/config | jq '.scrape_configs'
-
-# Verify target endpoints are correct
-curl -s http://localhost:9090/api/v1/targets | jq '.data.active'
-```
-
-4. **Data format issues:**
-```bash
-# Check for unexpected metric names or labels
-curl -s http://localhost:8888/metrics | head -20
-curl -s http://localhost:8889/metrics | head -20
-curl -s http://localhost:8890/metrics | head -20
-```
-
-5. **Restart affected services:**
-```bash
-# Restart collectors
-docker-compose restart otelcol-main otelcol-observer
-
-# Restart Prometheus
-docker-compose restart prometheus
-```
-
-#### Unexpected Data in Pipeline
+### Pipeline Performance Issues
 
 **Symptoms:**
-- Cardinality estimates are too high or too low
-- Metrics with unexpected labels or values
-- Alerts for high cardinality or data spikes
+- High latency (>50ms p99)
+- Memory pressure warnings
+- Batch timeout errors
+
+**Solutions:**
+
+1. **Tune batch processor:**
+```bash
+# Edit configs/otel/collectors/main-optimized.yaml
+# Adjust batch settings:
+# send_batch_size: 5000  # Reduce from 10000
+# timeout: 10s  # Reduce from 30s
+```
+
+2. **Increase memory limit:**
+```bash
+export OTELCOL_MAIN_MEMORY_LIMIT_MIB=2048
+docker-compose up -d otelcol-main
+```
+
+## New Services Issues
+
+### Anomaly Detector Issues
+
+**Symptoms:**
+- No alerts at :8082/alerts
+- Detection algorithms not triggering
+- Webhook failures
 
 **Diagnosis:**
 ```bash
-# Check recent changes in telemetry data
-curl -s http://localhost:8888/metrics | grep phoenix_cardinality
-curl -s http://localhost:8889/metrics | grep phoenix_cardinality
-curl -s http://localhost:8890/metrics | grep phoenix_cardinality
+# Check anomaly detector health
+curl http://localhost:8082/health
 
-# Review collector logs for errors or warnings
-docker-compose logs otelcol-main | grep "error\|warn"
+# View recent alerts
+curl http://localhost:8082/alerts | jq
 
-# Check for recent changes in configuration
-git diff HEAD~1 HEAD -- configs/otel/collectors
+# Check detector logs
+docker-compose logs anomaly-detector | grep -E "(detected|alert|error)"
 ```
 
 **Solutions:**
 
-1. **Adjust cardinality thresholds:**
+1. **Adjust detection thresholds:**
 ```bash
-# Update thresholds in .env
-THRESHOLD_CARDINALITY_ESTIMATE=10000
-
-# Restart affected services
-docker-compose restart otelcol-main otelcol-observer
+# For high false positives, increase Z-score threshold
+# Edit apps/anomaly-detector/main.go
+# Change: threshold: 3.0 to threshold: 4.0
+docker-compose build anomaly-detector
+docker-compose up -d anomaly-detector
 ```
 
-2. **Refine metric filters:**
+2. **Fix webhook connectivity:**
 ```bash
-# Edit processor filters in main.yaml
-# Exclude unnecessary labels or metrics
+# Test control actuator webhook
+docker-compose exec anomaly-detector curl -X POST http://control-actuator-go:8080/anomaly \
+  -H "Content-Type: application/json" \
+  -d '{"test": true}'
 ```
 
-3. **Review and update documentation:**
+### Benchmark Controller Issues
+
+**Symptoms:**
+- Benchmarks not running
+- No results at :8083/benchmark/results
+- Generator configuration failures
+
+**Diagnosis:**
 ```bash
-# Document any changes in data patterns or processing
-# Update runbooks and troubleshooting guides
+# List available scenarios
+curl http://localhost:8083/benchmark/scenarios
+
+# Check benchmark logs
+docker-compose logs benchmark-controller
+
+# Verify generator connectivity
+docker-compose exec benchmark-controller curl http://synthetic-metrics-generator:8080
+```
+
+**Solutions:**
+
+1. **Generator communication:**
+```bash
+# Ensure synthetic generator is running
+docker-compose up -d synthetic-metrics-generator
+
+# Check generator endpoint
+export SYNTHETIC_GENERATOR_URL=http://synthetic-metrics-generator:8080
+docker-compose up -d benchmark-controller
+```
+
+2. **Prometheus queries failing:**
+```bash
+# Verify benchmark metrics exist
+curl -s http://localhost:9090/api/v1/query?query=phoenix:signal_preservation_score
 ```
 
 ## Performance Issues
 
-#### High Memory Usage
+### High Memory Usage (New Services)
 
 **Symptoms:**
+- Go services using excessive memory
 - OOM kills
 - Slow response times
-- High container memory usage
 
 **Diagnosis:**
 ```bash
-# Monitor container memory
-docker stats --format "table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}"
-
-# Check collector memory metrics
-curl http://localhost:8888/metrics | grep otelcol_process_memory
+# Monitor Go service memory
+docker stats control-actuator-go anomaly-detector benchmark-controller
 
 # Check for memory leaks
-curl http://localhost:1777/debug/pprof/heap > heap.prof
+curl http://localhost:8081/debug/pprof/heap > control-heap.prof
+go tool pprof control-heap.prof
 ```
 
 **Solutions:**
 
-1. **Increase memory limits:**
+1. **Set GOMEMLIMIT:**
 ```bash
-# Adjust memory limits in .env
-OTELCOL_MAIN_MEMORY_LIMIT_MIB=2048
-OTELCOL_OBSERVER_MEMORY_LIMIT_MIB=512
-
-# Restart services
-docker-compose restart otelcol-main otelcol-observer
+# Add to docker-compose.yaml environment
+GOMEMLIMIT: 128MiB  # For control actuator
+GOMEMLIMIT: 256MiB  # For anomaly detector
 ```
 
-2. **Optimize processing:**
+2. **Tune garbage collection:**
 ```bash
-# Reduce batch sizes
-send_batch_size: 4096  # Reduce from 8192
-
-# Increase timeout to reduce frequent batching
-timeout: 30s  # Increase from 10s
-
-# Enable memory ballast
-OTEL_MAIN_MEMBALLAST_MIB_ENV=512
+GOGC: 50  # More aggressive GC
 ```
 
-3. **Reduce cardinality:**
-```bash
-# Lower process count
-SYNTHETIC_PROCESS_COUNT_PER_HOST=100  # Reduce from 250
-
-# More aggressive filtering
-# Modify processor filters to be more selective
-```
-
-#### High CPU Usage
+### Recording Rules Performance
 
 **Symptoms:**
-- High CPU utilization
-- Slow metrics processing
-- Timeouts and backpressure
+- Prometheus high CPU usage
+- Slow rule evaluation
+- Recording rule failures
 
 **Diagnosis:**
 ```bash
-# Monitor CPU usage
-docker stats --format "table {{.Name}}\t{{.CPUPerc}}"
+# Check rule evaluation time
+curl http://localhost:9090/api/v1/rules | jq '.data.groups[].rules[] | select(.type=="recording") | {name, evaluationTime}'
 
-# Check processing rates
-curl http://localhost:8888/metrics | grep otelcol_processor_batch_batch_send_size_sum
+# Monitor rule health
+curl http://localhost:9090/api/v1/rules | jq '.data.groups[].rules[] | select(.health!="ok")'
 ```
 
 **Solutions:**
 
-1. **Optimize Go runtime:**
+1. **Optimize expensive rules:**
 ```bash
-# Adjust GOMAXPROCS
-OTELCOL_MAIN_GOMAXPROCS=2  # Match available cores
-
-# Set memory limit
-GOMEMLIMIT=1GiB
+# Increase evaluation interval for complex rules
+# Edit configs/monitoring/prometheus/rules/phoenix_comprehensive_rules.yml
+# Change interval from 30s to 60s for expensive rules
 ```
 
-2. **Reduce processing overhead:**
+2. **Reduce rule complexity:**
 ```bash
-# Simplify transform operations
-# Use more efficient attribute operations
-# Reduce regex complexity in filters
-```
-
-### Network and Connectivity Issues
-
-#### New Relic Export Failures
-
-**Symptoms:**
-- Export errors in logs
-- High retry counts
-- Missing data in New Relic
-
-**Diagnosis:**
-```bash
-# Check export logs
-docker-compose logs otelcol-main | grep newrelic
-
-# Test connectivity
-docker-compose exec otelcol-main curl -I https://otlp.nr-data.net:4318/v1/metrics
-```
-
-**Solutions:**
-
-1. **Authentication issues:**
-```bash
-# Verify API keys
-echo $NEW_RELIC_LICENSE_KEY_FULL
-echo $NEW_RELIC_LICENSE_KEY_OPTIMISED
-echo $NEW_RELIC_LICENSE_KEY_EXPERIMENTAL
-
-# Test with curl
-curl -X POST https://otlp.nr-data.net:4318/v1/metrics \
-  -H "api-key: $NEW_RELIC_LICENSE_KEY_FULL" \
-  -H "Content-Type: application/json" \
-  -d '{}'
-```
-
-2. **Network connectivity:**
-```bash
-# Check DNS resolution
-docker-compose exec otelcol-main nslookup otlp.nr-data.net
-
-# Check firewall rules
-# Ensure outbound HTTPS (443) is allowed
-```
-
-#### Prometheus Scraping Issues
-
-**Symptoms:**
-- Missing targets in Prometheus
-- Scrape failures
-- Stale data
-
-**Diagnosis:**
-```bash
-# Check Prometheus targets
-curl http://localhost:9090/api/v1/targets
-
-# Check scrape configuration
-curl http://localhost:9090/api/v1/status/config
-```
-
-**Solutions:**
-
-1. **Service discovery issues:**
-```bash
-# Verify service connectivity
-docker-compose exec prometheus curl http://otelcol-main:8888/metrics
-docker-compose exec prometheus curl http://otelcol-observer:9888/metrics
-
-# Check network connectivity
-docker network ls
-docker network inspect phoenix-vnext_default
+# Simplify aggregations
+# Use recording rules to pre-compute expensive queries
 ```
 
 ## Diagnostic Commands
 
-#### Health Check Commands
+### System Health Check
 
 ```bash
-# Overall system health
-./scripts/health-check.sh
+# Complete health check
+echo "=== Service Health ==="
+curl -s http://localhost:13133/health || echo "Main collector: DOWN"
+curl -s http://localhost:8081/metrics > /dev/null && echo "Control actuator: UP" || echo "Control actuator: DOWN"
+curl -s http://localhost:8082/health || echo "Anomaly detector: DOWN"
+curl -s http://localhost:8083/health || echo "Benchmark controller: DOWN"
 
-# Service-specific health
-curl http://localhost:13133  # Main collector
-curl http://localhost:13134  # Observer
-curl http://localhost:9090/-/healthy  # Prometheus
-curl http://localhost:3000/api/health  # Grafana
+echo -e "\n=== Control State ==="
+curl -s http://localhost:8081/metrics | jq '{mode: .current_mode, transitions: .transition_count, stability: .stability_score}'
+
+echo -e "\n=== Recent Anomalies ==="
+curl -s http://localhost:8082/alerts | jq '.[0:3] | .[] | {metric: .anomaly.metric_name, severity: .anomaly.severity, time: .anomaly.timestamp}'
 ```
 
-#### Data Validation Commands
+### Performance Metrics
 
 ```bash
-# Verify data flow
-./scripts/validate-data-flow.sh
+# Pipeline efficiency
+curl -s http://localhost:9090/api/v1/query?query=phoenix:resource_efficiency_score | jq '.data.result[0].value[1]'
 
-# Check cardinality across pipelines
-for port in 8888 8889 8890; do
-  echo "Pipeline $port cardinality:"
-  curl -s http://localhost:$port/metrics | grep -v "^#" | wc -l
-done
+# Signal preservation
+curl -s http://localhost:9090/api/v1/query?query=phoenix:signal_preservation_score | jq '.data.result[0].value[1]'
 
-# Control system validation
-./scripts/validate-control-system.sh
+# Cardinality reduction
+curl -s http://localhost:9090/api/v1/query?query=phoenix:cardinality_reduction_percentage | jq '.data.result[0].value[1]'
 ```
 
-#### Performance Monitoring
+### Debug Data Collection
 
 ```bash
-# Resource usage
-docker stats --no-stream
+# Create debug bundle
+DEBUG_DIR="debug_$(date +%Y%m%d_%H%M%S)"
+mkdir -p $DEBUG_DIR
 
-# Metrics rates
-curl "http://localhost:9090/api/v1/query?query=rate(otelcol_processor_batch_batch_send_size_sum[5m])"
+# Collect logs
+docker-compose logs > $DEBUG_DIR/docker-compose.logs
+docker-compose logs control-actuator-go > $DEBUG_DIR/control-actuator.log
+docker-compose logs anomaly-detector > $DEBUG_DIR/anomaly-detector.log
 
-# Error rates  
-curl "http://localhost:9090/api/v1/query?query=rate(otelcol_exporter_send_failed_metric_points_total[5m])"
+# Collect metrics
+curl -s http://localhost:8081/metrics > $DEBUG_DIR/control-metrics.json
+curl -s http://localhost:8082/alerts > $DEBUG_DIR/anomaly-alerts.json
+curl -s http://localhost:9090/api/v1/query?query='{__name__=~"phoenix:.*"}' > $DEBUG_DIR/phoenix-metrics.json
+
+# Collect configs
+cp .env $DEBUG_DIR/
+cp configs/control/optimization_mode.yaml $DEBUG_DIR/
+cp docker-compose.yaml $DEBUG_DIR/
+
+echo "Debug bundle created: $DEBUG_DIR"
 ```
 
 ## Emergency Procedures
@@ -669,105 +408,85 @@ curl "http://localhost:9090/api/v1/query?query=rate(otelcol_exporter_send_failed
 ### Complete System Reset
 
 ```bash
-# Stop all services
-docker-compose down
-
-# Remove all data
+# Stop everything
 docker-compose down -v
-rm -rf data/
 
-# Clean Docker state
+# Clean build cache
 docker system prune -f
+docker builder prune -f
+
+# Remove data
+rm -rf data/
+rm -f configs/control/optimization_mode.yaml
 
 # Reinitialize
 ./scripts/initialize-environment.sh
+docker-compose build
 docker-compose up -d
-```
-
-### Backup Current State
-
-```bash
-# Create backup
-mkdir -p backups/emergency_$(date +%Y%m%d_%H%M%S)
-
-# Backup data volumes
-docker run --rm -v phoenix-vnext_prometheus_data:/data -v $(pwd)/backups/emergency_$(date +%Y%m%d_%H%M%S):/backup alpine tar czf /backup/prometheus.tar.gz -C /data .
-
-# Backup configuration
-cp -r configs/ backups/emergency_$(date +%Y%m%d_%H%M%S)/
-cp .env backups/emergency_$(date +%Y%m%d_%H%M%S)/
 ```
 
 ### Service Recovery
 
 ```bash
-# Restart individual services
-docker-compose restart otelcol-main
-docker-compose restart otelcol-observer
-docker-compose restart control-loop-actuator
+# Restart new Go services
+docker-compose restart control-actuator-go anomaly-detector benchmark-controller
 
 # Force recreate if needed
-docker-compose up -d --force-recreate otelcol-main
+docker-compose up -d --force-recreate control-actuator-go
+
+# Reset control state
+echo 'optimization_mode: balanced' > configs/control/optimization_mode.yaml
+docker-compose restart control-actuator-go otelcol-main
 ```
 
-## Log Analysis
-
-### Structured Log Parsing
+### Rollback Procedures
 
 ```bash
-# Parse collector logs
-docker-compose logs otelcol-main | jq 'select(.level == "error")'
+# Revert to bash control actuator
+docker-compose stop control-actuator-go
+docker-compose up -d control-loop-actuator
 
-# Filter by component
-docker-compose logs otelcol-main | jq 'select(.caller | contains("processor"))'
+# Disable anomaly detection
+docker-compose stop anomaly-detector
 
-# Time-based filtering
-docker-compose logs --since "30m" otelcol-main
-```
-
-### Common Log Patterns
-
-#### Successful Processing
-```
-{"level":"info","ts":"...","caller":"...","msg":"Started pipeline","pipeline":"metrics/pipeline_full_fidelity"}
-```
-
-#### Configuration Errors
-```
-{"level":"error","ts":"...","caller":"...","msg":"Failed to load config","error":"yaml: line 123: ..."}
-```
-
-#### Memory Pressure
-```
-{"level":"warn","ts":"...","caller":"...","msg":"Memory usage is above limit","current":"1.2GB","limit":"1GB"}
+# Use original collector config
+# Edit docker-compose.yaml to use main.yaml instead of main-optimized.yaml
+docker-compose up -d otelcol-main
 ```
 
 ## Getting Help
 
-### Collecting Debug Information
+### Collecting Support Information
 
 ```bash
-# Generate debug bundle
-./scripts/collect-debug-info.sh
+# Generate support bundle
+./scripts/generate-support-bundle.sh
 
-# Manual collection
-mkdir debug_$(date +%Y%m%d_%H%M%S)
-docker-compose logs > debug_*/docker-compose.logs
-curl http://localhost:13133 > debug_*/main-collector-health.json
-curl http://localhost:9090/api/v1/targets > debug_*/prometheus-targets.json
-cp configs/control/optimization_mode.yaml debug_*/
-cp .env debug_*/
+# Or manually:
+echo "Phoenix-vNext Support Information" > support.txt
+echo "=================================" >> support.txt
+echo "Version: $(git describe --tags --always)" >> support.txt
+echo "Date: $(date)" >> support.txt
+echo -e "\nEnvironment Variables:" >> support.txt
+grep -E "(TARGET|THRESHOLD|HYSTERESIS|NEW_RELIC)" .env >> support.txt
+echo -e "\nService Status:" >> support.txt
+docker-compose ps >> support.txt
+echo -e "\nRecent Errors:" >> support.txt
+docker-compose logs --tail=50 | grep -i error >> support.txt
 ```
 
-### Community Resources
+### Common Error Messages
 
-- **GitHub Issues**: Report bugs and request features
-- **OpenTelemetry Community**: General OTel questions
-- **Prometheus Community**: Prometheus-specific issues
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `failed to query Prometheus` | Network/connectivity issue | Check Prometheus is running and accessible |
+| `stability period not met` | Too frequent mode changes | Increase ADAPTIVE_CONTROLLER_STABILITY_SECONDS |
+| `anomaly detection timeout` | Slow Prometheus queries | Optimize recording rules or increase timeout |
+| `benchmark scenario failed` | Resource constraints | Increase memory limits or reduce load |
+| `config file permission denied` | File permissions | Run `chmod 666 configs/control/optimization_mode.yaml` |
 
-### Professional Support
+### Support Channels
 
-For production deployments, consider:
-- OpenTelemetry vendor support
-- Prometheus enterprise solutions
-- Custom consulting services
+- **GitHub Issues**: Bug reports and feature requests
+- **Documentation**: Check docs/ directory for detailed guides
+- **Community**: OpenTelemetry and Prometheus communities

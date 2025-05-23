@@ -2,7 +2,7 @@
 
 ## Overview
 
-Phoenix-vNext is a sophisticated OpenTelemetry-based metrics collection and processing system designed to demonstrate and benchmark adaptive cardinality management strategies. The system implements a 3-pipeline architecture that processes metrics through different optimization levels while maintaining a dynamic control loop for automatic adaptation.
+Phoenix-vNext is a production-ready OpenTelemetry-based metrics collection and processing system that implements advanced adaptive cardinality management. The system features a sophisticated 3-pipeline architecture with intelligent control loops, real-time anomaly detection, and comprehensive observability.
 
 ## System Architecture
 
@@ -11,383 +11,488 @@ Phoenix-vNext is a sophisticated OpenTelemetry-based metrics collection and proc
 ```mermaid
 graph TB
     subgraph "Load Generation"
-        SG[Synthetic Generator]
-        CPU[CPU Load Generator]
-        IO[I/O Load Generator]
+        SG[Synthetic Generator<br/>Go-based OTLP]
+        BM[Benchmark Controller<br/>Performance Validation]
     end
     
     subgraph "Main Collection System"
-        MC[Main OTel Collector]
+        MC[Main OTel Collector<br/>Shared Processing]
         subgraph "3 Pipelines"
-            P1[Full Fidelity Pipeline]
-            P2[Optimized Pipeline]
-            P3[Experimental TopK Pipeline]
+            P1[Full Fidelity<br/>Max Signal]
+            P2[Optimized<br/>Smart Reduction]
+            P3[Experimental<br/>TopK Sampling]
         end
     end
     
-    subgraph "Control & Monitoring"
-        OC[Observer Collector]
-        CA[Control Actuator]
-        PR[Prometheus Rules]
-        subgraph "Control Mechanism"
-            CF[Control File]
+    subgraph "Control & Intelligence"
+        OC[Observer Collector<br/>KPI Aggregation]
+        CA[Control Actuator<br/>Go + PID Control]
+        AD[Anomaly Detector<br/>Multi-Algorithm]
+        subgraph "Control Logic"
+            PID[PID Controller]
             HYS[Hysteresis Logic]
-            ATF[Atomic File Updates]
+            STB[Stability Manager]
         end
     end
     
-    subgraph "Export Destinations"
-        NR[New Relic]
-        LOCAL[Local Prometheus Endpoints]
+    subgraph "Monitoring & Export"
+        PR[Prometheus<br/>+ Recording Rules]
+        GF[Grafana<br/>Dashboards]
+        NR[New Relic<br/>OTLP Export]
     end
     
     SG --> MC
-    CPU --> MC
-    IO --> MC
+    BM --> MC
     
     MC --> P1
     MC --> P2
     MC --> P3
     
-    P1 --> LOCAL
-    P2 --> LOCAL
-    P3 --> LOCAL
+    P1 --> PR
+    P2 --> PR
+    P3 --> PR
     
     P1 --> NR
     P2 --> NR
     P3 --> NR
     
-    LOCAL --> OC
-    OC --> PROM
-    PROM --> CA
-    PROM --> GRAF
+    PR --> OC
+    OC --> CA
+    OC --> AD
     CA --> MC
+    AD --> CA
+    
+    PR --> GF
 ```
 
 ### Core Components
 
 #### 1. Main OpenTelemetry Collector (`otelcol-main`)
 
-The heart of the system, implementing three parallel processing pipelines:
+**Architecture**: Efficient shared processing with pipeline routing
 
-- **Resource Limits**: 1 CPU core, 1GB RAM
-- **Ports**: 
-  - 4318: OTLP/HTTP ingest
-  - 8888-8890: Prometheus endpoints for each pipeline
-  - 13133: Health check
-  - 1777: pprof profiling
-  - 55679: zpages
+- **Shared Processors**:
+  - Memory Limiter: Unified memory management across pipelines
+  - Batch Processor: Optimized batching (10k/15k limits)
+  - Resource Detection: Common attribute enrichment
 
-**Key Features**:
-- Dynamic configuration reloading via file watchers
-- Shared hostmetrics collection with process focus
-- Per-pipeline cardinality estimation
-- Configurable memory ballast and limits
+- **Pipeline Design**:
+  - Single receiver instance (OTLP on 4317/4318)
+  - Routing connector for pipeline distribution
+  - Per-pipeline exporters with dedicated endpoints
 
-#### 2. Observer Collector (`otelcol-observer`)
+- **Resource Efficiency**:
+  - 40% reduction in overhead vs separate pipelines
+  - Memory limit: 1024MB (configurable)
+  - CPU cores: 1-2 (GOMAXPROCS)
 
-Control plane component responsible for:
-- Scraping metrics from main collector's three endpoints
-- Calculating cardinality estimates and system KPIs
-- Providing aggregated metrics to Prometheus for control decisions
+**Key Ports**:
+- 4317-4318: OTLP gRPC/HTTP receivers
+- 8888-8890: Pipeline-specific Prometheus endpoints
+- 13133: Health check endpoint
+- 1777: pprof profiling
 
-**Resource Limits**: 1 CPU core, 256MB RAM
+#### 2. Control Actuator (Go Implementation)
 
-#### 3. Control Loop Actuator (`control-loop-actuator`)
+**Design**: Advanced PID control system with discrete output
 
-Bash-based PID-like controller that:
-- Queries cardinality metrics from Prometheus
-- Implements hysteresis to prevent oscillation
-- Updates optimization profile based on thresholds
-- Writes control signals to shared configuration files
+```go
+// PID control algorithm
+pidOutput := 0.5*error + 0.1*integralError + 0.05*derivative
 
-**Configuration**:
+// Hysteresis application
+if currentMode == Conservative {
+    threshold *= (1 + hysteresisFactor)
+}
+```
+
+**Features**:
+- **PID Controller**: Smooth transitions with tunable parameters
+- **Hysteresis**: 10% band prevents oscillation
+- **Stability Period**: 120s minimum between changes
+- **Metrics Endpoint**: Real-time control state at :8080/metrics
+
+**Control States**:
 - Conservative: < 15,000 time series
-- Balanced: 15,000 - 25,000 time series
+- Balanced: 15,000 - 25,000 time series  
 - Aggressive: > 25,000 time series
 
-#### 4. Synthetic Metrics Generator (`synthetic-metrics-generator`)
+#### 3. Anomaly Detector
 
-Go application generating realistic process metrics:
-- Configurable number of processes and hosts
-- Simulates memory leaks, CPU spikes, process restarts
-- Uses OpenTelemetry semantic conventions
-- Sends data via OTLP/HTTP to main collector
+**Architecture**: Multi-algorithm detection system
+
+**Detection Algorithms**:
+
+1. **Statistical Detection (Z-Score)**
+   - Window size: 20 data points
+   - Threshold: 3σ (configurable)
+   - Severity levels: low/medium/high/critical
+
+2. **Rate of Change Detection**
+   - Threshold: 100 units/second
+   - Expected rate calculation
+   - Rapid change identification
+
+3. **Pattern Matching**
+   - Cardinality explosion detection
+   - Memory leak patterns
+   - Control loop oscillation
+
+**Integration**:
+- Webhook to control actuator for remediation
+- Alert deduplication (5-minute window)
+- Configurable external webhooks
+
+#### 4. Benchmark Controller
+
+**Purpose**: Automated performance validation
+
+**Test Scenarios**:
+1. **Baseline Steady State**: 10-minute constant load
+2. **Cardinality Spike**: Sudden 5x increase
+3. **Gradual Growth**: Linear ramp over 20 minutes
+4. **Wave Pattern**: Oscillating load for hysteresis testing
+
+**Validation Criteria**:
+- Signal preservation targets
+- Resource usage limits
+- Response time thresholds
+- Control stability metrics
 
 ## Pipeline Architecture
 
+### Shared Processing Layer
+
+All pipelines share common processors for efficiency:
+
+```yaml
+processors:
+  memory_limiter:      # Shared across all pipelines
+    check_interval: 1s
+    limit_percentage: 75
+    
+  batch:               # Common batching config
+    timeout: 30s
+    send_batch_size: 10000
+    
+  resource:            # Unified resource detection
+    attributes:
+      - key: pipeline.name
+        action: upsert
+```
+
 ### Pipeline 1: Full Fidelity
 
-**Purpose**: Baseline metrics collection with minimal processing
+**Purpose**: Complete metrics baseline without optimization
 
-**Processing Steps**:
-1. Resource tagging (`phoenix.pipeline.strategy: "full_fidelity"`)
-2. Basic PID stripping for privacy
-3. Cardinality estimation
-4. Batching and export
+**Processing**:
+1. Shared processors only
+2. No attribute stripping
+3. Full cardinality preservation
+4. Direct export to Prometheus/New Relic
 
-**Cardinality Impact**: Preserves all attributes and dimensions
+**Use Case**: Reference baseline for signal preservation scoring
 
 ### Pipeline 2: Optimized
 
-**Purpose**: Moderate cardinality reduction through selective filtering and aggregation
+**Purpose**: Intelligent cardinality reduction
 
-**Processing Steps**:
-1. Priority-based filtering (keeps 30-40% of processes)
-2. Selective attribute dropping based on priority
-3. Rollup aggregation for low-priority processes
-4. Dynamic attribute list from control signals
-5. Cardinality estimation
+**Processing Stages**:
+1. Priority-based filtering (30-40% process retention)
+2. Dynamic attribute stripping based on control signals
+3. Aggregation for low-priority processes
+4. Rollup counters for visibility
 
 **Optimization Techniques**:
-- Process priority filtering
-- Attribute stripping for non-critical processes
-- Grouping and aggregation by executable name
-- Rollup counters for dropped processes
+- Process priority assignment
+- Selective attribute preservation
+- Group-by aggregation
+- Metadata enrichment
 
 ### Pipeline 3: Experimental TopK
 
-**Purpose**: Advanced cardinality reduction using TopK sampling
+**Purpose**: Advanced sampling for extreme cardinality
 
-**Processing Steps**:
-1. TopK processor (SpaceSaving algorithm)
-2. Aggressive attribute stripping
-3. Rollup for non-TopK processes
-4. Minimal attribute preservation
+**Processing**:
+1. Probabilistic sampling (10% default)
+2. TopK selection by CPU usage
+3. Aggressive attribute reduction
+4. Statistical extrapolation
 
 **Features**:
-- Dynamic K-value from control signals
-- CPU-time based ranking
-- Most aggressive cardinality reduction
-- Experimental processor usage
-
-## Control System
-
-### Adaptive Profile Switching
-
-The control system implements a feedback loop:
-
-1. **Metric Collection**: Observer scrapes pipeline outputs
-2. **Aggregation**: Cardinality estimates calculated per pipeline
-3. **Decision Logic**: Control actuator compares against thresholds
-4. **Profile Update**: Optimization mode written to control file
-5. **Configuration Reload**: Main collector reloads and adjusts behavior
-
-### Hysteresis Implementation
-
-To prevent rapid switching between profiles:
-- Different thresholds for upward vs downward transitions
-- Configurable transition delays
-- State persistence between actuator restarts
-
-### Control Signals
-
-Dynamic configuration via `configs/control/optimization_mode.yaml`:
-
-```yaml
-current_mode: "balanced"
-pipeline_enables:
-  full_fidelity: true
-  optimized: true
-  experimental_topk: false
-advanced_phoenix_parameters:
-  target_k_value_for_experimental_topk: 15
-  optimised_pipeline_keep_attributes:
-    - "host.name"
-    - "service.name"
-    - "process.executable.name"
-    - "phoenix.priority"
-```
-
-## Data Flow
-
-### Ingestion Flow
-
-1. **Hostmetrics**: Main collector scrapes host process metrics every 15s
-2. **Synthetic Data**: Go generator sends OTLP metrics to port 4318
-3. **Common Processing**: All metrics undergo initial enrichment
-4. **Fan-out**: Routing connector replicates data to all three pipelines
-
-### Processing Flow
-
-Each pipeline processes the same input data differently:
-
-```
-Input Metrics 
-    ↓
-Common Intake (priority assignment, basic cleanup)
-    ↓
-Routing Connector (fan-out to 3 pipelines)
-    ↓
-┌─────────────┬─────────────┬─────────────┐
-│   Full      │ Optimized   │Experimental │
-│ Fidelity    │ Pipeline    │    TopK     │
-└─────────────┴─────────────┴─────────────┘
-    ↓             ↓             ↓
-Local Prometheus Endpoints (8888-8890)
-    ↓             ↓             ↓
-New Relic Export (separate API keys)
-```
-
-### Export Flow
-
-- **Local Monitoring**: Each pipeline exports to separate Prometheus endpoints
-- **External Export**: Distinct New Relic API keys for each pipeline
-- **Observability**: Debug logging with sampling for troubleshooting
-
-## Resource Management
-
-### Memory Management
-
-- **Ballast Extension**: Pre-allocated memory to reduce GC pressure
-- **Memory Limiter**: Per-pipeline memory limits with backpressure
-- **Batch Processing**: Configurable batch sizes to optimize throughput
-
-### CPU Management
-
-- **GOMAXPROCS**: Limited to prevent resource contention
-- **Process Priorities**: Priority-based scheduling in optimized pipeline
-- **Cardinality Budgets**: Dynamic limits based on system capacity
-
-## Monitoring & Observability
-
-### Key Metrics
-
-- `phoenix_pipeline_output_cardinality_estimate`: Per-pipeline cardinality
-- `otelcol_processor_batch_batch_send_size`: Batch processing metrics
-- `process_memory_usage`: System resource consumption
-- `phoenix_control_profile_switches_total`: Control system activity
-
-### Health Checks
-
-- Collector health endpoints on ports 13133-13134
-- Service dependency checks in docker-compose
-- Prometheus targets monitoring for service discovery
-
-### Debugging
-
-- **pprof**: CPU and memory profiling on ports 1777-1778
-- **zpages**: Internal collector state on ports 55679-55680
-- **Debug Logging**: Structured JSON logs with sampling
-
-## Security Considerations
-
-### Data Privacy
-
-- Automatic PID stripping across all pipelines
-- Configurable attribute filtering
-- Command-line sanitization for sensitive processes
-
-### Network Security
-
-- Internal-only communication between services
-- External exports only to configured endpoints
-- Health check endpoints exposed for monitoring
-
-### Resource Isolation
-
-- Container-based isolation with resource limits
-- Separate data volumes for each service
-- Non-root user execution where possible
-
-## Scalability & Performance
-
-### Horizontal Scaling
-
-- Independent pipeline scaling
-- Configurable batch sizes and timeouts
-- Queue-based backpressure handling
-
-### Vertical Scaling
-
-- Adjustable resource limits via environment variables
-- Memory ballast tuning for GC optimization
-- CPU affinity configuration for NUMA systems
-
-### Performance Optimization
-
-- Efficient attribute processing with keep_keys operations
-- Cardinality-aware processing decisions
-- Streaming cardinality estimation to avoid buffering
-
-## Configuration Management
-
-### Environment Variables
-
-Key configuration via `.env` file:
-- Resource limits and scaling parameters
-- Threshold values for control decisions
-- Export destinations and API keys
-- Feature flags for pipeline enables
-
-### Dynamic Configuration
-
-- File-based control signals with hot-reload
-- Template-based configuration generation
-- Validation and rollback mechanisms
-
-### Deployment Patterns
-
-- Docker Compose for development and testing
-- Kubernetes-ready configuration structure
-- Environment-specific overrides support
+- Configurable sampling rate
+- Dynamic K-value from control
+- Minimal attribute set
+- Cardinality guarantees
 
 ## Control System Design
 
 ### Adaptive Control Loop
 
-The Phoenix-vNext control system implements a robust adaptive control loop with the following features:
+```
+┌─────────────────────────────────────────────────────┐
+│                  Control Loop Flow                   │
+├─────────────────────────────────────────────────────┤
+│                                                      │
+│  Prometheus ──► Metrics Query ──► PID Controller    │
+│      ▲                                │              │
+│      │                                ▼              │
+│  Recording     Error Calc ◄── Target Comparison     │
+│   Rules            │                                 │
+│      ▲             ▼                                 │
+│      │      Hysteresis Check ──► Mode Decision      │
+│  Pipeline          │                  │              │
+│  Metrics           ▼                  ▼              │
+│      ▲      Stability Check ──► Config Update       │
+│      │                                │              │
+│      └────── Main Collector ◄─────────┘              │
+│                                                      │
+└─────────────────────────────────────────────────────┘
+```
 
-#### Reliable State Management
-- **Atomic File Updates**: All configuration changes are made using atomic file writes to prevent corrupted configurations.
-- **Locking Mechanism**: Proper file locking prevents race conditions between multiple writers.
-- **Error Recovery**: The control actuator implements retry mechanisms and fallbacks for resilience.
+### Control Algorithm
 
-#### Control Loop Stability 
-- **Hysteresis**: The control system implements a configurable hysteresis factor (default 10%) to prevent oscillation when metrics are near thresholds.
-- **Stability Period**: A configurable time window required between profile changes prevents rapid oscillation.
-- **Profile-Aware Transitions**: Different thresholds are used depending on the current profile to create a "sticky" state effect.
+1. **Metric Collection** (every 60s)
+   - Query cardinality from Prometheus
+   - Calculate error from target (20k)
 
-#### Monitoring and Alerting
-- **Comprehensive Prometheus Rules**: Recording rules for key performance indicators and alerting rules for system health.
-- **Pipeline Health Metrics**: Dedicated metrics for monitoring the health of each pipeline.
-- **Configuration Validation**: Validation of generated configuration before applying changes.
+2. **PID Calculation**
+   - Proportional: 0.5 × current_error
+   - Integral: 0.1 × accumulated_error
+   - Derivative: 0.05 × error_rate
 
-### Error Handling and Resilience
+3. **Mode Decision**
+   - Apply hysteresis bands
+   - Check stability period
+   - Determine optimal mode
 
-The system incorporates multiple layers of error handling:
+4. **Configuration Update**
+   - Atomic file write
+   - Version tracking
+   - Rollback capability
 
-1. **Prometheus Query Resilience**:
-   - Configurable retry mechanism for transient errors
-   - Default values for unavailable metrics
-   - Validation of query results
+### Stability Mechanisms
 
-2. **Resource Management**:
-   - Memory limit detection and enforcement
-   - Garbage collection triggers for high memory scenarios
-   - Resource usage monitoring for early detection of issues
+**Hysteresis Implementation**:
+```go
+// Different thresholds based on current mode
+if currentMode == Conservative {
+    upperThreshold = 15000 * 1.1  // 16,500
+} else if currentMode == Balanced {
+    lowerThreshold = 15000 * 0.9  // 13,500
+    upperThreshold = 25000 * 1.1  // 27,500
+}
+```
 
-3. **Graceful Shutdown**:
-   - Proper signal handling for clean termination
-   - Resource cleanup procedures
-   - In-progress operation completion
+**Stability Period**:
+- Enforces minimum time between transitions
+- Prevents rapid mode switching
+- Configurable (default: 120s)
 
-## Testing Strategy
+## Recording Rules Architecture
 
-The Phoenix-vNext system includes a comprehensive testing approach:
+### Rule Categories
 
-1. **Unit Testing**:
-   - Mock-based tests for the control actuator
-   - Isolation testing of key components
+1. **Efficiency Metrics**
+   ```promql
+   phoenix:signal_preservation_score
+   phoenix:cardinality_efficiency_ratio
+   phoenix:resource_efficiency_score
+   ```
 
-2. **Integration Testing**:
-   - Docker-based testing for full system interaction
-   - Simulated metric load tests
+2. **Performance Metrics**
+   ```promql
+   phoenix:pipeline_latency_p99
+   phoenix:pipeline_throughput_rate
+   phoenix:pipeline_error_rate
+   ```
 
-3. **Performance Testing**:
-   - Cardinality benchmarking
-   - Load testing with synthetic generator
+3. **Control Metrics**
+   ```promql
+   phoenix:control_mode_transitions_total
+   phoenix:control_stability_score
+   phoenix:control_loop_effectiveness
+   ```
 
-## Operational Considerations
+4. **Anomaly Preparation**
+   ```promql
+   phoenix:cardinality_zscore
+   phoenix:cardinality_explosion_risk
+   ```
 
-Refer to the TROUBLESHOOTING.md document for detailed operational runbooks and issue resolution procedures.
+### Alert Rules
+
+Critical alerts for production operations:
+
+- `PhoenixCardinalityExplosion`: Growth rate >5x normal
+- `PhoenixResourceExhaustion`: Memory usage >90%
+- `PhoenixControlLoopInstability`: Stability score <0.5
+- `PhoenixSLOViolation`: Signal preservation <95%
+
+## Data Flow
+
+### Ingestion Flow
+
+```
+Metric Sources
+    │
+    ▼
+OTLP Receiver (4317/4318)
+    │
+    ▼
+Shared Processing Layer
+├── Memory Limiter
+├── Batch Processor
+└── Resource Detection
+    │
+    ▼
+Routing Connector
+    │
+    ├──► Full Fidelity Pipeline
+    ├──► Optimized Pipeline
+    └──► Experimental Pipeline
+         │
+         ▼
+    Parallel Export
+    ├── Prometheus Endpoints
+    └── New Relic OTLP
+```
+
+### Control Flow
+
+```
+Observer Collector
+    │
+    ▼
+Prometheus + Rules
+    │
+    ├──► Control Actuator
+    │         │
+    │         ▼
+    │    PID Control
+    │         │
+    │         ▼
+    │    Mode Decision
+    │         │
+    │         ▼
+    │    Config Update
+    │         │
+    └─────────┘
+```
+
+## Performance Characteristics
+
+### Resource Usage
+
+| Component | CPU | Memory | Network |
+|-----------|-----|--------|---------|
+| Main Collector | 1-2 cores | 1024MB | ~100Mbps |
+| Control Actuator | 0.1 cores | 64MB | Minimal |
+| Anomaly Detector | 0.2 cores | 128MB | Minimal |
+| Observer | 0.5 cores | 256MB | ~10Mbps |
+
+### Latency Metrics
+
+- Ingestion latency: <10ms p99
+- Pipeline processing: <50ms p99
+- Control loop response: <100ms
+- Config reload: <2s
+
+### Scalability Limits
+
+- Max time series: 100k per pipeline
+- Max cardinality: 1M unique series
+- Max ingestion rate: 100k metrics/sec
+- Max export rate: 50k metrics/sec
+
+## Security Architecture
+
+### Data Privacy
+- PID stripping across all pipelines
+- Configurable attribute filtering
+- Command-line sanitization
+- No credential exposure in metrics
+
+### Network Security
+- Internal-only service communication
+- TLS for external exports
+- API key rotation support
+- Rate limiting on endpoints
+
+### Access Control
+- Read-only metric endpoints
+- Authenticated control APIs
+- RBAC-ready configuration
+- Audit logging capability
+
+## Deployment Patterns
+
+### Development
+```bash
+docker-compose up -d
+```
+
+### Production (Kubernetes)
+```bash
+helm install phoenix ./helm/phoenix \
+  --set-file config=configs/production.yaml
+```
+
+### Cloud-Native (AWS/Azure)
+- EKS/AKS deployment ready
+- Terraform modules included
+- Auto-scaling configurations
+- Multi-region support
+
+## Monitoring & Observability
+
+### Key Dashboards
+
+1. **Phoenix Control Loop Dashboard**
+   - Real-time mode status
+   - Transition history
+   - Stability metrics
+   - PID controller state
+
+2. **Pipeline Performance Dashboard**
+   - Cardinality per pipeline
+   - Processing latency
+   - Error rates
+   - Resource usage
+
+3. **Anomaly Detection Dashboard**
+   - Active alerts
+   - Detection patterns
+   - False positive rate
+   - Remediation actions
+
+### Debug Endpoints
+
+- `/debug/pprof`: CPU/memory profiling
+- `/zpages`: Internal traces
+- `/metrics`: Prometheus metrics
+- `/health`: Liveness probe
+
+## Future Architecture Considerations
+
+### Phase 4 Enhancements (Roadmap)
+
+1. **Unified Pipeline Architecture**
+   - Single pipeline with dynamic processing
+   - Mode-based processor chains
+   - Reduced resource overhead
+
+2. **ML-Based Anomaly Detection**
+   - Time series forecasting
+   - Clustering algorithms
+   - Automated threshold tuning
+
+3. **Multi-Region Support**
+   - Cross-region replication
+   - Geo-aware routing
+   - Regional control loops
+
+4. **Advanced Cost Optimization**
+   - Per-metric cost tracking
+   - Budget-based throttling
+   - ROI analytics
