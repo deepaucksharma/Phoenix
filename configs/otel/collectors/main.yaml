@@ -3,7 +3,7 @@
 
 config_sources:
   ctlfile_optimization_mode:
-    path: ${CONTROL_SIGNALS_PATH_IN_CONTAINER:/etc/otelcol/control_signals/optimization_mode.yaml}
+    path: ${CONTROL_SIGNALS_PATH_IN_CONTAINER:/etc/otelcol/control/optimization_mode.yaml}
     watch: true
     reload_delay: 10s
 

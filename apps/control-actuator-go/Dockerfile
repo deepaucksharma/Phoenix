@@ -26,6 +26,6 @@ WORKDIR /root/
 COPY --from=builder /app/control-actuator .
 
 # Expose metrics port
-EXPOSE 8080
+EXPOSE 8081
 
 CMD ["./control-actuator"]

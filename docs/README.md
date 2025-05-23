@@ -6,17 +6,13 @@ This directory contains documentation for the Phoenix v3 Cardinality Optimizatio
 ## Core Documentation
 
 ### System Architecture
-- **[Runbooks](../runbooks/README.md)** - Operational procedures and troubleshooting guides
-- **[CLAUDE.md](../CLAUDE.md)** - AI assistant instructions and codebase guidance
+- **[CLAUDE.md](../CLAUDE.md)** - Comprehensive AI assistant instructions, architecture details, and operational procedures
+- **[README.md](../README.md)** - Main project documentation with quick start guide
 
-### Recent Changes
-- **[Repository Cleanup Summary](CLEANUP_SUMMARY.md)** - Overview of the major repository restructuring
-- **[Fixes Applied](FIXES_APPLIED.md)** - Latest fixes addressing code review issues
-- **[Monorepo Modularity Review](MONOREPO_MODULARITY_REVIEW.md)** - Analysis of the monorepo structure
-
-### Testing & Validation
-- **[Manual Test Results](../MANUAL_TEST_RESULTS.md)** - Results from manual testing sessions
-- **[Complete Solution Review](COMPLETE_SOLUTION_REVIEW.md)** - Comprehensive system validation
+### Component Documentation
+- **[Scripts Documentation](../scripts/consolidated/README.md)** - Consolidated scripts organization and usage
+- **[Prometheus Rules](../configs/monitoring/prometheus/rules/README.md)** - Metrics and alerting rules documentation
+- **[Go Common Packages](../packages/go-common/README.md)** - Shared Go packages documentation
 
 ## Quick Links
 
@@ -26,7 +22,7 @@ This directory contains documentation for the Phoenix v3 Cardinality Optimizatio
 - [Control System](../configs/control/)
 
 ### Scripts
-- [Consolidated Scripts](../scripts/consolidated/README.md)
+- [Master Script Manager](../scripts/consolidated/phoenix-scripts.sh) - Unified entry point
 - [Initialize Environment](../scripts/consolidated/core/initialize-environment.sh)
 - [Run Phoenix](../scripts/consolidated/core/run-phoenix.sh)
 
@@ -35,11 +31,24 @@ This directory contains documentation for the Phoenix v3 Cardinality Optimizatio
 - [Azure Deployment](../scripts/consolidated/deployment/deploy-azure.sh)
 - [Docker Compose](../docker-compose.yaml)
 
-## Historical Documentation
-The following documents were created during the repository cleanup and are preserved for reference:
-- Script consolidation process
-- Implementation gap analysis
-- Metric naming fixes
-- Testing tracking
+## Key System Information
 
-These have been archived but key information has been incorporated into the main documentation.
+### Service Ports
+- Control Actuator: `8081`
+- Anomaly Detector: `8082`
+- Benchmark Controller: `8083`
+- Main Collector Health: `13133`
+- Observer Health: `13134`
+
+### Performance Targets
+- Signal preservation: >98%
+- Cardinality reduction: 15-40%
+- Control loop latency: <100ms
+- Memory usage: <512MB baseline
+
+## Historical Documentation
+Historical reports and analysis documents are preserved in the [archive](archive/) directory:
+- `reports-2025-05-24/` - Repository cleanup, system reviews, and test results
+- Previous cleanup and migration documents
+
+All critical information from these documents has been incorporated into the main documentation.

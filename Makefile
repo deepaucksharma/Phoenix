@@ -114,7 +114,7 @@ setup-env:
 
 validate-config:
 	@echo "$(BLUE)Validating configurations...$(NC)"
-	@find config -name "*.yaml" -o -name "*.yml" | xargs yamllint
+	@find configs -name "*.yaml" -o -name "*.yml" | xargs yamllint
 	@echo "$(GREEN)Configuration validation complete!$(NC)"
 
 # Documentation
