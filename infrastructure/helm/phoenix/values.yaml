@@ -1,0 +1,250 @@
+# Default values for Phoenix
+global:
+  cloudProvider: "" # aws, azure, gcp
+  storageClass: "" # Leave empty for default
+  domain: "" # Your domain for ingress
+
+# Phoenix Collector Configuration
+collector:
+  enabled: true
+  replicas: 3
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    tag: 0.91.0
+    pullPolicy: IfNotPresent
+  
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+  
+  service:
+    type: LoadBalancer
+    annotations: {}
+    # AWS NLB annotations
+    # service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    # Azure LB annotations  
+    # service.beta.kubernetes.io/azure-load-balancer-internal: "false"
+  
+  config:
+    # Control thresholds
+    conservativeMaxTS: 15000
+    aggressiveMinTS: 25000
+    hysteresisFactor: 0.1
+    stabilityPeriodSeconds: 120
+
+# Control Plane Configuration
+controlPlane:
+  observer:
+    enabled: true
+    replicas: 2
+    image:
+      repository: otel/opentelemetry-collector-contrib
+      tag: 0.91.0
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+  
+  actuator:
+    enabled: true
+    replicas: 1
+    image:
+      repository: alpine
+      tag: 3.18
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+# Validator/Benchmark Service
+validator:
+  enabled: true
+  schedule: "*/15 * * * *" # Every 15 minutes
+  image:
+    repository: phoenix-validator
+    tag: latest
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# Load Generators
+generators:
+  synthetic:
+    enabled: true
+    replicas: 2
+    processCountPerHost: 250
+    hostCount: 3
+    metricInterval: 15
+  
+  complex:
+    enabled: false
+    metricCount: 1000
+    dimensionCount: 5
+
+# Storage Configuration
+storage:
+  # Control signals storage
+  controlSignals:
+    size: 1Gi
+    # AWS: Use EFS
+    # Azure: Use Azure Files
+    storageClass: ""
+  
+  # Benchmark data storage
+  benchmarkData:
+    size: 10Gi
+    storageClass: ""
+
+# Ingress Configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+    # AWS ALB
+    # kubernetes.io/ingress.class: alb
+    # alb.ingress.kubernetes.io/scheme: internet-facing
+    # Azure Application Gateway
+    # kubernetes.io/ingress.class: azure/application-gateway
+  hosts:
+    - host: phoenix.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: grafana
+        - path: /prometheus
+          pathType: Prefix
+          service: prometheus
+  tls: []
+    # - secretName: phoenix-tls
+    #   hosts:
+    #     - phoenix.example.com
+
+# Monitoring Stack
+prometheus:
+  enabled: true
+  server:
+    persistentVolume:
+      enabled: true
+      size: 50Gi
+    retention: "30d"
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+    
+    # Recording rules
+    serverFiles:
+      recording_rules.yml:
+        groups:
+          - name: phoenix_core
+            interval: 30s
+            rules:
+              - record: phoenix_signal_preservation_score
+                expr: |
+                  1 - (
+                    rate(otelcol_processor_dropped_metric_points_total[5m]) / 
+                    clamp_min(rate(otelcol_receiver_accepted_metric_points_total[5m]), 1)
+                  )
+
+grafana:
+  enabled: true
+  adminPassword: "phoenix-admin"
+  persistence:
+    enabled: true
+    size: 10Gi
+  
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'phoenix'
+          orgId: 1
+          folder: 'Phoenix'
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/phoenix
+  
+  dashboardsConfigMaps:
+    phoenix: "phoenix-dashboards"
+  
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://{{ .Release.Name }}-prometheus-server
+          access: proxy
+          isDefault: true
+
+# Cloud-specific configurations
+aws:
+  region: us-east-1
+  irsaEnabled: true
+  serviceAccounts:
+    collector:
+      annotations:
+        eks.amazonaws.com/role-arn: ""
+    validator:
+      annotations:
+        eks.amazonaws.com/role-arn: ""
+
+azure:
+  location: eastus
+  workloadIdentityEnabled: true
+  storageAccount: ""
+  resourceGroup: ""
+
+# Security
+security:
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    fsGroup: 65534
+  
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 65534
+    capabilities:
+      drop:
+        - ALL
+
+# Node selectors and tolerations
+nodeSelector: {}
+  # workload: general
+
+tolerations: []
+  # - key: "monitoring"
+  #   operator: "Equal"
+  #   value: "true"
+  #   effect: "NoSchedule"
+
+affinity: {}
