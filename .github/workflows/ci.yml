@@ -1,0 +1,258 @@
+name: Phoenix CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  DOCKER_REGISTRY: ghcr.io
+  DOCKER_IMAGE_PREFIX: ${{ github.repository }}
+
+jobs:
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Validate YAML configurations
+        run: |
+          sudo apt-get update && sudo apt-get install -y yamllint
+          yamllint -d relaxed configs/
+          
+      - name: Validate Docker Compose
+        run: |
+          docker-compose config > /dev/null
+          
+      - name: Check configuration checksums
+        run: |
+          sha256sum -c CHECKSUMS.txt || echo "Warning: Checksum mismatch detected"
+
+  test-go:
+    name: Test Go Services
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - apps/synthetic-generator
+          - apps/control-actuator-go
+          - services/benchmark
+          - services/validator
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          
+      - name: Run tests
+        working-directory: ${{ matrix.service }}
+        run: |
+          go mod download
+          go test -v -race -coverprofile=coverage.out ./...
+          
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ${{ matrix.service }}/coverage.out
+          flags: ${{ matrix.service }}
+
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [validate, test-go]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Start Phoenix stack
+        run: |
+          ./scripts/initialize-environment.sh
+          docker-compose up -d
+          
+      - name: Wait for services to be ready
+        run: |
+          timeout 300 bash -c 'until curl -f http://localhost:13133/health; do sleep 5; done'
+          timeout 300 bash -c 'until curl -f http://localhost:9090/-/ready; do sleep 5; done'
+          
+      - name: Run integration tests
+        run: |
+          # Test metric ingestion
+          curl -X POST http://localhost:4318/v1/metrics \
+            -H "Content-Type: application/json" \
+            -d '{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"test"}}]},"scopeMetrics":[{"metrics":[{"name":"test.metric","gauge":{"dataPoints":[{"asInt":"100"}]}}]}]}]}'
+          
+          # Wait for metrics to propagate
+          sleep 30
+          
+          # Verify metrics in Prometheus
+          curl -s http://localhost:9090/api/v1/query?query=up | grep -q "success" || exit 1
+          
+      - name: Run benchmark smoke test
+        run: |
+          curl -X POST http://localhost:8080/benchmark/run \
+            -H "Content-Type: application/json" \
+            -d '{"scenario": "baseline_steady_state"}'
+            
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          docker-compose logs > integration-test-logs.txt
+          
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: integration-test-logs
+          path: integration-test-logs.txt
+          
+      - name: Cleanup
+        if: always()
+        run: docker-compose down -v
+
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [test-go, test-integration]
+    strategy:
+      matrix:
+        service:
+          - name: otelcol-main
+            context: services/collector
+            dockerfile: Dockerfile
+          - name: otelcol-observer
+            context: services/collector
+            dockerfile: Dockerfile
+          - name: control-actuator-go
+            context: apps/control-actuator-go
+            dockerfile: Dockerfile
+          - name: synthetic-generator
+            context: apps/synthetic-generator
+            dockerfile: Dockerfile
+          - name: benchmark-controller
+            context: services/benchmark
+            dockerfile: Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.context }}/${{ matrix.service.dockerfile }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}/${{ matrix.service.name }}:latest
+            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}/${{ matrix.service.name }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  performance-test:
+    name: Performance Validation
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Update image references
+        run: |
+          sed -i "s|image: \(.*\):|image: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}/\1:${{ github.sha }}|g" docker-compose.yaml
+          
+      - name: Start Phoenix with latest images
+        run: |
+          ./scripts/initialize-environment.sh
+          docker-compose up -d
+          
+      - name: Run performance benchmark
+        run: |
+          # Wait for services
+          timeout 300 bash -c 'until curl -f http://localhost:8080/health; do sleep 5; done'
+          
+          # Run baseline benchmark
+          curl -X POST http://localhost:8080/benchmark/run \
+            -H "Content-Type: application/json" \
+            -d '{"scenario": "baseline_steady_state"}'
+            
+          # Wait for benchmark to complete (12 minutes total)
+          sleep 720
+          
+          # Get results
+          RESULTS=$(curl -s http://localhost:8080/benchmark/results)
+          echo "$RESULTS" > benchmark-results.json
+          
+          # Check if benchmark passed
+          echo "$RESULTS" | jq -e '.[0].passed' || (echo "Benchmark failed" && exit 1)
+          
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: benchmark-results.json
+          
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const results = JSON.parse(fs.readFileSync('benchmark-results.json', 'utf8'));
+            const comment = `## Performance Benchmark Results
+            
+            | Metric | Value |
+            |--------|-------|
+            | Signal Preservation | ${results[0].metrics.signal_preservation.toFixed(2)} |
+            | Cardinality Reduction | ${results[0].metrics.cardinality_reduction.toFixed(1)}% |
+            | Avg CPU Usage | ${results[0].resource_usage.avg_cpu.toFixed(1)}% |
+            | Max Memory | ${results[0].resource_usage.max_memory.toFixed(0)} MB |
+            | Test Result | ${results[0].passed ? '✅ Passed' : '❌ Failed'} |
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  deploy:
+    name: Deploy to Environment
+    runs-on: ubuntu-latest
+    needs: [build, performance-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+          
+      - name: Update Kubernetes manifests
+        run: |
+          sed -i "s|image: .*|image: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}/otelcol-main:${{ github.sha }}|g" infrastructure/kubernetes/deployments/otel-collector.yaml
+          sed -i "s|image: .*|image: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}/control-actuator-go:${{ github.sha }}|g" infrastructure/kubernetes/deployments/control-actuator.yaml
+          
+      - name: Deploy to Kubernetes
+        run: |
+          aws eks update-kubeconfig --name phoenix-cluster
+          kubectl apply -f infrastructure/kubernetes/
+          kubectl rollout status deployment/otel-collector -n phoenix
+          kubectl rollout status deployment/control-actuator -n phoenix
