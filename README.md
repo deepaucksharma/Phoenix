@@ -296,3 +296,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Issues**: [GitHub Issues](https://github.com/deepaucksharma/Phoenix/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/deepaucksharma/Phoenix/discussions)
 - **Email**: phoenix-support@example.com
+## 🔍 Retrospective Documents
+
+- [Project Retrospective](docs/RETROSPECTIVE.md) - How we'd do it from scratch
+- [Missing Features](docs/MISSING_FEATURES.md) - Components not yet migrated
+- [Ideal vs Current](docs/IDEAL_VS_CURRENT.md) - Gap analysis and roadmap
