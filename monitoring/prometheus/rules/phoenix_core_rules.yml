@@ -1,0 +1,120 @@
+groups:
+  - name: phoenix_core
+    interval: 30s
+    rules:
+      # Signal Preservation Score - measures how well pipelines preserve critical metrics
+      - record: phoenix_signal_preservation_score
+        expr: |
+          1 - (
+            rate(otelcol_processor_dropped_metric_points_total[5m]) / 
+            clamp_min(rate(otelcol_receiver_accepted_metric_points_total[5m]), 1)
+          )
+          
+      # Pipeline Efficiency Ratio - cost reduction achieved
+      - record: phoenix_pipeline_efficiency_ratio
+        expr: |
+          1 - (
+            sum by (pipeline) (phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate) / 
+            clamp_min(sum(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{pipeline="pipeline_full_fidelity"}), 1)
+          )
+          
+      # Cardinality Growth Rate - detect explosions
+      - record: phoenix_cardinality_growth_rate
+        expr: |
+          rate(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[5m])
+          
+      # Control Loop Stability - measure mode switching frequency
+      - record: phoenix_control_loop_stability_score
+        expr: |
+          1 - (
+            rate(phoenix_control_mode_changes_total[30m]) / 10
+          )
+          
+      # Memory Pressure Score - detect resource issues
+      - record: phoenix_memory_pressure_score
+        expr: |
+          (
+            sum by (service) (process_resident_memory_bytes) / 
+            sum by (service) (process_resident_memory_bytes + on(service) group_left() (container_spec_memory_limit_bytes or on() vector(1073741824)))
+          )
+          
+      # Processing Latency P95
+      - record: phoenix_processing_latency_p95
+        expr: |
+          histogram_quantile(0.95, 
+            sum by (pipeline, le) (
+              rate(otelcol_processor_batch_batch_send_duration_seconds_bucket[5m])
+            )
+          )
+          
+      # Cost Per Time Series
+      - record: phoenix_cost_per_timeseries_usd
+        expr: |
+          (0.5 / 1000000) * phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate
+          
+      # Anomaly Detection Score (simplified)
+      - record: phoenix_anomaly_score
+        expr: |
+          abs(
+            (phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate - 
+             avg_over_time(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[1h])) /
+            stddev_over_time(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[1h])
+          )
+
+  - name: phoenix_alerts
+    interval: 30s
+    rules:
+      # Alert on cardinality explosion
+      - alert: PhoenixCardinalityExplosion
+        expr: phoenix_cardinality_growth_rate > 10000
+        for: 2m
+        labels:
+          severity: critical
+          component: cardinality
+        annotations:
+          summary: "Cardinality explosion detected"
+          description: "Pipeline {{ $labels.pipeline }} cardinality growing at {{ $value }} series/sec"
+          
+      # Alert on low signal preservation
+      - alert: PhoenixSignalLoss
+        expr: phoenix_signal_preservation_score < 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: quality
+        annotations:
+          summary: "High metric drop rate"
+          description: "Pipeline {{ $labels.pipeline }} preserving only {{ $value | humanizePercentage }} of signals"
+          
+      # Alert on control instability
+      - alert: PhoenixControlInstability
+        expr: phoenix_control_loop_stability_score < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: control
+        annotations:
+          summary: "Control loop oscillating"
+          description: "Control system stability score: {{ $value | humanizePercentage }}"
+          
+      # Alert on high memory usage
+      - alert: PhoenixMemoryPressure
+        expr: phoenix_memory_pressure_score > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High memory usage"
+          description: "Service {{ $labels.service }} using {{ $value | humanizePercentage }} of memory limit"
+          
+      # Alert on high processing latency
+      - alert: PhoenixHighLatency
+        expr: phoenix_processing_latency_p95 > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "High processing latency"
+          description: "Pipeline {{ $labels.pipeline }} P95 latency: {{ $value }}s"
