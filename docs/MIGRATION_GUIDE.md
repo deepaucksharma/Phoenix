@@ -54,7 +54,7 @@ make deploy-generators
 ### 5. Verify Migration
 ```bash
 # Check service health
-make health-check
+make health
 
 # View logs
 make logs
