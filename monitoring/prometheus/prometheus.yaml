@@ -13,7 +13,8 @@ global:
 
 # Load rule files from this directory.
 rule_files:
-  - "/etc/prometheus/rules/phoenix_rules.yaml" # Path inside Prometheus container
+  - "/etc/prometheus/rules/*.yml" # All rule files
+  - "/etc/prometheus/rules/phoenix_comprehensive_rules.yml" # Comprehensive rules for Phoenix
 
 scrape_configs:
   - job_name: 'otelcol-main-telemetry' # Collector's own operational metrics (from :8888)
@@ -59,11 +60,32 @@ scrape_configs:
         target_label: otel_component
         replacement: "synthetic_generator_self"
   
-  - job_name: 'control-loop-actuator' # If actuator script were to expose metrics (e.g., via textfile collector)
-    # This is advanced. For now, actuator is observed via its logs and the control file.
-    # scrape_interval: 30s
-    # static_configs:
-    #   - targets: ['control-loop-actuator:9100'] # Hypothetical port
+  - job_name: 'control-actuator-go' # Go-based control actuator metrics
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['control-actuator-go:8080']
+    relabel_configs:
+      - source_labels: []
+        target_label: otel_component
+        replacement: "control_actuator"
+
+  - job_name: 'anomaly-detector' # Anomaly detection service
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['anomaly-detector:8080']
+    relabel_configs:
+      - source_labels: []
+        target_label: otel_component
+        replacement: "anomaly_detector"
+
+  - job_name: 'benchmark-controller' # Benchmark controller service
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['benchmark-controller:8080']
+    relabel_configs:
+      - source_labels: []
+        target_label: otel_component
+        replacement: "benchmark_controller"
 
   - job_name: 'prometheus' # Prometheus self-monitoring
     scrape_interval: 10s

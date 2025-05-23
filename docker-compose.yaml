@@ -1,0 +1,196 @@
+version: '3.8'
+
+services:
+  # OpenTelemetry Collectors
+  otelcol-main:
+    image: otel/opentelemetry-collector-contrib:0.91.0
+    container_name: otelcol-main
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./configs/otel/collectors/main-optimized.yaml:/etc/otel-collector-config.yaml:ro
+      - ./configs/control/optimization_mode.yaml:/configs/control/optimization_mode.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+      - "8888:8888"   # Prometheus metrics (full fidelity)
+      - "8889:8889"   # Prometheus metrics (optimized)
+      - "8890:8890"   # Prometheus metrics (experimental)
+      - "13133:13133" # health_check extension
+      - "1777:1777"   # pprof extension
+    environment:
+      - GOGC=100
+      - GOMEMLIMIT=${OTELCOL_MAIN_MEMORY_LIMIT_MIB:-1024}MiB
+      - GOMAXPROCS=${OTELCOL_MAIN_GOMAXPROCS:-1}
+      - OPTIMIZATION_MODE=${OPTIMIZATION_MODE:-balanced}
+      - NEW_RELIC_OTLP_ENDPOINT=${NEW_RELIC_OTLP_ENDPOINT}
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
+    mem_limit: ${OTELCOL_MAIN_MEMORY_LIMIT_MIB:-1024}m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:13133"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - phoenix
+
+  otelcol-observer:
+    image: otel/opentelemetry-collector-contrib:0.91.0
+    container_name: otelcol-observer
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./services/control-plane/observer/config/observer-enhanced.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "9888:9888"   # Prometheus metrics (KPIs)
+      - "13134:13134" # health_check extension
+      - "1778:1778"   # pprof extension
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:13134"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      otelcol-main:
+        condition: service_healthy
+    networks:
+      - phoenix
+
+  # Control Plane Services
+  control-actuator-go:
+    build:
+      context: ./apps/control-actuator-go
+      dockerfile: Dockerfile
+    container_name: control-actuator-go
+    volumes:
+      - ./configs/control/optimization_mode.yaml:/configs/control/optimization_mode.yaml:rw
+    ports:
+      - "8081:8080"
+    environment:
+      - PROMETHEUS_URL=http://prometheus:9090
+      - CONTROL_CONFIG_PATH=/configs/control/optimization_mode.yaml
+      - TARGET_OPTIMIZED_PIPELINE_TS_COUNT=${TARGET_OPTIMIZED_PIPELINE_TS_COUNT:-20000}
+      - THRESHOLD_OPTIMIZATION_CONSERVATIVE_MAX_TS=${THRESHOLD_OPTIMIZATION_CONSERVATIVE_MAX_TS:-15000}
+      - THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS=${THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS:-25000}
+      - HYSTERESIS_FACTOR=${HYSTERESIS_FACTOR:-0.1}
+      - ADAPTIVE_CONTROLLER_STABILITY_SECONDS=${ADAPTIVE_CONTROLLER_STABILITY_SECONDS:-120}
+      - ADAPTIVE_CONTROLLER_INTERVAL_SECONDS=${ADAPTIVE_CONTROLLER_INTERVAL_SECONDS:-60}
+    depends_on:
+      otelcol-observer:
+        condition: service_healthy
+      prometheus:
+        condition: service_healthy
+    networks:
+      - phoenix
+
+  # Anomaly Detection
+  anomaly-detector:
+    build:
+      context: ./apps/anomaly-detector
+      dockerfile: Dockerfile
+    container_name: anomaly-detector
+    ports:
+      - "8082:8080"
+    environment:
+      - PROMETHEUS_URL=http://prometheus:9090
+      - CONTROL_WEBHOOK_URL=http://control-actuator-go:8080/anomaly
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL}
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - phoenix
+
+  # Benchmark Controller
+  benchmark-controller:
+    build:
+      context: ./services/benchmark
+      dockerfile: Dockerfile
+    container_name: benchmark-controller
+    ports:
+      - "8083:8080"
+    environment:
+      - PROMETHEUS_URL=http://prometheus:9090
+      - SYNTHETIC_GENERATOR_URL=http://synthetic-metrics-generator:8080
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - phoenix
+
+  # Synthetic Metrics Generator
+  synthetic-metrics-generator:
+    build:
+      context: ./apps/synthetic-generator
+      dockerfile: Dockerfile
+    container_name: synthetic-metrics-generator
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otelcol-main:4317
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=synthetic-generator,service.version=1.0
+      - SYNTHETIC_PROCESS_COUNT_PER_HOST=${SYNTHETIC_PROCESS_COUNT_PER_HOST:-250}
+      - SYNTHETIC_HOST_COUNT=${SYNTHETIC_HOST_COUNT:-3}
+      - SYNTHETIC_METRIC_EMIT_INTERVAL_S=${SYNTHETIC_METRIC_EMIT_INTERVAL_S:-15}
+      - SYNTHETIC_JITTER_FACTOR=${SYNTHETIC_JITTER_FACTOR:-0.1}
+      - SYNTHETIC_SPIKE_FACTOR=${SYNTHETIC_SPIKE_FACTOR:-2.0}
+      - SYNTHETIC_SPIKE_PROBABILITY=${SYNTHETIC_SPIKE_PROBABILITY:-0.01}
+    depends_on:
+      otelcol-main:
+        condition: service_healthy
+    networks:
+      - phoenix
+
+  # Monitoring Stack
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--enable-feature=exemplar-storage'
+      - '--enable-feature=remote-write-receiver'
+    volumes:
+      - ./configs/monitoring/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - ./configs/monitoring/prometheus/rules/:/etc/prometheus/rules/:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - phoenix
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - ./configs/monitoring/grafana/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      - ./configs/monitoring/grafana/dashboards_provider.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml:ro
+      - ./configs/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - phoenix
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  phoenix:
+    driver: bridge
