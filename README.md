@@ -1,142 +1,285 @@
 # Phoenix - Adaptive Cardinality Optimization System
 
 <div align="center">
-  <img src="docs/assets/phoenix-logo.png" alt="Phoenix Logo" width="200"/>
   
   [![CI](https://github.com/deepaucksharma/Phoenix/actions/workflows/ci.yml/badge.svg)](https://github.com/deepaucksharma/Phoenix/actions)
   [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
   [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Compatible-orange)](https://opentelemetry.io/)
+  
 </div>
 
-## Overview
+## 🚀 Overview
 
-Phoenix is an adaptive cardinality optimization system for OpenTelemetry metrics collection and processing. It dynamically manages metric cardinality through intelligent pipeline switching and optimization profiles.
+Phoenix is an adaptive cardinality optimization system for OpenTelemetry metrics collection and processing. It dynamically manages metric cardinality through intelligent pipeline switching and optimization profiles based on real-time system performance.
 
-## 🏗️ Monorepo Structure
+### Key Features
+- **3-Pipeline Architecture**: Full fidelity, optimized, and experimental TopK pipelines
+- **Adaptive Control**: PID-like control system for automatic optimization
+- **Real-time Monitoring**: Grafana dashboards with comprehensive metrics
+- **Modular Design**: Microservices architecture with clear boundaries
+- **High Performance**: Handles millions of metrics with intelligent sampling
 
-This project is organized as a monorepo with clear separation of concerns:
+## 📋 Table of Contents
 
-```
-phoenix/
-├── packages/          # Shared libraries
-├── services/          # Microservices
-├── infrastructure/    # Deployment configs
-├── monitoring/        # Observability stack
-├── tools/            # Dev tools
-└── docs/             # Documentation
-```
+- [Quick Start](#-quick-start)
+- [Architecture](#-architecture)
+- [Project Structure](#-project-structure)
+- [Installation](#-installation)
+- [Usage](#-usage)
+- [Configuration](#-configuration)
+- [Monitoring](#-monitoring)
+- [Development](#-development)
+- [Documentation](#-documentation)
+- [Contributing](#-contributing)
 
-## 🚀 Quick Start
+## 🏃 Quick Start
 
-### Prerequisites
-- Node.js >= 18.0.0
-- Docker and Docker Compose
-- Go 1.21+ (for generator services)
-
-### Setup
 ```bash
 # Clone the repository
 git clone https://github.com/deepaucksharma/Phoenix.git
 cd Phoenix
 
-# Install dependencies
-make install
-
 # Setup environment
 make setup-env
 
-# Build all services
+# Install dependencies
+make install
+
+# Build and deploy
 make build
-make build-docker
+make deploy-dev
+
+# Check health
+make health
+
+# View dashboards
+make monitor
 ```
 
-### Running Phoenix
+## 🏗️ Architecture
+
+Phoenix uses a sophisticated 3-pipeline architecture to optimize metric cardinality:
+
+```
+┌─────────────────┐     ┌──────────────────────────────────────┐
+│ Metric Sources  │────▶│         Phoenix Collector            │
+└─────────────────┘     │  ┌────────────────────────────────┐ │
+                        │  │   Full Fidelity Pipeline       │ │
+                        │  ├────────────────────────────────┤ │
+                        │  │   Optimized Pipeline           │ │
+                        │  ├────────────────────────────────┤ │
+                        │  │   Experimental TopK Pipeline   │ │
+                        │  └────────────────────────────────┘ │
+                        └──────────────────────────────────────┘
+                                          │
+                        ┌─────────────────┴─────────────────┐
+                        │                                   │
+                  ┌─────▼──────┐                   ┌───────▼────────┐
+                  │ Prometheus  │                   │ Control Plane  │
+                  └─────┬──────┘                   └───────┬────────┘
+                        │                                   │
+                  ┌─────▼──────┐                   ┌───────▼────────┐
+                  │  Grafana    │                   │   Actuator     │
+                  └─────────────┘                   └────────────────┘
+```
+
+### Core Components
+- **Collector**: Multi-pipeline OTEL collector with cardinality management
+- **Observer**: Monitors pipeline metrics and system KPIs
+- **Actuator**: Implements adaptive control logic
+- **Generators**: Synthetic and complex metric generators for testing
+- **Validator**: Performance benchmarking and validation
+
+For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## 📁 Project Structure
+
+```
+phoenix/
+├── packages/              # Shared libraries
+│   ├── contracts/        # API contracts and schemas
+│   ├── common/          # Common utilities
+│   └── config/          # Configuration management
+├── services/             # Microservices
+│   ├── collector/       # Core OTEL collector
+│   ├── control-plane/   # Observer and actuator
+│   ├── generators/      # Load generators
+│   └── validator/       # Benchmarking service
+├── infrastructure/       # Deployment configurations
+│   └── docker/         # Docker compose files
+├── monitoring/          # Observability stack
+│   ├── prometheus/     # Metrics storage
+│   └── grafana/        # Visualization
+├── config/             # Environment configs
+├── tools/              # Development tools
+└── docs/               # Documentation
+```
+
+## 🛠️ Installation
+
+### Prerequisites
+- Docker and Docker Compose
+- Node.js >= 18.0.0
+- Go 1.21+ (for building services)
+- Make
+
+### Setup Steps
+
+1. **Clone and Setup Environment**
+   ```bash
+   git clone https://github.com/deepaucksharma/Phoenix.git
+   cd Phoenix
+   make setup-env
+   ```
+
+2. **Install Dependencies**
+   ```bash
+   make install
+   ```
+
+3. **Build Services**
+   ```bash
+   make build
+   make build-docker
+   ```
+
+4. **Deploy**
+   ```bash
+   # Development
+   make deploy-dev
+   
+   # Production
+   make deploy-prod
+   ```
+
+## 📊 Usage
+
+### Basic Commands
+
 ```bash
-# Development mode
-make deploy-dev
+# View logs
+make logs
 
 # Check service health
 make health
 
-# View logs
-make logs
-
 # Open monitoring dashboards
 make monitor
+
+# Stop services
+make stop
+
+# Clean everything
+make clean
 ```
 
-## 📦 Sub-Projects
+### Service-Specific Logs
 
-### Packages (Shared Libraries)
-- **@phoenix/contracts** - API contracts and schemas
-- **@phoenix/common** - Shared utilities
-- **@phoenix/config** - Configuration management
-
-### Services
-- **@phoenix/collector** - Core OTEL collector with multi-pipeline processing
-- **@phoenix/control-observer** - Metrics observation service
-- **@phoenix/control-actuator** - Adaptive control logic
-- **@phoenix/generator-synthetic** - Synthetic metrics generator
-- **@phoenix/generator-complex** - Complex metrics generator
-- **@phoenix/validator** - Performance validation service
-
-### Infrastructure
-- Docker Compose configurations
-- Kubernetes manifests (coming soon)
-- Terraform modules (coming soon)
-
-## 🔧 Development
-
-### Working with the Monorepo
 ```bash
-# Run specific service in dev mode
-cd services/collector && npm run dev
+make collector-logs   # View collector logs
+make observer-logs    # View observer logs
+make actuator-logs    # View actuator logs
+make generator-logs   # View generator logs
+```
 
-# Run all services in dev mode
-npm run dev
+## ⚙️ Configuration
 
-# Run tests across all packages
-npm test
+### Environment Variables
 
-# Lint all code
-npm run lint
+Key configuration options in `.env`:
+
+```bash
+# Control thresholds
+TARGET_OPTIMIZED_PIPELINE_TS_COUNT=20000
+THRESHOLD_OPTIMIZATION_CONSERVATIVE_MAX_TS=15000
+THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS=25000
+
+# Resource limits
+OTELCOL_MAIN_MEMORY_LIMIT_MIB=1024
+OTELCOL_MAIN_GOMAXPROCS=2
+
+# Control timing
+ADAPTIVE_CONTROLLER_INTERVAL_SECONDS=60
+ADAPTIVE_CONTROLLER_STABILITY_SECONDS=120
+```
+
+### Optimization Modes
+
+Phoenix automatically switches between three optimization modes:
+- **Conservative**: < 15,000 time series
+- **Balanced**: 15,000 - 25,000 time series
+- **Aggressive**: > 25,000 time series
+
+## 📈 Monitoring
+
+### Access Points
+- **Grafana**: http://localhost:3000 (admin/admin)
+- **Prometheus**: http://localhost:9090
+- **Collector Metrics**: http://localhost:8888/metrics
+- **Control API**: http://localhost:8080/api/v1
+
+### Available Dashboards
+1. **Phoenix Adaptive Control Loop**: Real-time control system monitoring
+2. **Phoenix Ultra Overview**: Comprehensive system metrics
+3. **Pipeline Performance**: Detailed pipeline analytics
+
+## 💻 Development
+
+### Development Mode
+
+```bash
+# Start in development mode
+make dev
+
+# Run tests
+make test
+
+# Lint code
+make lint
+
+# Validate configs
+make validate-config
 ```
 
 ### Adding a New Service
+
 1. Create directory: `services/your-service/`
-2. Add standard structure (cmd/, internal/, api/, etc.)
-3. Create package.json with workspace dependency
-4. Update root package.json workspaces if needed
+2. Add standard structure (cmd/, internal/, config/)
+3. Create `package.json` and `Dockerfile`
+4. Update workspace configuration
 
-## 📊 Architecture
+### Working with the Monorepo
 
-Phoenix uses a 3-pipeline architecture:
-1. **Full Fidelity** - Complete metrics without optimization
-2. **Optimized** - Moderate cardinality reduction
-3. **Experimental TopK** - Advanced optimization
+This project uses NPM workspaces and Turborepo for efficient builds:
 
-The control plane monitors metrics and dynamically switches between optimization profiles based on cardinality thresholds.
+```bash
+# Build specific service
+cd services/collector && npm run build
 
-## 🔍 Monitoring
+# Run all tests
+npm test
 
-- **Grafana**: http://localhost:3000 (admin/admin)
-- **Prometheus**: http://localhost:9090
-- **Health Checks**: `make health`
+# Lint everything
+npm run lint
+```
 
 ## 📚 Documentation
 
-- [Architecture Overview](docs/architecture/ARCHITECTURE.md)
-- [API Documentation](docs/api/README.md)
-- [Development Guide](docs/guides/DEVELOPMENT.md)
-- [Deployment Guide](docs/guides/DEPLOYMENT.md)
+- [Architecture Overview](docs/ARCHITECTURE.md)
+- [Monorepo Structure](docs/MONOREPO_STRUCTURE.md)
+- [Pipeline Analysis](docs/PIPELINE_ANALYSIS.md)
+- [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
+- [Migration Guide](docs/MIGRATION_GUIDE.md)
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ## 📄 License
 
@@ -147,3 +290,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - OpenTelemetry community for the excellent collector
 - Prometheus and Grafana for monitoring capabilities
 - All contributors to this project
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/deepaucksharma/Phoenix/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/deepaucksharma/Phoenix/discussions)
+- **Email**: phoenix-support@example.com
