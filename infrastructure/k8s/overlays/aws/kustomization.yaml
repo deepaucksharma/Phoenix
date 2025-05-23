@@ -1,0 +1,68 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: phoenix-aws
+
+namespace: phoenix-system
+
+resources:
+  - ../../base
+  - aws-load-balancer.yaml
+  - aws-storage-class.yaml
+  - aws-rbac.yaml
+
+patchesStrategicMerge:
+  - aws-collector-patch.yaml
+  - aws-monitoring-patch.yaml
+
+commonLabels:
+  phoenix.io/cloud-provider: aws
+  phoenix.io/environment: production
+
+commonAnnotations:
+  phoenix.io/deployed-by: terraform
+  phoenix.io/cluster-name: phoenix-eks
+
+images:
+  - name: phoenix/control-actuator-go
+    newName: 123456789012.dkr.ecr.us-west-2.amazonaws.com/phoenix/control-actuator-go
+    newTag: latest
+
+replicas:
+  - name: otelcol-main
+    count: 3
+  - name: prometheus
+    count: 2
+
+configMapGenerator:
+  - name: aws-config
+    literals:
+      - AWS_REGION=us-west-2
+      - CLUSTER_NAME=phoenix-eks
+      - STORAGE_CLASS=gp3-csi
+
+patches:
+  - target:
+      kind: Deployment
+      name: otelcol-main
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: AWS_REGION
+          value: us-west-2
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value:
+          kubernetes.io/arch: amd64
+          node.kubernetes.io/instance-type: m5.large
+  - target:
+      kind: Service
+      name: otelcol-main
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          service.beta.kubernetes.io/aws-load-balancer-type: nlb
+          service.beta.kubernetes.io/aws-load-balancer-scheme: internal

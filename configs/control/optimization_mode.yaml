@@ -1,0 +1,21 @@
+# Phoenix Control Configuration
+# This file is managed by the control actuator
+
+optimization_profile: balanced
+last_updated: "2025-05-23T19:10:00Z"
+trigger_reason: "initial_environment_setup"
+current_metrics:
+  full_ts: 0
+  optimized_ts: 0
+  experimental_ts: 0
+  cost_reduction_ratio: 0.0
+config_version: 1
+correlation_id: "phoenix-test-init-001"
+last_profile_change_timestamp: "2025-05-23T19:10:00Z"
+thresholds:
+  conservative_max_ts: 15000
+  aggressive_min_ts: 25000
+pipelines:
+  full_fidelity_enabled: true
+  optimized_enabled: true
+  experimental_enabled: false

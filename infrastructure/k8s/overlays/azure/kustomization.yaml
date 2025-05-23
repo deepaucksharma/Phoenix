@@ -1,0 +1,67 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: phoenix-azure
+
+namespace: phoenix-system
+
+resources:
+  - ../../base
+  - azure-ingress.yaml
+  - azure-storage-class.yaml
+  - azure-rbac.yaml
+
+patchesStrategicMerge:
+  - azure-collector-patch.yaml
+  - azure-monitoring-patch.yaml
+
+commonLabels:
+  phoenix.io/cloud-provider: azure
+  phoenix.io/environment: production
+
+commonAnnotations:
+  phoenix.io/deployed-by: terraform
+  phoenix.io/cluster-name: phoenix-aks
+
+images:
+  - name: phoenix/control-actuator-go
+    newName: phoenixregistry.azurecr.io/phoenix/control-actuator-go
+    newTag: latest
+
+replicas:
+  - name: otelcol-main
+    count: 3
+  - name: prometheus
+    count: 2
+
+configMapGenerator:
+  - name: azure-config
+    literals:
+      - AZURE_REGION=eastus
+      - CLUSTER_NAME=phoenix-aks
+      - STORAGE_CLASS=managed-csi
+
+patches:
+  - target:
+      kind: Deployment
+      name: otelcol-main
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: AZURE_REGION
+          value: eastus
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value:
+          kubernetes.io/arch: amd64
+          agentpool: nodepool1
+  - target:
+      kind: Service
+      name: otelcol-main
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          service.beta.kubernetes.io/azure-load-balancer-internal: "true"

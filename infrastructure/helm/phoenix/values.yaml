@@ -1,250 +1,380 @@
-# Default values for Phoenix
+# Phoenix-vNext Helm Chart Values
+# Default values for phoenix-vnext deployment
+
+# Global configuration
 global:
-  cloudProvider: "" # aws, azure, gcp
-  storageClass: "" # Leave empty for default
-  domain: "" # Your domain for ingress
-
-# Phoenix Collector Configuration
-collector:
-  enabled: true
-  replicas: 3
-  image:
-    repository: otel/opentelemetry-collector-contrib
-    tag: 0.91.0
-    pullPolicy: IfNotPresent
+  # Cloud provider: aws, azure, gcp, or local
+  cloudProvider: "local"
+  region: "us-west-2"
+  environment: "development"
   
-  resources:
-    requests:
-      memory: "512Mi"
-      cpu: "500m"
-    limits:
-      memory: "2Gi"
-      cpu: "2000m"
+  # Image configuration
+  imageRegistry: ""
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets: []
   
-  autoscaling:
-    enabled: true
-    minReplicas: 3
-    maxReplicas: 10
-    targetCPUUtilizationPercentage: 80
-    targetMemoryUtilizationPercentage: 80
-  
-  service:
-    type: LoadBalancer
-    annotations: {}
-    # AWS NLB annotations
-    # service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-    # Azure LB annotations  
-    # service.beta.kubernetes.io/azure-load-balancer-internal: "false"
-  
-  config:
-    # Control thresholds
-    conservativeMaxTS: 15000
-    aggressiveMinTS: 25000
-    hysteresisFactor: 0.1
-    stabilityPeriodSeconds: 120
-
-# Control Plane Configuration
-controlPlane:
-  observer:
-    enabled: true
-    replicas: 2
-    image:
-      repository: otel/opentelemetry-collector-contrib
-      tag: 0.91.0
-    resources:
-      requests:
-        memory: "256Mi"
-        cpu: "250m"
-      limits:
-        memory: "512Mi"
-        cpu: "500m"
-  
-  actuator:
-    enabled: true
-    replicas: 1
-    image:
-      repository: alpine
-      tag: 3.18
-    resources:
-      requests:
-        memory: "128Mi"
-        cpu: "100m"
-      limits:
-        memory: "256Mi"
-        cpu: "200m"
-
-# Validator/Benchmark Service
-validator:
-  enabled: true
-  schedule: "*/15 * * * *" # Every 15 minutes
-  image:
-    repository: phoenix-validator
-    tag: latest
-  resources:
-    requests:
-      memory: "256Mi"
-      cpu: "250m"
-    limits:
-      memory: "512Mi"
-      cpu: "500m"
-
-# Load Generators
-generators:
-  synthetic:
-    enabled: true
-    replicas: 2
-    processCountPerHost: 250
-    hostCount: 3
-    metricInterval: 15
-  
-  complex:
-    enabled: false
-    metricCount: 1000
-    dimensionCount: 5
-
-# Storage Configuration
-storage:
-  # Control signals storage
-  controlSignals:
-    size: 1Gi
-    # AWS: Use EFS
-    # Azure: Use Azure Files
-    storageClass: ""
-  
-  # Benchmark data storage
-  benchmarkData:
-    size: 10Gi
-    storageClass: ""
-
-# Ingress Configuration
-ingress:
-  enabled: true
-  className: nginx
-  annotations: {}
-    # AWS ALB
-    # kubernetes.io/ingress.class: alb
-    # alb.ingress.kubernetes.io/scheme: internet-facing
-    # Azure Application Gateway
-    # kubernetes.io/ingress.class: azure/application-gateway
-  hosts:
-    - host: phoenix.example.com
-      paths:
-        - path: /
-          pathType: Prefix
-          service: grafana
-        - path: /prometheus
-          pathType: Prefix
-          service: prometheus
-  tls: []
-    # - secretName: phoenix-tls
-    #   hosts:
-    #     - phoenix.example.com
-
-# Monitoring Stack
-prometheus:
-  enabled: true
-  server:
-    persistentVolume:
-      enabled: true
-      size: 50Gi
-    retention: "30d"
-    resources:
-      requests:
-        memory: "2Gi"
-        cpu: "1000m"
-      limits:
-        memory: "4Gi"
-        cpu: "2000m"
-    
-    # Recording rules
-    serverFiles:
-      recording_rules.yml:
-        groups:
-          - name: phoenix_core
-            interval: 30s
-            rules:
-              - record: phoenix_signal_preservation_score
-                expr: |
-                  1 - (
-                    rate(otelcol_processor_dropped_metric_points_total[5m]) / 
-                    clamp_min(rate(otelcol_receiver_accepted_metric_points_total[5m]), 1)
-                  )
-
-grafana:
-  enabled: true
-  adminPassword: "phoenix-admin"
-  persistence:
-    enabled: true
-    size: 10Gi
-  
-  dashboardProviders:
-    dashboardproviders.yaml:
-      apiVersion: 1
-      providers:
-        - name: 'phoenix'
-          orgId: 1
-          folder: 'Phoenix'
-          type: file
-          disableDeletion: false
-          editable: true
-          options:
-            path: /var/lib/grafana/dashboards/phoenix
-  
-  dashboardsConfigMaps:
-    phoenix: "phoenix-dashboards"
-  
-  datasources:
-    datasources.yaml:
-      apiVersion: 1
-      datasources:
-        - name: Prometheus
-          type: prometheus
-          url: http://{{ .Release.Name }}-prometheus-server
-          access: proxy
-          isDefault: true
-
-# Cloud-specific configurations
-aws:
-  region: us-east-1
-  irsaEnabled: true
-  serviceAccounts:
-    collector:
-      annotations:
-        eks.amazonaws.com/role-arn: ""
-    validator:
-      annotations:
-        eks.amazonaws.com/role-arn: ""
-
-azure:
-  location: eastus
-  workloadIdentityEnabled: true
-  storageAccount: ""
-  resourceGroup: ""
-
-# Security
-security:
-  podSecurityContext:
+  # Security context
+  securityContext:
     runAsNonRoot: true
     runAsUser: 65534
     fsGroup: 65534
+
+# OpenTelemetry Collector (Main)
+collector:
+  enabled: true
+  replicaCount: 2
   
-  containerSecurityContext:
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
-    runAsNonRoot: true
-    runAsUser: 65534
-    capabilities:
-      drop:
-        - ALL
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    tag: "0.103.1"
+    pullPolicy: IfNotPresent
+  
+  # Resource configuration
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    ports:
+      otlpGrpc: 4317
+      otlpHttp: 4318
+      metricsFull: 8888
+      metricsOpt: 8889
+      metricsExp: 8890
+      health: 13133
+  
+  # Service account
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+  
+  # Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  # Configuration
+  config:
+    # Will be populated from configmap
+    existingConfigMap: ""
 
-# Node selectors and tolerations
-nodeSelector: {}
-  # workload: general
+# OpenTelemetry Collector (Observer)
+observer:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    tag: "0.103.1"
+    pullPolicy: IfNotPresent
+  
+  resources:
+    limits:
+      cpu: 200m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  
+  service:
+    type: ClusterIP
+    ports:
+      metrics: 9888
+      health: 13133
 
-tolerations: []
-  # - key: "monitoring"
-  #   operator: "Equal"
-  #   value: "true"
-  #   effect: "NoSchedule"
+# Control Actuator
+controlActuator:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: phoenix/control-actuator-go
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  
+  service:
+    type: ClusterIP
+    port: 8081
+  
+  # Environment variables
+  env:
+    logLevel: "info"
+    controllerInterval: 60
+    stabilityPeriod: 120
 
-affinity: {}
+# Anomaly Detector
+anomalyDetector:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: phoenix/anomaly-detector
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  
+  service:
+    type: ClusterIP
+    port: 8082
+
+# Benchmark Controller
+benchmark:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: phoenix/benchmark-controller
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  
+  service:
+    type: ClusterIP
+    port: 8083
+
+# Synthetic Generator
+syntheticGenerator:
+  enabled: false  # Only enabled when needed for testing
+  replicaCount: 1
+  
+  image:
+    repository: phoenix/synthetic-generator
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  
+  # Load generation settings
+  env:
+    processCountPerHost: 250
+    hostCount: 3
+    emitInterval: 15
+
+# Monitoring Stack
+monitoring:
+  enabled: true
+  namespace: "phoenix-monitoring"
+  
+  # Prometheus
+  prometheus:
+    enabled: true
+    replicaCount: 1
+    
+    image:
+      repository: prom/prometheus
+      tag: "v2.47.0"
+      pullPolicy: IfNotPresent
+    
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+    
+    storage:
+      size: 50Gi
+      storageClass: ""
+    
+    retention: "30d"
+    
+    service:
+      type: ClusterIP
+      port: 9090
+    
+    # External access
+    ingress:
+      enabled: false
+      className: ""
+      annotations: {}
+      hosts: []
+      tls: []
+  
+  # Grafana
+  grafana:
+    enabled: true
+    replicaCount: 1
+    
+    image:
+      repository: grafana/grafana
+      tag: "10.1.1"
+      pullPolicy: IfNotPresent
+    
+    resources:
+      limits:
+        cpu: 500m
+        memory: 1Gi
+      requests:
+        cpu: 200m
+        memory: 512Mi
+    
+    storage:
+      size: 10Gi
+      storageClass: ""
+    
+    service:
+      type: ClusterIP
+      port: 3000
+    
+    # Admin credentials
+    adminUser: admin
+    adminPassword: admin
+    
+    # External access
+    ingress:
+      enabled: false
+      className: ""
+      annotations: {}
+      hosts: []
+      tls: []
+
+# Configuration Management
+config:
+  # Create ConfigMaps for collector configurations
+  createConfigMaps: true
+  
+  # Control configuration
+  control:
+    optimizationProfile: "balanced"
+    thresholds:
+      conservativeMaxTs: 15000
+      aggressiveMinTs: 25000
+    targetTsCount: 20000
+
+# Storage
+storage:
+  # Default storage class for all PVCs
+  storageClass: ""
+  
+  # Individual storage configurations
+  prometheus:
+    size: 50Gi
+    storageClass: ""
+  
+  grafana:
+    size: 10Gi
+    storageClass: ""
+
+# Network Policies
+networkPolicy:
+  enabled: false
+  ingress: []
+  egress: []
+
+# Pod Security Policy
+podSecurityPolicy:
+  enabled: false
+
+# New Relic Integration
+newRelic:
+  enabled: false
+  licenseKey: ""
+  endpoint: "https://otlp.nr-data.net:4317"
+  
+  # Which pipelines to export
+  exports:
+    full: false
+    optimized: false
+    experimental: false
+
+# Cloud-specific configurations
+aws:
+  # EKS-specific settings
+  region: "us-west-2"
+  loadBalancer:
+    type: "nlb"
+    scheme: "internal"
+  storageClass: "gp3-csi"
+  
+  # ECR configuration
+  ecr:
+    region: "us-west-2"
+    accountId: ""
+
+azure:
+  # AKS-specific settings
+  region: "eastus"
+  loadBalancer:
+    type: "internal"
+  storageClass: "managed-csi"
+  
+  # ACR configuration
+  acr:
+    loginServer: ""
+
+# Autoscaling
+autoscaling:
+  enabled: false
+  
+  # HPA configuration
+  hpa:
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  # VPA configuration  
+  vpa:
+    enabled: false
+    updateMode: "Auto"
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+  maxUnavailable: ""
+
+# Service Monitor for Prometheus Operator
+serviceMonitor:
+  enabled: false
+  namespace: ""
+  labels: {}
+  interval: 30s
+  scrapeTimeout: 10s
+
+# Tests
+tests:
+  enabled: true
+  image:
+    repository: busybox
+    tag: "1.35"
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi

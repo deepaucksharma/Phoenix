@@ -1,0 +1,35 @@
+# Phoenix-vNext Development Override Configuration
+# Use this file for local development overrides
+
+version: '3.8'
+
+services:
+  # Development overrides for collectors
+  otelcol-main:
+    environment:
+      - LOG_LEVEL=debug
+    volumes:
+      - ./configs/otel/collectors/main.yaml:/etc/otelcol/config.yaml:ro
+      - ./configs/otel/processors:/etc/otelcol/processors:ro  # Hot reload processors
+
+  # Enable synthetic generator in dev
+  synthetic-metrics-generator:
+    profiles: []  # Remove profile requirement for dev
+
+  # Development tools
+  prometheus:
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'  # Shorter retention for dev
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--log.level=debug'
+
+  grafana:
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_LOG_LEVEL=debug

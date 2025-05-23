@@ -1,0 +1,2 @@
+# This file is intentionally empty as services are defined in their respective component files
+# It's included in kustomization.yaml to maintain consistency with the resource list

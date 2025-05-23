@@ -1,0 +1,59 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: phoenix-base
+
+namespace: phoenix-system
+
+resources:
+  - namespace.yaml
+  - configmaps/
+  - secrets/
+  - deployments/
+  - services/
+  - monitoring/
+
+commonLabels:
+  app.kubernetes.io/name: phoenix-vnext
+  app.kubernetes.io/part-of: phoenix
+  app.kubernetes.io/version: "v3.0"
+
+commonAnnotations:
+  phoenix.io/managed-by: kustomize
+
+images:
+  - name: otel/opentelemetry-collector-contrib
+    newTag: "0.103.1"
+
+configMapGenerator:
+  - name: phoenix-config
+    files:
+      - configs/main-collector.yaml=../../../configs/otel/collectors/main.yaml
+      - configs/observer-collector.yaml=../../../configs/otel/collectors/observer.yaml
+      - configs/prometheus.yaml=../../../configs/monitoring/prometheus/prometheus.yaml
+
+secretGenerator:
+  - name: phoenix-secrets
+    envs:
+      - .env
+
+replicas:
+  - name: otelcol-main
+    count: 2
+  - name: otelcol-observer
+    count: 1
+  - name: control-actuator
+    count: 1
+
+patches:
+  - target:
+      kind: Deployment
+      name: otelcol-main
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "2Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "1Gi"

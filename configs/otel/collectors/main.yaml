@@ -1,0 +1,108 @@
+# Phoenix Main Collector Configuration
+# Handles 3-pipeline cardinality optimization with shared processing
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu:
+      memory:
+      disk:
+      network:
+
+processors:
+  memory_limiter:
+    limit_mib: ${OTELCOL_MAIN_MEMORY_LIMIT_MIB}
+    spike_limit_mib: 256
+
+  batch:
+    send_batch_size: 1024
+    timeout: 1s
+
+  resource:
+    attributes:
+      - key: service.name
+        value: phoenix-collector-main
+        action: upsert
+      - key: service.version
+        value: ${VERSION}
+        action: upsert
+
+  # Full fidelity - no optimization
+  resource/full:
+    attributes:
+      - key: pipeline.type
+        value: full_fidelity
+        action: upsert
+
+  # Optimized pipeline - moderate cardinality reduction
+  resource/optimized:
+    attributes:
+      - key: pipeline.type
+        value: optimized
+        action: upsert
+
+  # Experimental pipeline - aggressive optimization
+  resource/experimental:
+    attributes:
+      - key: pipeline.type
+        value: experimental
+        action: upsert
+
+exporters:
+  prometheus/full:
+    endpoint: "0.0.0.0:8888"
+    namespace: phoenix_full
+    const_labels:
+      pipeline_output_type: "full_fidelity"
+
+  prometheus/optimized:
+    endpoint: "0.0.0.0:8889"
+    namespace: phoenix_opt
+    const_labels:
+      pipeline_output_type: "optimized"
+
+  prometheus/experimental:
+    endpoint: "0.0.0.0:8890"
+    namespace: phoenix_exp
+    const_labels:
+      pipeline_output_type: "experimental"
+
+  logging:
+    loglevel: debug
+
+service:
+  extensions: []
+  
+  pipelines:
+    # Full fidelity pipeline - baseline without optimization
+    metrics/full:
+      receivers: [otlp, hostmetrics]
+      processors: [memory_limiter, resource, resource/full, batch]
+      exporters: [prometheus/full, logging]
+
+    # Optimized pipeline - smart cardinality reduction
+    metrics/optimized:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, resource/optimized, batch]
+      exporters: [prometheus/optimized, logging]
+
+    # Experimental pipeline - aggressive optimization
+    metrics/experimental:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, resource/experimental, batch]
+      exporters: [prometheus/experimental, logging]
+
+  telemetry:
+    logs:
+      level: ${LOG_LEVEL}
+    metrics:
+      address: 0.0.0.0:8888
+      level: detailed

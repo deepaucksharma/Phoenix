@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: phoenix-vnext-dev
+
+bases:
+  - ../../base
+
+namePrefix: dev-
+
+commonLabels:
+  environment: dev
+
+replicas:
+  - name: otel-collector-main
+    count: 1
+  - name: prometheus
+    count: 1
+
+patchesStrategicMerge:
+  - resource-limits.yaml
+  - ingress-patch.yaml
+
+configMapGenerator:
+  - name: env-config
+    literals:
+      - ENVIRONMENT=dev
+      - LOG_LEVEL=debug
+      - THRESHOLD_OPTIMIZATION_CONSERVATIVE_MAX_TS=10000
+      - THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS=20000

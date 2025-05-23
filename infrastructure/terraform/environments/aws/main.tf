@@ -1,5 +1,8 @@
+# AWS Phoenix Environment
+# This deploys Phoenix-vNext on AWS EKS
+
 terraform {
-  required_version = ">= 1.3.0"
+  required_version = ">= 1.5"
   
   required_providers {
     aws = {
@@ -15,18 +18,20 @@ terraform {
       version = "~> 2.11"
     }
   }
-  
-  # Optional: Configure S3 backend for state
+
+  # Uncomment and configure for remote state
   # backend "s3" {
-  #   bucket = "phoenix-terraform-state"
-  #   key    = "aws/terraform.tfstate"
-  #   region = "us-east-1"
+  #   bucket  = "phoenix-terraform-state"
+  #   key     = "aws/terraform.tfstate"
+  #   region  = "us-west-2"
+  #   encrypt = true
   # }
 }
 
+# Configure providers
 provider "aws" {
   region = var.aws_region
-  
+
   default_tags {
     tags = {
       Project     = "Phoenix-vNext"
@@ -36,358 +41,191 @@ provider "aws" {
   }
 }
 
-# Data sources for existing resources
-data "aws_availability_zones" "available" {
-  state = "available"
-}
+provider "kubernetes" {
+  host                   = module.aws_phoenix.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.aws_phoenix.cluster_certificate_authority_data)
 
-data "aws_caller_identity" "current" {}
-
-# VPC Module
-module "vpc" {
-  source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 5.0"
-
-  name = "${var.project_name}-vpc"
-  cidr = var.vpc_cidr
-
-  azs             = slice(data.aws_availability_zones.available.names, 0, 3)
-  private_subnets = var.private_subnet_cidrs
-  public_subnets  = var.public_subnet_cidrs
-
-  enable_nat_gateway   = true
-  single_nat_gateway   = var.environment == "dev" ? true : false
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-
-  # Enable VPC flow logs
-  enable_flow_log                      = true
-  create_flow_log_cloudwatch_iam_role  = true
-  create_flow_log_cloudwatch_log_group = true
-
-  tags = {
-    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
-  }
-
-  public_subnet_tags = {
-    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
-    "kubernetes.io/role/elb"                    = "1"
-  }
-
-  private_subnet_tags = {
-    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
-    "kubernetes.io/role/internal-elb"           = "1"
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", module.aws_phoenix.cluster_name]
   }
 }
 
-# EKS Module
-module "eks" {
-  source  = "terraform-aws-modules/eks/aws"
-  version = "~> 19.0"
+provider "helm" {
+  kubernetes {
+    host                   = module.aws_phoenix.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.aws_phoenix.cluster_certificate_authority_data)
 
-  cluster_name    = var.cluster_name
-  cluster_version = var.kubernetes_version
-
-  vpc_id                         = module.vpc.vpc_id
-  subnet_ids                     = module.vpc.private_subnets
-  cluster_endpoint_public_access = true
-
-  # Enable IRSA
-  enable_irsa = true
-
-  # Enable cluster encryption
-  cluster_encryption_config = {
-    provider_key_arn = aws_kms_key.eks.arn
-    resources        = ["secrets"]
-  }
-
-  # Cluster addons
-  cluster_addons = {
-    coredns = {
-      most_recent = true
-    }
-    kube-proxy = {
-      most_recent = true
-    }
-    vpc-cni = {
-      most_recent = true
-      configuration_values = jsonencode({
-        env = {
-          ENABLE_PREFIX_DELEGATION = "true"
-          WARM_PREFIX_TARGET       = "1"
-        }
-      })
-    }
-    aws-ebs-csi-driver = {
-      most_recent = true
-    }
-  }
-
-  # Node groups
-  eks_managed_node_groups = {
-    phoenix_general = {
-      name            = "${var.project_name}-general"
-      use_name_prefix = false
-
-      min_size     = var.node_group_min_size
-      max_size     = var.node_group_max_size
-      desired_size = var.node_group_desired_size
-
-      instance_types = var.node_instance_types
-      capacity_type  = var.node_capacity_type
-
-      disk_size = 100
-      disk_type = "gp3"
-
-      labels = {
-        Environment = var.environment
-        Workload    = "general"
-      }
-
-      taints = []
-
-      update_config = {
-        max_unavailable = 1
-      }
-    }
-
-    phoenix_monitoring = {
-      name            = "${var.project_name}-monitoring"
-      use_name_prefix = false
-
-      min_size     = 2
-      max_size     = 4
-      desired_size = 2
-
-      instance_types = ["t3.large"]
-      capacity_type  = "ON_DEMAND"
-
-      disk_size = 200
-      disk_type = "gp3"
-
-      labels = {
-        Environment = var.environment
-        Workload    = "monitoring"
-      }
-
-      taints = [
-        {
-          key    = "monitoring"
-          value  = "true"
-          effect = "NO_SCHEDULE"
-        }
-      ]
-    }
-  }
-
-  # Security group rules
-  node_security_group_additional_rules = {
-    ingress_self_all = {
-      description = "Node to node all ports/protocols"
-      protocol    = "-1"
-      from_port   = 0
-      to_port     = 0
-      type        = "ingress"
-      self        = true
-    }
-    egress_all = {
-      description      = "Node all egress"
-      protocol         = "-1"
-      from_port        = 0
-      to_port          = 0
-      type             = "egress"
-      cidr_blocks      = ["0.0.0.0/0"]
-      ipv6_cidr_blocks = ["::/0"]
-    }
-  }
-
-  tags = local.tags
-}
-
-# KMS key for EKS encryption
-resource "aws_kms_key" "eks" {
-  description             = "EKS Secret Encryption Key"
-  deletion_window_in_days = 7
-  enable_key_rotation     = true
-
-  tags = merge(local.tags, {
-    Name = "${var.cluster_name}-eks-key"
-  })
-}
-
-resource "aws_kms_alias" "eks" {
-  name          = "alias/${var.cluster_name}-eks"
-  target_key_id = aws_kms_key.eks.key_id
-}
-
-# S3 bucket for Phoenix data
-resource "aws_s3_bucket" "phoenix_data" {
-  bucket = "${var.project_name}-data-${data.aws_caller_identity.current.account_id}"
-
-  tags = merge(local.tags, {
-    Name = "${var.project_name}-data"
-  })
-}
-
-resource "aws_s3_bucket_versioning" "phoenix_data" {
-  bucket = aws_s3_bucket.phoenix_data.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "phoenix_data" {
-  bucket = aws_s3_bucket.phoenix_data.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
+      args        = ["eks", "get-token", "--cluster-name", module.aws_phoenix.cluster_name]
     }
   }
 }
 
-# EFS for persistent storage
-resource "aws_efs_file_system" "phoenix" {
-  creation_token = "${var.project_name}-efs"
-  encrypted      = true
-
-  performance_mode = "generalPurpose"
-  throughput_mode  = "bursting"
-
-  tags = merge(local.tags, {
-    Name = "${var.project_name}-efs"
-  })
-}
-
-resource "aws_efs_mount_target" "phoenix" {
-  count = length(module.vpc.private_subnets)
-
-  file_system_id  = aws_efs_file_system.phoenix.id
-  subnet_id       = module.vpc.private_subnets[count.index]
-  security_groups = [aws_security_group.efs.id]
-}
-
-resource "aws_security_group" "efs" {
-  name_prefix = "${var.project_name}-efs-"
-  vpc_id      = module.vpc.vpc_id
-
-  ingress {
-    from_port   = 2049
-    to_port     = 2049
-    protocol    = "tcp"
-    cidr_blocks = [module.vpc.vpc_cidr_block]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(local.tags, {
-    Name = "${var.project_name}-efs-sg"
-  })
-}
-
-# IAM roles for Phoenix services
-module "phoenix_irsa" {
-  source = "../../modules/aws-eks/irsa"
-
-  cluster_name = module.eks.cluster_name
-  
-  service_accounts = {
-    phoenix-collector = {
-      namespace = "phoenix-system"
-      policies = [
-        "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
-        aws_iam_policy.phoenix_collector.arn
-      ]
-    }
-    phoenix-validator = {
-      namespace = "phoenix-system"
-      policies = [
-        aws_iam_policy.phoenix_validator.arn
-      ]
-    }
-  }
-}
-
-# IAM policy for collector
-resource "aws_iam_policy" "phoenix_collector" {
-  name_prefix = "${var.project_name}-collector-"
-  
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.phoenix_data.arn,
-          "${aws_s3_bucket.phoenix_data.arn}/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "cloudwatch:PutMetricData",
-          "cloudwatch:GetMetricStatistics",
-          "cloudwatch:ListMetrics"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-# IAM policy for validator
-resource "aws_iam_policy" "phoenix_validator" {
-  name_prefix = "${var.project_name}-validator-"
-  
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "cloudwatch:GetMetricData",
-          "cloudwatch:GetMetricStatistics"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject"
-        ]
-        Resource = [
-          "${aws_s3_bucket.phoenix_data.arn}/benchmarks/*"
-        ]
-      }
-    ]
-  })
-}
-
-# Configure kubectl
-resource "null_resource" "kubectl_config" {
-  depends_on = [module.eks]
-
-  provisioner "local-exec" {
-    command = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks.cluster_name}"
-  }
-}
-
-# Locals
+# Local values
 locals {
-  tags = {
-    Project     = var.project_name
-    Environment = var.environment
-    Cluster     = var.cluster_name
+  cluster_name = "${var.project_name}-${var.environment}-eks"
+  
+  phoenix_config = {
+    ecr_repository_prefix = var.project_name
+    image_tag            = var.phoenix_image_tag
+    enable_new_relic     = var.enable_new_relic
+    storage_class        = "gp3-csi"
   }
+
+  base_phoenix_config = {
+    collector_replicas = var.environment == "production" ? 3 : 2
+    observer_replicas  = 1
+    resources = {
+      collector_cpu_limit      = var.environment == "production" ? "2000m" : "1000m"
+      collector_memory_limit   = var.environment == "production" ? "4Gi" : "2Gi"
+      collector_cpu_request    = var.environment == "production" ? "1000m" : "500m"
+      collector_memory_request = var.environment == "production" ? "2Gi" : "1Gi"
+    }
+    image_tag = var.phoenix_image_tag
+  }
+}
+
+# Deploy AWS infrastructure
+module "aws_phoenix" {
+  source = "../../modules/aws-phoenix"
+
+  cluster_name           = local.cluster_name
+  region                = var.aws_region
+  vpc_cidr              = var.vpc_cidr
+  private_subnet_cidrs  = var.private_subnet_cidrs
+  public_subnet_cidrs   = var.public_subnet_cidrs
+  node_instance_types   = var.node_instance_types
+  node_desired_capacity = var.node_desired_capacity
+  node_min_capacity     = var.node_min_capacity
+  node_max_capacity     = var.node_max_capacity
+  phoenix_config        = local.phoenix_config
+}
+
+# Deploy Phoenix base infrastructure
+module "phoenix_base" {
+  source = "../../modules/phoenix-base"
+
+  namespace             = var.phoenix_namespace
+  monitoring_namespace  = var.monitoring_namespace
+  phoenix_config        = local.base_phoenix_config
+  storage_class         = local.phoenix_config.storage_class
+  enable_monitoring     = var.enable_monitoring
+
+  depends_on = [module.aws_phoenix]
+}
+
+# Install AWS Load Balancer Controller
+resource "helm_release" "aws_load_balancer_controller" {
+  name       = "aws-load-balancer-controller"
+  repository = "https://aws.github.io/eks-charts"
+  chart      = "aws-load-balancer-controller"
+  namespace  = "kube-system"
+  version    = "1.6.2"
+
+  set {
+    name  = "clusterName"
+    value = module.aws_phoenix.cluster_name
+  }
+
+  set {
+    name  = "serviceAccount.create"
+    value = "false"
+  }
+
+  set {
+    name  = "serviceAccount.name"
+    value = "aws-load-balancer-controller"
+  }
+
+  depends_on = [module.aws_phoenix]
+}
+
+# Install EBS CSI Driver
+resource "helm_release" "ebs_csi_driver" {
+  name       = "aws-ebs-csi-driver"
+  repository = "https://kubernetes-sigs.github.io/aws-ebs-csi-driver"
+  chart      = "aws-ebs-csi-driver"
+  namespace  = "kube-system"
+  version    = "2.25.0"
+
+  set {
+    name  = "storageClasses[0].name"
+    value = "gp3-csi"
+  }
+
+  set {
+    name  = "storageClasses[0].parameters.type"
+    value = "gp3"
+  }
+
+  set {
+    name  = "storageClasses[0].volumeBindingMode"
+    value = "WaitForFirstConsumer"
+  }
+
+  depends_on = [module.aws_phoenix]
+}
+
+# Install Phoenix application
+resource "helm_release" "phoenix" {
+  name       = "phoenix-vnext"
+  chart      = "../../../helm/phoenix"
+  namespace  = module.phoenix_base.namespace
+  version    = var.phoenix_chart_version
+
+  values = [
+    yamlencode({
+      global = {
+        cloudProvider = "aws"
+        region       = var.aws_region
+        environment  = var.environment
+      }
+
+      collector = {
+        replicaCount = local.base_phoenix_config.collector_replicas
+        image = {
+          tag = local.base_phoenix_config.image_tag
+        }
+        resources = local.base_phoenix_config.resources
+        serviceAccount = {
+          name = module.phoenix_base.collector_service_account
+        }
+      }
+
+      controlActuator = {
+        image = {
+          repository = "${module.aws_phoenix.ecr_repositories["control-actuator-go"]}"
+          tag       = var.phoenix_image_tag
+        }
+        serviceAccount = {
+          name = module.phoenix_base.control_service_account
+        }
+      }
+
+      monitoring = {
+        enabled = var.enable_monitoring
+        prometheus = {
+          storageClass = local.phoenix_config.storage_class
+        }
+        grafana = {
+          storageClass = local.phoenix_config.storage_class
+        }
+      }
+
+      newRelic = {
+        enabled    = var.enable_new_relic
+        licenseKey = var.new_relic_license_key
+      }
+    })
+  ]
+
+  depends_on = [
+    module.phoenix_base,
+    helm_release.aws_load_balancer_controller,
+    helm_release.ebs_csi_driver
+  ]
 }

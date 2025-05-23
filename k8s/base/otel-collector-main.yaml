@@ -1,0 +1,156 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-main-config
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      batch:
+        send_batch_size: 10000
+        timeout: 10s
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 1024
+        spike_limit_mib: 256
+
+    exporters:
+      prometheus/full_fidelity:
+        endpoint: "0.0.0.0:8888"
+        resource_to_telemetry_conversion:
+          enabled: true
+      prometheus/optimized:
+        endpoint: "0.0.0.0:8889"
+        resource_to_telemetry_conversion:
+          enabled: true
+      prometheus/experimental:
+        endpoint: "0.0.0.0:8890"
+        resource_to_telemetry_conversion:
+          enabled: true
+
+    service:
+      pipelines:
+        metrics/full_fidelity:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [prometheus/full_fidelity]
+        metrics/optimized:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [prometheus/optimized]
+        metrics/experimental_topk:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [prometheus/experimental]
+
+      telemetry:
+        logs:
+          level: info
+        metrics:
+          level: detailed
+          address: 0.0.0.0:8888
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector-main
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: otel-collector-main
+  template:
+    metadata:
+      labels:
+        app: otel-collector-main
+        component: collector
+    spec:
+      serviceAccountName: otel-collector
+      containers:
+      - name: otel-collector
+        image: otel/opentelemetry-collector-contrib:0.91.0
+        args:
+          - --config=/etc/otel-collector/config.yaml
+        resources:
+          limits:
+            memory: 1Gi
+            cpu: 1000m
+          requests:
+            memory: 512Mi
+            cpu: 500m
+        ports:
+        - containerPort: 4317  # OTLP gRPC
+          name: otlp-grpc
+        - containerPort: 4318  # OTLP HTTP
+          name: otlp-http
+        - containerPort: 8888  # Full fidelity metrics
+          name: metrics-full
+        - containerPort: 8889  # Optimized metrics
+          name: metrics-opt
+        - containerPort: 8890  # Experimental metrics
+          name: metrics-exp
+        - containerPort: 13133 # Health check
+          name: health
+        volumeMounts:
+        - name: config
+          mountPath: /etc/otel-collector
+        - name: control-config
+          mountPath: /etc/otel-control
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 13133
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 13133
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: otel-collector-main-config
+      - name: control-config
+        configMap:
+          name: phoenix-control-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector-main
+spec:
+  selector:
+    app: otel-collector-main
+  ports:
+  - name: otlp-grpc
+    port: 4317
+    targetPort: 4317
+  - name: otlp-http
+    port: 4318
+    targetPort: 4318
+  - name: metrics-full
+    port: 8888
+    targetPort: 8888
+  - name: metrics-opt
+    port: 8889
+    targetPort: 8889
+  - name: metrics-exp
+    port: 8890
+    targetPort: 8890
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-collector

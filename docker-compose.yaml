@@ -1,175 +1,180 @@
+# Phoenix-vNext Base Docker Compose Configuration
+# This file contains the core services for all environments
+
 version: '3.8'
 
 services:
-  # OpenTelemetry Collectors
+  # Main OpenTelemetry Collector - Core service
   otelcol-main:
-    image: otel/opentelemetry-collector-contrib:0.91.0
-    container_name: otelcol-main
-    command: ["--config=/etc/otel-collector-config.yaml"]
-    volumes:
-      - ./configs/otel/collectors/main-optimized.yaml:/etc/otel-collector-config.yaml:ro
-      - ./configs/control/optimization_mode.yaml:/configs/control/optimization_mode.yaml:ro
-    ports:
-      - "4317:4317"   # OTLP gRPC receiver
-      - "4318:4318"   # OTLP HTTP receiver
-      - "8888:8888"   # Prometheus metrics (full fidelity)
-      - "8889:8889"   # Prometheus metrics (optimized)
-      - "8890:8890"   # Prometheus metrics (experimental)
-      - "13133:13133" # health_check extension
-      - "1777:1777"   # pprof extension
+    image: otel/opentelemetry-collector-contrib:0.103.1
+    container_name: phoenix-collector-main
+    command: ["--config=/etc/otelcol/config.yaml"]
+    pid: host
+    env_file: .env
     environment:
-      - GOGC=100
-      - GOMEMLIMIT=${OTELCOL_MAIN_MEMORY_LIMIT_MIB:-1024}MiB
-      - GOMAXPROCS=${OTELCOL_MAIN_GOMAXPROCS:-1}
-      - OPTIMIZATION_MODE=${OPTIMIZATION_MODE:-balanced}
-      - NEW_RELIC_OTLP_ENDPOINT=${NEW_RELIC_OTLP_ENDPOINT}
-      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
-    mem_limit: ${OTELCOL_MAIN_MEMORY_LIMIT_MIB:-1024}m
+      GOMAXPROCS: ${OTELCOL_MAIN_GOMAXPROCS:-2}
+      GOMEMLIMIT: ${OTELCOL_MAIN_MEMORY_LIMIT_MIB:-1024MiB}
+    volumes:
+      - ./configs/otel/collectors/main.yaml:/etc/otelcol/config.yaml:ro
+      - ./configs/control:/etc/otelcol/control:ro
+      - /proc:/hostfs/proc:ro
+      - /sys:/hostfs/sys:ro
+      - /etc/hostname:/hostfs/etc/hostname:ro
+      - ./data/otelcol_main:/var/lib/otelcol/file_storage
+    ports:
+      - "4317:4317"   # OTLP/gRPC
+      - "4318:4318"   # OTLP/HTTP
+      - "8888:8888"   # Full pipeline metrics
+      - "8889:8889"   # Optimized pipeline metrics
+      - "8890:8890"   # Experimental pipeline metrics
+      - "13133:13133" # Health check
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:13133"]
       interval: 20s
       timeout: 5s
       retries: 3
-      start_period: 30s
-    depends_on:
-      prometheus:
-        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: ${OTELCOL_MAIN_MEMORY_LIMIT_MIB:-1024}MiB
     networks:
       - phoenix
 
+  # Observer Collector - Monitoring and KPIs
   otelcol-observer:
-    image: otel/opentelemetry-collector-contrib:0.91.0
-    container_name: otelcol-observer
-    command: ["--config=/etc/otel-collector-config.yaml"]
+    image: otel/opentelemetry-collector-contrib:0.103.1
+    container_name: phoenix-collector-observer
+    command: ["--config=/etc/otelcol/config.yaml"]
+    env_file: .env
+    environment:
+      GOMAXPROCS: ${OTELCOL_OBSERVER_GOMAXPROCS:-1}
+      GOMEMLIMIT: ${OTELCOL_OBSERVER_MEMORY_LIMIT_MIB:-256MiB}
     volumes:
-      - ./services/control-plane/observer/config/observer-enhanced.yaml:/etc/otel-collector-config.yaml:ro
+      - ./configs/otel/collectors/observer.yaml:/etc/otelcol/config.yaml:ro
     ports:
-      - "9888:9888"   # Prometheus metrics (KPIs)
-      - "13134:13134" # health_check extension
-      - "1778:1778"   # pprof extension
-    mem_limit: 256m
+      - "9888:9888"   # Observer metrics
+      - "13134:13133" # Health check (remapped)
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:13134"]
+      test: ["CMD", "curl", "-f", "http://localhost:13133"]
       interval: 20s
       timeout: 5s
       retries: 3
-    depends_on:
-      otelcol-main:
-        condition: service_healthy
     networks:
       - phoenix
 
-  # Control Plane Services
+  # Control Actuator - Go-based PID controller
   control-actuator-go:
     build:
       context: ./apps/control-actuator-go
       dockerfile: Dockerfile
-    container_name: control-actuator-go
-    volumes:
-      - ./configs/control/optimization_mode.yaml:/configs/control/optimization_mode.yaml:rw
-    ports:
-      - "8081:8080"
+    container_name: phoenix-control-actuator
+    env_file: .env
     environment:
-      - PROMETHEUS_URL=http://prometheus:9090
-      - CONTROL_CONFIG_PATH=/configs/control/optimization_mode.yaml
-      - TARGET_OPTIMIZED_PIPELINE_TS_COUNT=${TARGET_OPTIMIZED_PIPELINE_TS_COUNT:-20000}
-      - THRESHOLD_OPTIMIZATION_CONSERVATIVE_MAX_TS=${THRESHOLD_OPTIMIZATION_CONSERVATIVE_MAX_TS:-15000}
-      - THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS=${THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS:-25000}
-      - HYSTERESIS_FACTOR=${HYSTERESIS_FACTOR:-0.1}
-      - ADAPTIVE_CONTROLLER_STABILITY_SECONDS=${ADAPTIVE_CONTROLLER_STABILITY_SECONDS:-120}
-      - ADAPTIVE_CONTROLLER_INTERVAL_SECONDS=${ADAPTIVE_CONTROLLER_INTERVAL_SECONDS:-60}
+      - OBSERVER_ENDPOINT=http://otelcol-observer:9888
+      - CONTROL_FILE_PATH=/configs/control/optimization_mode.yaml
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - ./configs/control:/configs/control
+    ports:
+      - "8081:8081"   # Control API
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     depends_on:
       otelcol-observer:
-        condition: service_healthy
-      prometheus:
         condition: service_healthy
     networks:
       - phoenix
 
-  # Anomaly Detection
+  # Anomaly Detector - Multi-algorithm detection
   anomaly-detector:
     build:
       context: ./apps/anomaly-detector
       dockerfile: Dockerfile
-    container_name: anomaly-detector
-    ports:
-      - "8082:8080"
+    container_name: phoenix-anomaly-detector
+    env_file: .env
     environment:
-      - PROMETHEUS_URL=http://prometheus:9090
-      - CONTROL_WEBHOOK_URL=http://control-actuator-go:8080/anomaly
-      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL}
+      - PROMETHEUS_ENDPOINT=http://prometheus:9090
+      - WEBHOOK_ENDPOINT=http://control-actuator-go:8081/anomaly
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    ports:
+      - "8082:8082"   # Anomaly API
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     depends_on:
       prometheus:
         condition: service_healthy
     networks:
       - phoenix
 
-  # Benchmark Controller
+  # Benchmark Controller - Performance validation
   benchmark-controller:
     build:
       context: ./services/benchmark
       dockerfile: Dockerfile
-    container_name: benchmark-controller
-    ports:
-      - "8083:8080"
+    container_name: phoenix-benchmark
+    env_file: .env
     environment:
-      - PROMETHEUS_URL=http://prometheus:9090
-      - SYNTHETIC_GENERATOR_URL=http://synthetic-metrics-generator:8080
+      - PROMETHEUS_ENDPOINT=http://prometheus:9090
+      - COLLECTOR_ENDPOINT=http://otelcol-main:4318
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    ports:
+      - "8083:8083"   # Benchmark API
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     depends_on:
+      otelcol-main:
+        condition: service_healthy
       prometheus:
         condition: service_healthy
     networks:
       - phoenix
 
-  # Synthetic Metrics Generator
-  synthetic-metrics-generator:
-    build:
-      context: ./apps/synthetic-generator
-      dockerfile: Dockerfile
-    container_name: synthetic-metrics-generator
-    environment:
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otelcol-main:4317
-      - OTEL_RESOURCE_ATTRIBUTES=service.name=synthetic-generator,service.version=1.0
-      - SYNTHETIC_PROCESS_COUNT_PER_HOST=${SYNTHETIC_PROCESS_COUNT_PER_HOST:-250}
-      - SYNTHETIC_HOST_COUNT=${SYNTHETIC_HOST_COUNT:-3}
-      - SYNTHETIC_METRIC_EMIT_INTERVAL_S=${SYNTHETIC_METRIC_EMIT_INTERVAL_S:-15}
-      - SYNTHETIC_JITTER_FACTOR=${SYNTHETIC_JITTER_FACTOR:-0.1}
-      - SYNTHETIC_SPIKE_FACTOR=${SYNTHETIC_SPIKE_FACTOR:-2.0}
-      - SYNTHETIC_SPIKE_PROBABILITY=${SYNTHETIC_SPIKE_PROBABILITY:-0.01}
-    depends_on:
-      otelcol-main:
-        condition: service_healthy
-    networks:
-      - phoenix
-
-  # Monitoring Stack
+  # Prometheus - Metrics storage and querying
   prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
+    image: prom/prometheus:v2.47.0
+    container_name: phoenix-prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-      - '--enable-feature=exemplar-storage'
-      - '--enable-feature=remote-write-receiver'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
     volumes:
       - ./configs/monitoring/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
-      - ./configs/monitoring/prometheus/rules/:/etc/prometheus/rules/:ro
+      - ./configs/monitoring/prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
     ports:
       - "9090:9090"
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/ready"]
-      interval: 10s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
       timeout: 5s
       retries: 3
     networks:
       - phoenix
 
+  # Grafana - Visualization and dashboards
   grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
+    image: grafana/grafana:10.1.1
+    container_name: phoenix-grafana
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -181,16 +186,48 @@ services:
       - grafana_data:/var/lib/grafana
     ports:
       - "3000:3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     depends_on:
       prometheus:
         condition: service_healthy
     networks:
       - phoenix
 
+  # Synthetic Metrics Generator - Load generation
+  synthetic-metrics-generator:
+    build:
+      context: ./apps/synthetic-generator
+      dockerfile: Dockerfile
+    container_name: phoenix-generator-synthetic
+    env_file: .env
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otelcol-main:4318
+      - SYNTHETIC_PROCESS_COUNT_PER_HOST=${SYNTHETIC_PROCESS_COUNT_PER_HOST:-250}
+      - SYNTHETIC_HOST_COUNT=${SYNTHETIC_HOST_COUNT:-3}
+      - SYNTHETIC_METRIC_EMIT_INTERVAL_S=${SYNTHETIC_METRIC_EMIT_INTERVAL_S:-15}
+    restart: unless-stopped
+    depends_on:
+      otelcol-main:
+        condition: service_healthy
+    networks:
+      - phoenix
+    profiles:
+      - generators
+
 volumes:
   prometheus_data:
+    driver: local
   grafana_data:
+    driver: local
 
 networks:
   phoenix:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

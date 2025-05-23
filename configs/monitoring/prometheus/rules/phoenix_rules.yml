@@ -1,0 +1,336 @@
+groups:
+  # ===== OPERATIONAL ALERTS =====
+  - name: phoenix_operational_alerts
+    interval: 30s
+    rules:
+      # Collector Health
+      - alert: CollectorDown
+        expr: up{job=~"phoenix-collector.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: collector
+        annotations:
+          summary: "Phoenix collector {{ $labels.instance }} is down"
+          description: "Collector has been down for more than 2 minutes"
+          runbook_url: "/runbooks/incident-response/collector-down.md"
+
+      - alert: CollectorHighMemory
+        expr: |
+          (process_resident_memory_bytes{job=~"phoenix-collector.*"} / 1024 / 1024) > 800
+        for: 5m
+        labels:
+          severity: warning
+          component: collector
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Collector memory usage is {{ $value }}MB"
+
+      - alert: CollectorOOM
+        expr: |
+          rate(kube_pod_container_status_restarts_total{container=~"otel-collector.*"}[15m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: collector
+        annotations:
+          summary: "Collector OOM restart detected"
+          description: "Collector {{ $labels.pod }} has restarted due to OOM"
+          runbook_url: "/runbooks/incident-response/collector-oom.md"
+
+      # Cardinality Alerts
+      - alert: HighCardinality
+        expr: |
+          phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate > 40000
+        for: 5m
+        labels:
+          severity: warning
+          component: cardinality
+        annotations:
+          summary: "High cardinality in {{ $labels.pipeline }}"
+          description: "Pipeline cardinality is {{ $value }}, approaching limit"
+
+      - alert: CardinalityExplosion
+        expr: |
+          phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate > 50000
+          OR
+          phoenix:cardinality_explosion_risk > 90
+        for: 2m
+        labels:
+          severity: critical
+          component: cardinality
+        annotations:
+          summary: "Cardinality explosion detected"
+          description: "Critical cardinality level: {{ $value }}"
+          runbook_url: "/runbooks/incident-response/high-cardinality-explosion.md"
+
+      - alert: CardinalityGrowthAnomaly
+        expr: |
+          abs(phoenix:cardinality_zscore) > 3
+        for: 10m
+        labels:
+          severity: warning
+          component: cardinality
+        annotations:
+          summary: "Abnormal cardinality growth pattern"
+          description: "Z-score is {{ $value }}, indicating unusual behavior"
+
+      # Control Loop Health
+      - alert: ControlLoopFailure
+        expr: |
+          up{job="phoenix-control-actuator"} == 0
+          OR
+          time() - phoenix_control_last_update_timestamp > 300
+        for: 5m
+        labels:
+          severity: critical
+          component: control
+        annotations:
+          summary: "Control loop is not functioning"
+          description: "Control actuator is down or not updating"
+
+      - alert: OptimizationModeOscillation
+        expr: |
+          changes(phoenix_control_optimization_mode[30m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: control
+        annotations:
+          summary: "Optimization mode is oscillating"
+          description: "Mode changed {{ $value }} times in 30 minutes"
+
+      # Data Quality
+      - alert: HighDataLoss
+        expr: |
+          phoenix:optimization_data_loss_percentage > 20
+        for: 10m
+        labels:
+          severity: warning
+          component: quality
+        annotations:
+          summary: "High data loss in optimized pipeline"
+          description: "{{ $value }}% of data is being dropped"
+
+      - alert: MetricStaleness
+        expr: |
+          time() - prometheus_tsdb_lowest_timestamp_seconds > 600
+        for: 5m
+        labels:
+          severity: warning
+          component: quality
+        annotations:
+          summary: "Metrics are stale"
+          description: "No new metrics for {{ $value }} seconds"
+
+  # ===== PERFORMANCE MONITORING =====
+  - name: phoenix_performance
+    interval: 60s
+    rules:
+      # System Health Score
+      - record: phoenix:system_health_score
+        expr: |
+          (
+            avg(up{job=~"phoenix-.*"}) * 25 +
+            (1 - clamp_max(phoenix:pipeline_error_rate, 1)) * 25 +
+            clamp_max((1 - phoenix:cardinality_explosion_risk / 100), 1) * 25 +
+            clamp_max(phoenix:pipeline_efficiency_percentage / 100, 1) * 25
+          )
+
+      # Pipeline Efficiency
+      - record: phoenix:pipeline_efficiency_percentage
+        expr: |
+          (
+            sum(rate(otelcol_processor_accepted_metric_points[5m])) /
+            (sum(rate(otelcol_processor_accepted_metric_points[5m])) + 
+             sum(rate(otelcol_processor_refused_metric_points[5m])) + 0.1)
+          ) * 100
+
+      - record: phoenix:pipeline_error_rate
+        expr: |
+          sum(rate(otelcol_processor_refused_metric_points[5m])) /
+          (sum(rate(otelcol_receiver_accepted_metric_points[5m])) + 0.1)
+
+      # Resource Efficiency
+      - record: phoenix:pipeline_throughput_per_core
+        expr: |
+          sum(rate(otelcol_processor_accepted_metric_points[5m])) /
+          sum(rate(process_cpu_seconds_total{job=~"phoenix-collector.*"}[5m]))
+
+      - record: phoenix:memory_efficiency_datapoints_per_mb
+        expr: |
+          sum(rate(otelcol_processor_accepted_metric_points[5m])) /
+          (sum(process_resident_memory_bytes{job=~"phoenix-collector.*"}) / 1024 / 1024)
+
+  # ===== CARDINALITY ANALYSIS =====
+  - name: phoenix_cardinality_advanced
+    interval: 30s
+    rules:
+      # Statistical Analysis
+      - record: phoenix:cardinality_zscore
+        expr: |
+          (
+            phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate -
+            avg_over_time(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[1h])
+          ) / 
+          (stddev_over_time(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[1h]) + 0.1)
+
+      - record: phoenix:cardinality_growth_rate_per_minute
+        expr: |
+          rate(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[5m]) * 60
+
+      - record: phoenix:cardinality_explosion_risk
+        expr: |
+          clamp_max(
+            (phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate / 50000) * 100,
+            100
+          )
+
+      # Predictions
+      - record: phoenix:cardinality_prediction_1h
+        expr: |
+          predict_linear(
+            phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[30m],
+            3600
+          )
+
+      - record: phoenix:days_until_cardinality_limit
+        expr: |
+          (50000 - phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate) /
+          (rate(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[24h]) * 86400 + 0.1)
+
+      # Optimization Impact
+      - record: phoenix:cardinality_reduction_percentage
+        expr: |
+          label_replace(
+            (1 - 
+              phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{pipeline="metrics/optimised"} /
+              phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{pipeline="metrics/full_fidelity"}
+            ) * 100,
+            "optimization", "percentage", "", ""
+          )
+
+  # ===== COST ANALYSIS =====
+  - name: phoenix_cost_optimization
+    interval: 60s
+    rules:
+      # Cost Calculations
+      - record: phoenix:cost_per_million_datapoints_usd
+        expr: |
+          0.10  # $0.10 per million datapoints (configurable)
+
+      - record: phoenix:hourly_datapoints_processed
+        expr: |
+          sum(rate(otelcol_processor_accepted_metric_points[5m])) * 3600
+
+      - record: phoenix:estimated_hourly_cost_usd
+        expr: |
+          (phoenix:hourly_datapoints_processed / 1000000) * phoenix:cost_per_million_datapoints_usd
+
+      - record: phoenix:estimated_monthly_cost_usd
+        expr: |
+          phoenix:estimated_hourly_cost_usd * 24 * 30
+
+      - record: phoenix:cost_efficiency_score
+        expr: |
+          (sum(rate(otelcol_processor_accepted_metric_points[5m])) / 
+           (phoenix:estimated_hourly_cost_usd + 0.01)) / 1000000
+
+      # Cost by Pipeline
+      - record: phoenix:cost_per_pipeline_hourly_usd
+        expr: |
+          (rate(otelcol_processor_accepted_metric_points[5m]) * 3600 / 1000000) * 
+          phoenix:cost_per_million_datapoints_usd
+
+  # ===== CAPACITY PLANNING =====
+  - name: phoenix_capacity
+    interval: 5m
+    rules:
+      # Memory Planning
+      - record: phoenix:memory_headroom_percentage
+        expr: |
+          (1 - 
+            process_resident_memory_bytes{job=~"phoenix-collector.*"} /
+            (container_spec_memory_limit_bytes{pod=~"phoenix-collector.*"} + 1)
+          ) * 100
+
+      - record: phoenix:memory_growth_rate_mb_per_hour
+        expr: |
+          rate(process_resident_memory_bytes{job=~"phoenix-collector.*"}[1h]) * 3600 / 1024 / 1024
+
+      # Volume Projections
+      - record: phoenix:projected_monthly_volume_gb
+        expr: |
+          (sum(rate(otelcol_processor_accepted_metric_points[1h])) * 86400 * 30 * 8) / 1073741824
+
+      # Scaling Requirements
+      - record: phoenix:required_collector_instances
+        expr: |
+          ceil(
+            sum(rate(otelcol_receiver_accepted_metric_points[5m])) / 
+            1000000  # 1M points per instance baseline
+          )
+
+      - record: phoenix:collector_saturation_percentage
+        expr: |
+          (sum(rate(otelcol_receiver_accepted_metric_points[5m])) /
+           (count(up{job=~"phoenix-collector.*"}) * 1000000)) * 100
+
+  # ===== ANOMALY DETECTION FEATURES =====
+  - name: phoenix_ml_features
+    interval: 60s
+    rules:
+      # Seasonality Detection
+      - record: phoenix:hourly_pattern_baseline
+        expr: |
+          avg_over_time(
+            phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[1h:5m]
+          )
+
+      - record: phoenix:weekly_pattern_baseline
+        expr: |
+          avg_over_time(
+            phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[7d:1h]
+          )
+
+      # Anomaly Scoring
+      - record: phoenix:anomaly_score
+        expr: |
+          abs(
+            phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate -
+            phoenix:weekly_pattern_baseline
+          ) / (phoenix:weekly_pattern_baseline + 1)
+
+      # Trend Analysis
+      - record: phoenix:trend_strength_indicator
+        expr: |
+          abs(
+            phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate -
+            phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate offset 1h
+          ) / (phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate offset 1h + 1)
+
+  # ===== SERVICE LEVEL INDICATORS =====
+  - name: phoenix_sli
+    interval: 30s
+    rules:
+      # Availability SLI
+      - record: phoenix:availability_sli
+        expr: |
+          avg_over_time(up{job=~"phoenix-.*"}[5m])
+
+      # Latency SLI
+      - record: phoenix:latency_p99_sli
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(otelcol_processor_batch_batch_send_size_bucket[5m])) by (le)
+          )
+
+      # Error Rate SLI
+      - record: phoenix:error_rate_sli
+        expr: |
+          1 - phoenix:pipeline_error_rate
+
+      # Data Freshness SLI
+      - record: phoenix:data_freshness_sli
+        expr: |
+          (time() - max(prometheus_tsdb_lowest_timestamp_seconds)) < 300

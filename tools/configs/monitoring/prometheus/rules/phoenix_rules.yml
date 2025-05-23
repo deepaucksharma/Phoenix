@@ -1,0 +1,15 @@
+# Placeholder for Phoenix Prometheus Rules
+# Add recording rules and alerts here as per specification.
+# groups:
+#   - name: phoenix_optimisation_kpis
+#     rules:
+#       - record: phoenix:cost_reduction_ratio
+#         expr: 1 - (sum(phoenix_opt_final_output_phoenix_optimised_output_ts_active) / ignoring(pipeline_output_type) sum(phoenix_full_final_output_phoenix_full_output_ts_active))
+#   - name: phoenix_alerts
+#     rules:
+#       - alert: PhoenixOptimizationDrift
+#         expr: phoenix:cost_reduction_ratio < 0.4 for 10m
+#         labels: {severity: warning}
+#         annotations:
+#           summary: Phoenix optimized pipeline no longer hitting 40% reduction
+#           description: "Current cost reduction ratio is {{ $value | printf \"%.2f\" }}. Check pipeline configurations and control loop."

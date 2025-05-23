@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: phoenix-vnext
+
+resources:
+  - namespace.yaml
+  - configmaps.yaml
+  - secrets.yaml
+  - otel-collector-main.yaml
+  - otel-collector-observer.yaml
+  - control-actuator.yaml
+  - prometheus.yaml
+  - grafana.yaml
+  - analytics.yaml
+  - services.yaml
+  - ingress.yaml
+
+configMapGenerator:
+  - name: phoenix-config
+    files:
+      - configs/otel/collectors/main.yaml
+      - configs/otel/collectors/observer.yaml
+  - name: prometheus-config
+    files:
+      - configs/monitoring/prometheus/prometheus.yaml
+      - configs/monitoring/prometheus/rules/phoenix_rules.yml
+  - name: grafana-dashboards
+    files:
+      - configs/monitoring/grafana/dashboards/phoenix-adaptive-control-loop.json
+      - configs/monitoring/grafana/dashboards/phoenix-v3-ultra-overview.json
+
+generatorOptions:
+  disableNameSuffixHash: false
+
+commonLabels:
+  app.kubernetes.io/part-of: phoenix-vnext
+  app.kubernetes.io/managed-by: kustomize

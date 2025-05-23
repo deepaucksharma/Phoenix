@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-actuator
+  labels:
+    app: control-actuator
+    component: control-plane
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: control-actuator
+  template:
+    metadata:
+      labels:
+        app: control-actuator
+        component: control-plane
+    spec:
+      serviceAccountName: phoenix-control
+      containers:
+      - name: control-actuator
+        image: phoenix/control-actuator-go:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8081
+          name: http
+          protocol: TCP
+        env:
+        - name: OBSERVER_ENDPOINT
+          value: "http://otelcol-observer:9888"
+        - name: CONTROL_FILE_PATH
+          value: "/configs/control/optimization_mode.yaml"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: ADAPTIVE_CONTROLLER_INTERVAL_SECONDS
+          value: "60"
+        - name: ADAPTIVE_CONTROLLER_STABILITY_SECONDS
+          value: "120"
+        volumeMounts:
+        - name: control-config
+          mountPath: /configs/control
+        - name: secrets
+          mountPath: /etc/secrets
+          readOnly: true
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: control-config
+        configMap:
+          name: phoenix-control-config
+      - name: secrets
+        secret:
+          secretName: phoenix-secrets
+      securityContext:
+        fsGroup: 1000

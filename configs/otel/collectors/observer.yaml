@@ -1,0 +1,70 @@
+# Phoenix Observer Collector Configuration
+# Monitors main collector metrics and provides KPIs for control decisions
+
+receivers:
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'phoenix-main-collector'
+          static_configs:
+            - targets: ['otelcol-main:8888', 'otelcol-main:8889', 'otelcol-main:8890']
+          scrape_interval: 30s
+          metrics_path: /metrics
+
+  hostmetrics:
+    collection_interval: 60s
+    scrapers:
+      cpu:
+      memory:
+
+processors:
+  memory_limiter:
+    limit_mib: ${OTELCOL_OBSERVER_MEMORY_LIMIT_MIB}
+
+  batch:
+    send_batch_size: 512
+    timeout: 5s
+
+  resource:
+    attributes:
+      - key: service.name
+        value: phoenix-observer
+        action: upsert
+      - key: service.version
+        value: ${VERSION}
+        action: upsert
+
+  # Calculate KPI metrics for control decisions
+  transform:
+    metric_statements:
+      - context: metric
+        statements:
+          # Calculate cardinality estimates
+          - set(name, "phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate") where name == "phoenix_full_final_output_phoenix_full_output_ts_active"
+          - set(name, "phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate") where name == "phoenix_opt_final_output_phoenix_optimised_output_ts_active"
+
+exporters:
+  prometheus:
+    endpoint: "0.0.0.0:9888"
+    namespace: phoenix_observer_kpi_store
+    const_labels:
+      observer_role: "control_plane"
+
+  logging:
+    loglevel: info
+
+service:
+  extensions: []
+  
+  pipelines:
+    metrics:
+      receivers: [prometheus, hostmetrics]
+      processors: [memory_limiter, resource, transform, batch]
+      exporters: [prometheus, logging]
+
+  telemetry:
+    logs:
+      level: ${LOG_LEVEL}
+    metrics:
+      address: 0.0.0.0:9888
+      level: detailed

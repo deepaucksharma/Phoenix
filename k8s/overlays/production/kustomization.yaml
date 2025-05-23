@@ -1,0 +1,43 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: phoenix-vnext-prod
+
+bases:
+  - ../../base
+
+namePrefix: prod-
+
+commonLabels:
+  environment: production
+
+replicas:
+  - name: otel-collector-main
+    count: 3
+  - name: prometheus
+    count: 2
+  - name: grafana
+    count: 2
+  - name: phoenix-analytics
+    count: 2
+
+patchesStrategicMerge:
+  - resource-limits.yaml
+  - security-patches.yaml
+  - monitoring-patches.yaml
+
+configMapGenerator:
+  - name: env-config
+    literals:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=info
+      - THRESHOLD_OPTIMIZATION_CONSERVATIVE_MAX_TS=15000
+      - THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS=25000
+      - ENABLE_NR_EXPORT_FULL=true
+      - ENABLE_NR_EXPORT_OPTIMISED=true
+
+secretGenerator:
+  - name: newrelic-license
+    literals:
+      - license-key=YOUR_NR_LICENSE_KEY_HERE
+    type: Opaque
