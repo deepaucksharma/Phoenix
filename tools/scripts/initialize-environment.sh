@@ -158,42 +158,25 @@ echo "INFO: Setting up dashboards directory for Grafana..."
 mkdir -p ./configs/monitoring/grafana/dashboards
 GRAFANA_MAIN_DASHBOARD_PATH_INIT="./configs/monitoring/grafana/dashboards/phoenix-v3-ultra-overview.json"
 if [ ! -f "$GRAFANA_MAIN_DASHBOARD_PATH_INIT" ]; then
-    echo "INFO: Creating placeholder Grafana main overview dashboard: $GRAFANA_MAIN_DASHBOARD_PATH_INIT"
-    # This should be the full dashboard JSON from the spec. For brevity, a stub:
-    cat <<EOF > "$GRAFANA_MAIN_DASHBOARD_PATH_INIT"
-{
-  "title": "Phoenix v3 Ultra - Placeholder",
-  "uid": "phoenix-v3-ultra-overview",
-  "panels": [{"type": "text", "title": "Placeholder", "gridPos": { "x": 0, "y": 0, "w": 24, "h": 2 }, "options": {"content": "# Dashboard content to be populated from spec", "mode": "markdown"}}],
-  "schemaVersion": 37, "version": 1
-}
-EOF
+    echo "INFO: Installing default Grafana dashboard: $GRAFANA_MAIN_DASHBOARD_PATH_INIT"
+    cp config/defaults/monitoring/grafana/dashboards/phoenix-v3-ultra-overview.json "$GRAFANA_MAIN_DASHBOARD_PATH_INIT"
+fi
+
+EXTRA_DASHBOARD_PATH_INIT="./configs/monitoring/grafana/dashboards/phoenix-adaptive-control-loop.json"
+if [ ! -f "$EXTRA_DASHBOARD_PATH_INIT" ]; then
+    echo "INFO: Installing adaptive control loop dashboard: $EXTRA_DASHBOARD_PATH_INIT"
+    cp config/defaults/monitoring/grafana/dashboards/phoenix-adaptive-control-loop.json "$EXTRA_DASHBOARD_PATH_INIT"
 fi
 
 echo "INFO: Creating Prometheus rules directory..."
 mkdir -p ./configs/monitoring/prometheus/rules
 
-# Create placeholder phoenix_rules.yml if it doesn't exist
+
+# Install real Prometheus recording rules if missing
 PROM_RULES_FILE="./configs/monitoring/prometheus/rules/phoenix_rules.yml"
 if [ ! -f "$PROM_RULES_FILE" ]; then
-  echo "INFO: Creating placeholder Prometheus rules file: $PROM_RULES_FILE"
-  cat <<EOF > "$PROM_RULES_FILE"
-# Placeholder for Phoenix Prometheus Rules
-# Add recording rules and alerts here as per specification.
-# groups:
-#   - name: phoenix_optimisation_kpis
-#     rules:
-#       - record: phoenix:cost_reduction_ratio
-#         expr: 1 - (sum(phoenix_opt_final_output_phoenix_optimised_output_ts_active) / ignoring(pipeline_output_type) sum(phoenix_full_final_output_phoenix_full_output_ts_active))
-#   - name: phoenix_alerts
-#     rules:
-#       - alert: PhoenixOptimizationDrift
-#         expr: phoenix:cost_reduction_ratio < 0.4 for 10m
-#         labels: {severity: warning}
-#         annotations:
-#           summary: Phoenix optimized pipeline no longer hitting 40% reduction
-#           description: "Current cost reduction ratio is {{ \$value | printf \"%.2f\" }}. Check pipeline configurations and control loop."
-EOF
+  echo "INFO: Installing default Prometheus rules: $PROM_RULES_FILE"
+  cp config/defaults/monitoring/prometheus/rules/phoenix_rules.yml "$PROM_RULES_FILE"
 fi
 
 
