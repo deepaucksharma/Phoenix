@@ -4,23 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Phoenix-vNext is a production-ready 3-Pipeline Cardinality Optimization System for OpenTelemetry metrics collection and processing. The system uses adaptive cardinality management with dynamic switching between optimization profiles (conservative, balanced, aggressive) based on metric volume and system performance through a PID-like control algorithm implemented in Go.
+Phoenix-vNext is a production-ready 3-Pipeline Cardinality Optimization System for OpenTelemetry metrics collection and processing. The system uses adaptive cardinality management with dynamic switching between optimization profiles (conservative, balanced, aggressive) based on metric volume and system performance through a PID controller implemented in Go.
 
 ## Architecture
 
 ### Core System Components
-- **Main Collector** (`otelcol-main`): Runs 3 parallel pipelines with different cardinality optimization levels using shared processing (40% overhead reduction)
+- **Main Collector** (`otelcol-main`): Runs 3 parallel pipelines with different cardinality optimization levels
 - **Observer Collector** (`otelcol-observer`): Control plane that monitors pipeline metrics and system performance
 - **Control Actuator** (`control-actuator-go`): Go-based PID controller with hysteresis and stability management
-- **Anomaly Detector** (`anomaly-detector`): Multi-algorithm detection (Z-score, rate of change, pattern matching) with webhook integration
-- **Benchmark Controller** (`benchmark`): Performance validation with 4 test scenarios and CI/CD integration
+- **Anomaly Detector** (`anomaly-detector`): Multi-algorithm detection (Z-score, rate of change, pattern matching)
+- **Benchmark Controller** (`benchmark-controller`): Performance validation with 4 test scenarios
 - **Synthetic Generator** (`synthetic-metrics-generator`): Go-based load generator for testing
 
 ### Pipeline Architecture
-The system operates 3 distinct pipelines in parallel with shared processing:
+The system operates 3 distinct pipelines in parallel:
 1. **Full Fidelity Pipeline** (`pipeline_full_fidelity`) - Complete metrics baseline without optimization
 2. **Optimized Pipeline** (`pipeline_optimised`) - Moderate cardinality reduction with configurable aggregation
-3. **Experimental TopK Pipeline** (`pipeline_experimental_topk`) - Advanced optimization using TopK sampling techniques
+3. **Experimental TopK Pipeline** (`pipeline_experimental_topk`) - Advanced optimization using TopK sampling
 
 ### Adaptive Control System
 - Observer monitors `phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate` metrics
@@ -32,30 +32,24 @@ The system operates 3 distinct pipelines in parallel with shared processing:
 - PID algorithm: `pidOutput = 0.5*error + 0.1*integral + 0.05*derivative`
 - Hysteresis factor (10%) prevents rapid oscillation
 
-### Performance Targets
-- Signal preservation: >98%
-- Cardinality reduction: 15-40% (mode dependent)
-- Control loop latency: <100ms
-- Memory usage: <512MB baseline
-- P99 processing latency: <50ms
-
 ## Development Commands
 
-### Consolidated Script System
-Phoenix uses a unified script management system for all operations:
-
+### Quick Start
 ```bash
-# Master script manager - single entry point for all scripts
-./scripts/consolidated/phoenix-scripts.sh
+# Initialize environment (creates data dirs, control files, .env from template)
+./scripts/consolidated/core/initialize-environment.sh
 
-# Quick commands
-./scripts/consolidated/phoenix-scripts.sh help           # Show all available commands
-./scripts/consolidated/phoenix-scripts.sh init           # Initialize environment
-./scripts/consolidated/phoenix-scripts.sh verify-system  # Comprehensive system verification
-./scripts/consolidated/phoenix-scripts.sh start          # Start all services
-./scripts/consolidated/phoenix-scripts.sh stop           # Stop all services
-./scripts/consolidated/phoenix-scripts.sh clean          # Clean everything
-./scripts/consolidated/phoenix-scripts.sh logs <service> # View service logs
+# Start full stack
+./run-phoenix.sh
+
+# Or use docker-compose directly
+docker-compose up -d
+
+# Stop services
+./run-phoenix.sh stop
+
+# Clean everything
+./run-phoenix.sh clean
 ```
 
 ### Makefile Commands
@@ -106,10 +100,8 @@ curl http://localhost:8082/health  # Anomaly detector health
 
 ### Testing & Validation
 ```bash
-# Use consolidated testing scripts
-./scripts/consolidated/phoenix-scripts.sh verify-system     # Complete system verification
-./scripts/consolidated/phoenix-scripts.sh test-integration  # Run integration tests
-./scripts/consolidated/phoenix-scripts.sh validate-configs  # Validate all configurations
+# Run integration tests
+./tests/integration/test_core_functionality.sh
 
 # Generate synthetic load
 docker-compose up synthetic-metrics-generator
@@ -122,22 +114,23 @@ curl -X POST http://localhost:8083/benchmark/run \
 
 # Monitor control signal changes
 watch cat configs/control/optimization_mode.yaml
+
+# Validate configurations
+docker-compose config
+sha256sum configs/otel/collectors/*.yaml configs/templates/control/*.yaml > CHECKSUMS.txt
 ```
 
-### Go Service Development
+### Cloud Deployment
 ```bash
-# Run Go service locally
-cd apps/control-actuator-go
-go run main.go
+# AWS deployment
+./deploy-aws.sh
 
-# Run tests (Note: No unit tests currently exist in the codebase)
-go test -v -race ./...
+# Azure deployment  
+./deploy-azure.sh
 
-# Build binary
-go build -o control-actuator
-
-# Build Docker image
-docker build -t control-actuator-go .
+# Terraform deployment
+cd infrastructure/terraform/environments/aws
+terraform init && terraform apply
 ```
 
 ## Configuration Architecture
@@ -146,6 +139,7 @@ docker build -t control-actuator-go .
 - `configs/otel/collectors/main.yaml`: Core collector with 3-pipeline configuration
 - `configs/otel/collectors/observer.yaml`: Monitoring collector that exposes KPI metrics
 - `configs/otel/processors/common_intake_processors.yaml`: Shared processor configurations
+- `configs/otel/exporters/newrelic-enhanced.yaml`: New Relic OTLP integration
 
 ### Control System
 - `configs/control/optimization_mode.yaml`: Dynamic control file modified by actuator
@@ -155,8 +149,41 @@ docker build -t control-actuator-go .
 
 ### Monitoring Stack
 - `configs/monitoring/prometheus/prometheus.yaml`: Prometheus scrape configuration
-- `configs/monitoring/prometheus/rules/phoenix_core_rules.yml`: Core recording rules
-- `configs/monitoring/grafana/dashboards/phoenix-v3-ultra-overview.json`: Main dashboard
+- `configs/monitoring/prometheus/rules/phoenix_rules.yml`: Core recording rules
+- `configs/monitoring/prometheus/rules/phoenix_documented_metrics.yml`: Colon-notation metrics
+- `configs/monitoring/prometheus/rules/phoenix_core_rules.yml`: Basic alerting rules
+- `configs/monitoring/grafana/`: Datasource and dashboard provisioning
+
+## Key Environment Variables
+
+Critical variables in `.env`:
+```bash
+# Control thresholds for adaptive switching
+TARGET_OPTIMIZED_PIPELINE_TS_COUNT=20000
+THRESHOLD_OPTIMIZATION_CONSERVATIVE_MAX_TS=15000
+THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS=25000
+HYSTERESIS_FACTOR=0.1
+
+# Resource constraints
+OTELCOL_MAIN_MEMORY_LIMIT_MIB="1024"
+OTELCOL_MAIN_GOMAXPROCS="2"
+
+# Control loop timing
+ADAPTIVE_CONTROLLER_INTERVAL_SECONDS=60
+ADAPTIVE_CONTROLLER_STABILITY_SECONDS=120
+
+# Load generation
+SYNTHETIC_PROCESS_COUNT_PER_HOST=250
+SYNTHETIC_HOST_COUNT=3
+SYNTHETIC_METRIC_EMIT_INTERVAL_S=15
+
+# New Relic export
+NEW_RELIC_LICENSE_KEY=your_key_here
+NEW_RELIC_OTLP_ENDPOINT=https://otlp.nr-data.net:4317
+ENABLE_NR_EXPORT_FULL="false"
+ENABLE_NR_EXPORT_OPTIMISED="false"
+ENABLE_NR_EXPORT_EXPERIMENTAL="false"
+```
 
 ## Service Endpoints & APIs
 
@@ -189,6 +216,10 @@ docker build -t control-actuator-go .
 - Observer Collector: http://localhost:13134
 - Docker health checks configured with 20s intervals, 3 retries
 
+### Debug Endpoints
+- pprof: http://localhost:1777/debug/pprof
+- zpages: http://localhost:55679
+
 ## Control Flow & Data Paths
 
 1. **Metrics Ingestion**: Synthetic generator → Main collector OTLP endpoint (4318)
@@ -201,12 +232,6 @@ docker build -t control-actuator-go .
 8. **Benchmarking**: Controller generates load patterns → validates performance
 
 ## Development Patterns
-
-### Go Services
-- **Go version**: 1.21 for control services, 1.22.3 for synthetic generator
-- **Dependencies**: Prometheus client, YAML parser, OpenTelemetry SDK
-- **Build pattern**: Multi-stage Docker builds with static binaries (CGO_ENABLED=0)
-- **Testing**: Integration tests via shell scripts (no unit tests in codebase)
 
 ### Adding New Processors
 1. Create processor config in `configs/otel/processors/`
@@ -229,8 +254,27 @@ docker-compose up -d otelcol-main
 curl http://localhost:1777/debug/pprof/heap > heap.prof
 go tool pprof heap.prof
 
+# Monitor resource usage
+docker-compose top
+
 # Check pipeline efficiency
 curl -s http://localhost:9090/api/v1/query?query=phoenix:resource_efficiency_score
+```
+
+### Local Development
+```bash
+# Run Go service locally
+cd apps/control-actuator-go
+go run main.go
+
+# With live reload
+air
+
+# Run tests
+go test -v -race ./...
+
+# Build binary
+go build -o control-actuator
 ```
 
 ## Monorepo Structure
@@ -239,21 +283,23 @@ curl -s http://localhost:9090/api/v1/query?query=phoenix:resource_efficiency_sco
 - **`services/`**: Service implementations with Dockerfiles
 - **`configs/`**: Technology-grouped configurations (otel, monitoring, control)
 - **`infrastructure/`**: Cloud deployment (Terraform, Helm charts)
-- **`scripts/consolidated/`**: Unified operational scripts
+- **`packages/`**: Shared packages (managed by npm workspaces)
+- **`scripts/`**: Operational utilities and environment setup
 - **`tests/`**: Integration and performance tests
+- **`tools/`**: Development and migration utilities
 - **`data/`**: Persistent storage directories (gitignored)
 
 ## Build System
 
 - **Turborepo**: Parallel builds with caching (`turbo.json`)
 - **Make**: Developer-friendly commands (see `make help`)
-- **npm workspaces**: Package management for Node.js services
+- **npm workspaces**: Package management
 - **Docker multi-stage builds**: Optimized images
 - **Go modules**: Dependency management for Go services
 
 ## Key Metrics & Alerts
 
-### Recording Rules (phoenix:* namespace)
+### Recording Rules (25+ rules)
 - **Efficiency**: `phoenix:signal_preservation_score`, `phoenix:cardinality_efficiency_ratio`
 - **Performance**: `phoenix:pipeline_latency_ms_p99`, `phoenix:pipeline_throughput_metrics_per_sec`
 - **Control**: `phoenix:control_stability_score`, `phoenix:control_loop_effectiveness`
@@ -266,10 +312,31 @@ curl -s http://localhost:9090/api/v1/query?query=phoenix:resource_efficiency_sco
 - `PhoenixControlLoopInstability`: Frequent mode changes
 - `PhoenixSLOViolation`: Service objectives not met
 
+## Benchmark Scenarios
+
+1. **baseline_steady_state**: Normal operation validation
+2. **cardinality_spike**: Sudden 3x increase testing
+3. **gradual_growth**: Linear growth over time
+4. **wave_pattern**: Sinusoidal load pattern
+
+## CI/CD Integration
+
+### GitHub Actions Workflows
+- `.github/workflows/ci.yml`: Full CI/CD pipeline
+- `.github/workflows/security.yml`: Security scanning (Trivy, Gosec, OWASP)
+
+### Pipeline Stages
+1. Configuration validation
+2. Go service testing with coverage
+3. Integration testing
+4. Docker image building
+5. Performance benchmarking
+6. Deployment (on main branch)
+
 ## Important Implementation Notes
 
-### Service Ports
-- Control Actuator: **8081**
+### Service Ports (Updated)
+- Control Actuator: **8081** (was 8080 in early versions)
 - Anomaly Detector: **8082** 
 - Benchmark Controller: **8083**
 - Main Collector Health: **13133**
@@ -281,6 +348,12 @@ The control actuator implements a full PID controller with:
 - Anti-windup for integral term with limit
 - Time-based derivative calculation
 - Soft integral reset on mode changes
+
+### Recent Architecture Changes
+1. **Consolidated Scripts**: Major scripts moved to `scripts/` directory
+2. **Cleaned Codebase**: 96% reduction in code size, removed obsolete files
+3. **All APIs Implemented**: Every documented endpoint now exists
+4. **Recording Rules**: Added colon-notation metrics (e.g., `phoenix:signal_preservation_score`)
 
 ## Troubleshooting
 
@@ -304,6 +377,12 @@ curl -X POST http://localhost:8081/mode \
   -H "Content-Type: application/json" \
   -d '{"mode": "aggressive"}'
 
+# Export metrics for analysis
+curl "http://localhost:9090/api/v1/query_range?query=phoenix:cardinality_growth_rate&start=$(date -u -d '1 hour ago' +%s)&end=$(date +%s)&step=60"
+
+# Check for memory leaks
+docker stats --no-stream
+
 # Verify all services are healthy
-./scripts/consolidated/phoenix-scripts.sh verify-system
+for port in 8081 8082 8083; do echo "Port $port:"; curl -s http://localhost:$port/health | jq; done
 ```
