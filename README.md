@@ -46,21 +46,24 @@ Phoenix-vNext is a production-ready, adaptive cardinality optimization system fo
 ```bash
 # Clone the repository
 git clone https://github.com/deepaucksharma/Phoenix.git
-cd phoenix-vnext
+cd Phoenix
 
-# Initialize environment
-./scripts/initialize-environment.sh
+# Initialize environment (creates data dirs, configs, .env)
+./scripts/consolidated/phoenix-scripts.sh init
+# OR directly: ./scripts/consolidated/core/initialize-environment.sh
 
 # Start the stack
 docker-compose up -d
 
-# Verify health
-curl http://localhost:13133/health
+# Verify services
+./scripts/consolidated/phoenix-scripts.sh verify-system
+# OR: ./scripts/consolidated/testing/full-verification.sh
 
-# Access Grafana dashboards
-open http://localhost:3000  # admin/admin
+# Access monitoring
+open http://localhost:3000  # Grafana (admin/admin)
+open http://localhost:9090  # Prometheus
 
-# Run a benchmark
+# Run a benchmark test
 curl -X POST http://localhost:8083/benchmark/run \
   -H "Content-Type: application/json" \
   -d '{"scenario": "baseline_steady_state"}'
@@ -142,8 +145,13 @@ Phoenix-vNext implements a sophisticated multi-tier architecture:
 1. **Clone and Initialize**
    ```bash
    git clone https://github.com/deepaucksharma/Phoenix.git
-   cd phoenix-vnext
-   ./scripts/initialize-environment.sh
+   cd Phoenix
+   
+   # Use consolidated script manager
+   ./scripts/consolidated/phoenix-scripts.sh init
+   
+   # OR run initialization directly
+   ./scripts/consolidated/core/initialize-environment.sh
    ```
 
 2. **Configure Environment**
@@ -169,10 +177,18 @@ Phoenix-vNext implements a sophisticated multi-tier architecture:
 
 4. **Verify Installation**
    ```bash
-   # Check health endpoints
+   # Use comprehensive verification
+   ./scripts/consolidated/phoenix-scripts.sh verify-system
+   
+   # OR run individual checks
+   ./scripts/consolidated/testing/verify-services.sh    # Service health
+   ./scripts/consolidated/testing/verify-apis.sh        # API endpoints
+   ./scripts/consolidated/testing/verify-configs.sh     # Configuration validation
+   
+   # Manual health checks
    curl http://localhost:13133/health  # Main collector
    curl http://localhost:8081/metrics  # Control actuator
-   curl http://localhost:8082/health  # Anomaly detector
+   curl http://localhost:8082/health   # Anomaly detector
    ```
 
 ## ⚙️ Configuration
@@ -220,14 +236,21 @@ SYNTHETIC_METRIC_EMIT_INTERVAL_S=15
 ### Basic Operations
 
 ```bash
+# Use consolidated script manager for common tasks
+./scripts/consolidated/phoenix-scripts.sh help  # List all available commands
+
 # View real-time logs
-docker-compose logs -f control-actuator-go
+./scripts/consolidated/phoenix-scripts.sh logs control-actuator
+# OR: docker-compose logs -f control-actuator-go
 
 # Check current optimization mode
 curl http://localhost:8081/metrics | jq '.current_mode'
 
 # View detected anomalies
 curl http://localhost:8082/alerts | jq
+
+# System verification
+./scripts/consolidated/phoenix-scripts.sh verify-system
 
 # Force metric generation spike (testing)
 docker-compose up synthetic-metrics-generator
@@ -389,21 +412,45 @@ cd ../../../..
 ./infrastructure/scripts/deploy-azure.sh
 ```
 
-### Kubernetes Manifests
+### Cloud Deployment
 
 ```bash
-# Using Helm
-helm install phoenix ./infrastructure/kubernetes/helm/phoenix \
+# Using Helm for container services
+helm install phoenix ./infrastructure/helm/phoenix \
   --namespace phoenix \
   --create-namespace \
-  --values ./infrastructure/kubernetes/helm/phoenix/values.yaml
+  --values ./infrastructure/helm/phoenix/values.yaml
 
-# Using kubectl
-kubectl create namespace phoenix
-kubectl apply -f ./infrastructure/kubernetes/
+# Using Terraform for infrastructure
+cd infrastructure/terraform/environments/aws
+terraform init && terraform apply
 ```
 
 ## 💻 Development
+
+### Script Organization
+
+Phoenix uses a consolidated script management system for all operational tasks:
+
+```bash
+# Master script manager - provides unified interface to all scripts
+./scripts/consolidated/phoenix-scripts.sh
+
+# Available script categories:
+# - core/        : Environment setup, initialization, project management
+# - deployment/  : Docker and cloud deployment scripts
+# - testing/     : Verification, validation, and testing scripts
+# - monitoring/  : Health checks and system monitoring
+# - maintenance/ : Cleanup, backup, and utility scripts
+# - utils/       : Helper scripts and utilities
+# - legacy/      : Backward compatibility scripts
+
+# Quick commands:
+./scripts/consolidated/phoenix-scripts.sh help           # Show all commands
+./scripts/consolidated/phoenix-scripts.sh init           # Initialize environment
+./scripts/consolidated/phoenix-scripts.sh verify-system  # Full system verification
+./scripts/consolidated/phoenix-scripts.sh logs <service> # View service logs
+```
 
 ### Local Development
 
@@ -420,6 +467,10 @@ go test -v -race ./...
 
 # Build binary
 go build -o control-actuator
+
+# Use development helpers
+./scripts/consolidated/phoenix-scripts.sh test-integration  # Run integration tests
+./scripts/consolidated/phoenix-scripts.sh validate-configs  # Validate configurations
 ```
 
 ### Testing
@@ -501,12 +552,12 @@ curl http://localhost:9090/api/v1/query_range?query=phoenix:cardinality_growth_r
 
 ## 📚 Documentation
 
-- [Architecture Deep Dive](docs/ARCHITECTURE.md)
-- [Pipeline Analysis](docs/PIPELINE_ANALYSIS.md)
-- [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
-- [API Documentation](docs/API.md)
-- [Performance Tuning](docs/PERFORMANCE.md)
-- [Security Best Practices](docs/SECURITY.md)
+Phoenix documentation is organized into three comprehensive guides:
+
+- **[System Guide](docs/GUIDE.md)** - Architecture, requirements, and design
+- **[Operations Manual](docs/OPERATIONS.md)** - Deployment, troubleshooting, and runbooks
+- **[Development Handbook](docs/DEVELOPMENT.md)** - API reference and development practices
+- **[Documentation Index](docs/INDEX.md)** - Quick navigation and reference
 
 ## 🤝 Contributing
 

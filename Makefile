@@ -89,16 +89,22 @@ dev:
 
 # Service-specific targets
 collector-logs:
-	docker logs -f phoenix-collector
+	docker-compose logs -f otelcol-main
 
 observer-logs:
-	docker logs -f phoenix-observer
+	docker-compose logs -f otelcol-observer
 
 actuator-logs:
-	docker logs -f phoenix-actuator
+	docker-compose logs -f control-actuator-go
 
 generator-logs:
-	docker logs -f phoenix-generator-synthetic phoenix-generator-complex
+	docker-compose logs -f synthetic-metrics-generator
+
+anomaly-logs:
+	docker-compose logs -f anomaly-detector
+
+benchmark-logs:
+	docker-compose logs -f benchmark-controller
 
 # Utility targets
 setup-env:
@@ -131,10 +137,12 @@ help:
 	@grep -E '^## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(YELLOW)Service logs:$(NC)"
-	@echo "  $(GREEN)collector-logs      $(NC) Show collector logs"
-	@echo "  $(GREEN)observer-logs       $(NC) Show observer logs"
-	@echo "  $(GREEN)actuator-logs       $(NC) Show actuator logs"
-	@echo "  $(GREEN)generator-logs      $(NC) Show generator logs"
+	@echo "  $(GREEN)collector-logs      $(NC) Show main collector logs"
+	@echo "  $(GREEN)observer-logs       $(NC) Show observer collector logs"
+	@echo "  $(GREEN)actuator-logs       $(NC) Show control actuator logs"
+	@echo "  $(GREEN)generator-logs      $(NC) Show synthetic generator logs"
+	@echo "  $(GREEN)anomaly-logs        $(NC) Show anomaly detector logs"
+	@echo "  $(GREEN)benchmark-logs      $(NC) Show benchmark controller logs"
 	@echo ""
 	@echo "$(YELLOW)Utilities:$(NC)"
 	@echo "  $(GREEN)setup-env           $(NC) Setup development environment"

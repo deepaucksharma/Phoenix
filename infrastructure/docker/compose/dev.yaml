@@ -48,7 +48,7 @@ services:
       PROMETHEUS_URL: ${PROMETHEUS_URL:-http://prometheus:9090}
       BENCHMARK_CONFIG_PATH: /etc/phoenix/benchmark/config.yaml
     volumes:
-      - ../../../config/defaults/benchmark:/etc/phoenix/benchmark:ro
+      - ../../../configs/templates/benchmark:/etc/phoenix/benchmark:ro
       - validator-results:/data/results
     depends_on:
       - prometheus
@@ -61,7 +61,7 @@ services:
       LOG_LEVEL: debug
     volumes:
       - ../../../services/collector/configs:/etc/phoenix:ro
-      - ../../../config/defaults/control:/etc/phoenix/control:rw
+      - ../../../configs/templates/control:/etc/phoenix/control:rw
 
   observer:
     environment:
@@ -74,12 +74,12 @@ services:
       LOG_LEVEL: debug
     volumes:
       - ../../../services/control-plane/actuator/src:/app:ro
-      - ../../../config/defaults/control:/etc/phoenix/control:rw
+      - ../../../configs/templates/control:/etc/phoenix/control:rw
 
   prometheus:
     volumes:
-      - ../../../monitoring/prometheus/config:/etc/prometheus:ro
-      - ../../../monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - ../../../configs/monitoring/prometheus:/etc/prometheus:ro
+      - ../../../configs/monitoring/prometheus/rules:/etc/prometheus/rules:ro
       - prometheus-data:/prometheus
 
   grafana:
@@ -88,8 +88,8 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
     volumes:
-      - ../../../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ../../../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../../../configs/monitoring/grafana:/etc/grafana/provisioning:ro
+      - ../../../configs/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
 
 volumes:

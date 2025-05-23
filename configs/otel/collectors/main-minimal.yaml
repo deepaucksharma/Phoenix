@@ -1,0 +1,28 @@
+# Minimal OTEL Collector Configuration for Testing
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 1024
+  batch:
+
+exporters:
+  prometheus:
+    endpoint: "0.0.0.0:8888"
+  logging:
+    loglevel: info
+
+service:
+  extensions: []
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus, logging]

@@ -1,58 +1,63 @@
 # Phoenix Prometheus Configuration
-# Scrapes metrics from all Phoenix services
-
 global:
   scrape_interval: 15s
-  evaluation_interval: 15s
+  evaluation_interval: 30s
 
+# Rule files
 rule_files:
-  - "rules/*.yml"
+  - "/etc/prometheus/rules/*.yml"
 
 scrape_configs:
-  # Phoenix Main Collector - All pipeline endpoints
-  - job_name: 'phoenix-collector-main'
-    static_configs:
-      - targets: ['otelcol-main:8888']  # Full fidelity pipeline
-        labels:
-          pipeline: 'full_fidelity'
-      - targets: ['otelcol-main:8889']  # Optimized pipeline
-        labels:
-          pipeline: 'optimized'
-      - targets: ['otelcol-main:8890']  # Experimental pipeline
-        labels:
-          pipeline: 'experimental'
-    scrape_interval: 30s
-    metrics_path: /metrics
-
-  # Phoenix Observer - KPI metrics for control decisions
-  - job_name: 'phoenix-observer'
-    static_configs:
-      - targets: ['otelcol-observer:9888']
-    scrape_interval: 30s
-    metrics_path: /metrics
-
-  # Control Actuator - PID controller state
-  - job_name: 'phoenix-control-actuator'
-    static_configs:
-      - targets: ['control-actuator-go:8081']
-    scrape_interval: 30s
-    metrics_path: /metrics
-
-  # Anomaly Detector - Detection state and alerts
-  - job_name: 'phoenix-anomaly-detector'
-    static_configs:
-      - targets: ['anomaly-detector:8082']
-    scrape_interval: 30s
-    metrics_path: /metrics
-
-  # Benchmark Controller - Performance validation
-  - job_name: 'phoenix-benchmark'
-    static_configs:
-      - targets: ['benchmark-controller:8083']
-    scrape_interval: 60s
-    metrics_path: /metrics
-
-  # Prometheus itself
+  # Prometheus self-monitoring
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
+
+  # Main collector metrics
+  - job_name: 'otelcol-main'
+    static_configs:
+      - targets: ['otelcol-main:8888']
+        labels:
+          pipeline: 'full_fidelity'
+      - targets: ['otelcol-main:8889']
+        labels:
+          pipeline: 'optimized'
+      - targets: ['otelcol-main:8890']
+        labels:
+          pipeline: 'experimental_topk'
+      - targets: ['otelcol-main:8891']
+        labels:
+          component: 'observatory'
+
+  # Observer collector metrics
+  - job_name: 'otelcol-observer'
+    static_configs:
+      - targets: ['otelcol-observer:9888']
+        labels:
+          component: 'observer'
+
+  # Control plane services
+  - job_name: 'control-actuator'
+    static_configs:
+      - targets: ['control-actuator-go:8081']
+        labels:
+          component: 'control_actuator'
+
+  - job_name: 'anomaly-detector'
+    static_configs:
+      - targets: ['anomaly-detector:8082']
+        labels:
+          component: 'anomaly_detector'
+
+  - job_name: 'benchmark-controller'
+    static_configs:
+      - targets: ['benchmark:8083']
+        labels:
+          component: 'benchmark'
+
+  # Monitoring stack
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+        labels:
+          component: 'grafana'

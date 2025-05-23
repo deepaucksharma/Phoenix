@@ -1,8 +1,6 @@
 # Phoenix-vNext Base Docker Compose Configuration
 # This file contains the core services for all environments
 
-version: '3.8'
-
 services:
   # Main OpenTelemetry Collector - Core service
   otelcol-main:
@@ -201,7 +199,7 @@ services:
   # Synthetic Metrics Generator - Load generation
   synthetic-metrics-generator:
     build:
-      context: ./apps/synthetic-generator
+      context: ./services/generators/synthetic
       dockerfile: Dockerfile
     container_name: phoenix-generator-synthetic
     env_file: .env

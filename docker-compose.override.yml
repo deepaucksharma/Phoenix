@@ -1,8 +1,6 @@
 # Phoenix-vNext Development Override Configuration
 # Use this file for local development overrides
 
-version: '3.8'
-
 services:
   # Development overrides for collectors
   otelcol-main:

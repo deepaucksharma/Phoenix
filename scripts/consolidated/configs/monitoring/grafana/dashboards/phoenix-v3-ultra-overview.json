@@ -1,0 +1,6 @@
+{
+  "title": "Phoenix v3 Ultra - Placeholder",
+  "uid": "phoenix-v3-ultra-overview",
+  "panels": [{"type": "text", "title": "Placeholder", "gridPos": { "x": 0, "y": 0, "w": 24, "h": 2 }, "options": {"content": "# Dashboard content to be populated from spec", "mode": "markdown"}}],
+  "schemaVersion": 37, "version": 1
+}

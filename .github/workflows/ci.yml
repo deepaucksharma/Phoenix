@@ -37,10 +37,9 @@ jobs:
     strategy:
       matrix:
         service:
-          - apps/synthetic-generator
+          - apps/anomaly-detector
           - apps/control-actuator-go
           - services/benchmark
-          - services/validator
     steps:
       - uses: actions/checkout@v4
       
@@ -70,7 +69,7 @@ jobs:
       
       - name: Start Phoenix stack
         run: |
-          ./scripts/initialize-environment.sh
+          ./scripts/consolidated/core/initialize-environment.sh
           docker-compose up -d
           
       - name: Wait for services to be ready
@@ -93,7 +92,7 @@ jobs:
           
       - name: Run benchmark smoke test
         run: |
-          curl -X POST http://localhost:8080/benchmark/run \
+          curl -X POST http://localhost:8083/benchmark/run \
             -H "Content-Type: application/json" \
             -d '{"scenario": "baseline_steady_state"}'
             
@@ -130,7 +129,10 @@ jobs:
             context: apps/control-actuator-go
             dockerfile: Dockerfile
           - name: synthetic-generator
-            context: apps/synthetic-generator
+            context: services/generators/synthetic
+            dockerfile: Dockerfile
+          - name: anomaly-detector
+            context: apps/anomaly-detector
             dockerfile: Dockerfile
           - name: benchmark-controller
             context: services/benchmark
@@ -174,16 +176,16 @@ jobs:
           
       - name: Start Phoenix with latest images
         run: |
-          ./scripts/initialize-environment.sh
+          ./scripts/consolidated/core/initialize-environment.sh
           docker-compose up -d
           
       - name: Run performance benchmark
         run: |
           # Wait for services
-          timeout 300 bash -c 'until curl -f http://localhost:8080/health; do sleep 5; done'
+          timeout 300 bash -c 'until curl -f http://localhost:8083/health; do sleep 5; done'
           
           # Run baseline benchmark
-          curl -X POST http://localhost:8080/benchmark/run \
+          curl -X POST http://localhost:8083/benchmark/run \
             -H "Content-Type: application/json" \
             -d '{"scenario": "baseline_steady_state"}'
             
@@ -191,7 +193,7 @@ jobs:
           sleep 720
           
           # Get results
-          RESULTS=$(curl -s http://localhost:8080/benchmark/results)
+          RESULTS=$(curl -s http://localhost:8083/benchmark/results)
           echo "$RESULTS" > benchmark-results.json
           
           # Check if benchmark passed
@@ -245,14 +247,8 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
           
-      - name: Update Kubernetes manifests
+      - name: Deploy to AWS
         run: |
-          sed -i "s|image: .*|image: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}/otelcol-main:${{ github.sha }}|g" infrastructure/kubernetes/deployments/otel-collector.yaml
-          sed -i "s|image: .*|image: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}/control-actuator-go:${{ github.sha }}|g" infrastructure/kubernetes/deployments/control-actuator.yaml
-          
-      - name: Deploy to Kubernetes
-        run: |
-          aws eks update-kubeconfig --name phoenix-cluster
-          kubectl apply -f infrastructure/kubernetes/
-          kubectl rollout status deployment/otel-collector -n phoenix
-          kubectl rollout status deployment/control-actuator -n phoenix
+          cd infrastructure/terraform/environments/aws
+          terraform init
+          terraform apply -auto-approve -var="environment=production"

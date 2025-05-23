@@ -1,0 +1,98 @@
+groups:
+  - name: phoenix_documented_metrics
+    interval: 30s
+    rules:
+      # Signal Preservation Score - measures how well pipelines preserve critical metrics
+      # This is the colon-notation version matching CLAUDE.md documentation
+      - record: phoenix:signal_preservation_score
+        expr: |
+          1 - (
+            rate(otelcol_processor_dropped_metric_points_total[5m]) / 
+            clamp_min(rate(otelcol_receiver_accepted_metric_points_total[5m]), 1)
+          )
+      
+      # Cardinality Efficiency Ratio - measures cardinality reduction effectiveness
+      - record: phoenix:cardinality_efficiency_ratio
+        expr: |
+          1 - (
+            sum by (pipeline) (phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate) / 
+            clamp_min(sum(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{pipeline="pipeline_full_fidelity"}), 1)
+          )
+      
+      # Pipeline Latency P99 - 99th percentile processing latency in milliseconds
+      - record: phoenix:pipeline_latency_ms_p99
+        expr: |
+          histogram_quantile(0.99, 
+            sum by (pipeline, le) (
+              rate(otelcol_processor_batch_batch_send_duration_seconds_bucket[5m])
+            )
+          ) * 1000
+      
+      # Pipeline Throughput - metrics processed per second
+      - record: phoenix:pipeline_throughput_metrics_per_sec
+        expr: |
+          sum by (pipeline) (
+            rate(otelcol_processor_accepted_metric_points_total[1m])
+          )
+      
+      # Control Stability Score - measures control loop stability (1 = stable, 0 = unstable)
+      - record: phoenix:control_stability_score
+        expr: |
+          1 - clamp_max(
+            rate(phoenix_control_mode_changes_total[30m]) / 10,
+            1
+          )
+      
+      # Control Loop Effectiveness - measures how well the control loop maintains targets
+      - record: phoenix:control_loop_effectiveness
+        expr: |
+          1 - (
+            abs(
+              phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{pipeline="pipeline_optimised"} -
+              20000  # TARGET_OPTIMIZED_PIPELINE_TS_COUNT
+            ) / 20000
+          )
+      
+      # Resource Efficiency Score - combines memory and CPU efficiency
+      - record: phoenix:resource_efficiency_score
+        expr: |
+          (
+            # Memory efficiency (inverse of usage ratio)
+            (1 - (
+              sum by (service) (process_resident_memory_bytes) / 
+              sum by (service) (process_resident_memory_bytes + on(service) group_left() 
+                (container_spec_memory_limit_bytes or on() vector(1073741824)))
+            )) * 0.5 +
+            # CPU efficiency (throughput per CPU core)
+            (
+              sum by (service) (rate(otelcol_processor_accepted_metric_points_total[5m])) /
+              (sum by (service) (rate(process_cpu_seconds_total[5m])) + 0.001) / 10000
+            ) * 0.5
+          )
+      
+      # Collector Memory Usage in MB
+      - record: phoenix:collector_memory_usage_mb
+        expr: |
+          sum by (service) (process_resident_memory_bytes{service=~"otelcol.*"}) / 1024 / 1024
+      
+      # Cardinality Z-Score (from phoenix_advanced_rules.yml, adding for completeness)
+      - record: phoenix:cardinality_zscore
+        expr: |
+          (
+            phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate - 
+            avg_over_time(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[1h])
+          ) / 
+          stddev_over_time(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[1h])
+      
+      # Cardinality Explosion Risk (from phoenix_advanced_rules.yml, adding for completeness)
+      - record: phoenix:cardinality_explosion_risk
+        expr: |
+          clamp_max(
+            rate(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[5m]) / 100,
+            1
+          )
+      
+      # Cardinality Growth Rate (from phoenix_advanced_rules.yml, adding for completeness)
+      - record: phoenix:cardinality_growth_rate
+        expr: |
+          rate(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[5m])
