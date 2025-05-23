@@ -299,7 +299,7 @@ func NewAnomalyDetector() (*AnomalyDetector, error) {
 		detectors:         make(map[string]Detector),
 		alerts:            make([]Alert, 0),
 		alertWebhookURL:   getEnv("ALERT_WEBHOOK_URL", ""),
-		controlWebhookURL: getEnv("CONTROL_WEBHOOK_URL", "http://control-actuator:8080/anomaly"),
+		controlWebhookURL: getEnv("CONTROL_WEBHOOK_URL", "http://control-actuator:8081/anomaly"),
 	}
 
 	// Register detectors
@@ -495,10 +495,23 @@ func (ad *AnomalyDetector) sendWebhook(alert Alert) {
 func (ad *AnomalyDetector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/alerts":
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		ad.handleGetAlerts(w, r)
 	case "/health":
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "OK")
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		ad.handleHealth(w, r)
+	case "/metrics":
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		ad.handleMetrics(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -511,6 +524,76 @@ func (ad *AnomalyDetector) handleGetAlerts(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(alerts)
+}
+
+func (ad *AnomalyDetector) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"status": "healthy",
+		"version": "1.0.0",
+		"detectors": []string{},
+		"active_alerts": 0,
+	}
+	
+	// Get detector names
+	for _, detector := range ad.detectors {
+		response["detectors"] = append(response["detectors"].([]string), detector.GetName())
+	}
+	
+	// Count active alerts
+	ad.mu.RLock()
+	for _, alert := range ad.alerts {
+		if alert.Status == "active" {
+			response["active_alerts"] = response["active_alerts"].(int) + 1
+		}
+	}
+	ad.mu.RUnlock()
+	
+	json.NewEncoder(w).Encode(response)
+}
+
+func (ad *AnomalyDetector) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	// Return Prometheus-style metrics
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	
+	ad.mu.RLock()
+	defer ad.mu.RUnlock()
+	
+	// Count alerts by status
+	statusCount := make(map[string]int)
+	severityCount := make(map[string]int)
+	detectorCount := make(map[string]int)
+	
+	for _, alert := range ad.alerts {
+		statusCount[alert.Status]++
+		severityCount[alert.Anomaly.Severity]++
+		detectorCount[alert.Anomaly.DetectorName]++
+	}
+	
+	// Write metrics
+	fmt.Fprintf(w, "# HELP phoenix_anomaly_alerts_total Total number of anomaly alerts\n")
+	fmt.Fprintf(w, "# TYPE phoenix_anomaly_alerts_total counter\n")
+	fmt.Fprintf(w, "phoenix_anomaly_alerts_total %d\n\n", len(ad.alerts))
+	
+	fmt.Fprintf(w, "# HELP phoenix_anomaly_alerts_by_status Number of alerts by status\n")
+	fmt.Fprintf(w, "# TYPE phoenix_anomaly_alerts_by_status gauge\n")
+	for status, count := range statusCount {
+		fmt.Fprintf(w, "phoenix_anomaly_alerts_by_status{status=\"%s\"} %d\n", status, count)
+	}
+	fmt.Fprintln(w)
+	
+	fmt.Fprintf(w, "# HELP phoenix_anomaly_alerts_by_severity Number of alerts by severity\n")
+	fmt.Fprintf(w, "# TYPE phoenix_anomaly_alerts_by_severity gauge\n")
+	for severity, count := range severityCount {
+		fmt.Fprintf(w, "phoenix_anomaly_alerts_by_severity{severity=\"%s\"} %d\n", severity, count)
+	}
+	fmt.Fprintln(w)
+	
+	fmt.Fprintf(w, "# HELP phoenix_anomaly_detections_by_detector Number of detections by detector\n")
+	fmt.Fprintf(w, "# TYPE phoenix_anomaly_detections_by_detector gauge\n")
+	for detector, count := range detectorCount {
+		fmt.Fprintf(w, "phoenix_anomaly_detections_by_detector{detector=\"%s\"} %d\n", detector, count)
+	}
 }
 
 // Helper functions
@@ -563,7 +646,7 @@ func main() {
 	}()
 
 	// Start HTTP server
-	port := getEnv("PORT", "8080")
+	port := getEnv("PORT", "8082")
 	log.Printf("Server listening on port %s", port)
 	
 	if err := http.ListenAndServe(":"+port, detector); err != nil {

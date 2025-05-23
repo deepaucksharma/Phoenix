@@ -1,0 +1,1 @@
+scripts/consolidated/deployment/deploy-aws.sh

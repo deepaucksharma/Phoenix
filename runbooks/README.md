@@ -47,23 +47,26 @@ runbooks/
 ### Health Checks
 ```bash
 # Quick system health check
-kubectl -n phoenix-vnext get pods
-kubectl -n phoenix-vnext top pods
-curl http://prometheus:9090/-/healthy
+docker-compose ps
+docker stats --no-stream
+curl http://localhost:9090/-/healthy
+curl http://localhost:13133
 ```
 
 ### Force Optimization Mode
 ```bash
 # Emergency aggressive mode
-kubectl -n phoenix-vnext create configmap emergency-control \
-  --from-literal=optimization_mode=aggressive \
-  --dry-run=client -o yaml | kubectl apply -f -
+curl -X POST http://localhost:8081/mode \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "aggressive"}'
 ```
 
 ### Scale Up Collectors
 ```bash
-# Emergency scale
-kubectl -n phoenix-vnext scale deployment otel-collector-main --replicas=5
+# Emergency resource increase
+export OTELCOL_MAIN_MEMORY_LIMIT_MIB=2048
+export OTELCOL_MAIN_GOMAXPROCS=4
+docker-compose up -d otelcol-main
 ```
 
 ## Runbook Standards

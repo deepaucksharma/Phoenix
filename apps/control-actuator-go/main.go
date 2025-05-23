@@ -43,6 +43,13 @@ type ControlLoop struct {
 	integralError    float64
 	lastUpdateTime   time.Time
 	currentMode      OptimizationMode
+	lastTime         time.Time
+	
+	// PID tuning parameters
+	Kp               float64  // Proportional gain
+	Ki               float64  // Integral gain
+	Kd               float64  // Derivative gain
+	integralLimit    float64  // Anti-windup limit
 	
 	// Metrics
 	transitionCount  int
@@ -68,6 +75,13 @@ func NewControlLoop() (*ControlLoop, error) {
 		stabilityPeriod:  time.Duration(getEnvInt("ADAPTIVE_CONTROLLER_STABILITY_SECONDS", 120)) * time.Second,
 		currentMode:      Balanced,
 		lastUpdateTime:   time.Now(),
+		lastTime:         time.Now(),
+		// PID parameters (tuned for cardinality control)
+		Kp:               getEnvFloat("PID_KP", 0.5),     // Proportional gain
+		Ki:               getEnvFloat("PID_KI", 0.1),     // Integral gain
+		Kd:               getEnvFloat("PID_KD", 0.05),    // Derivative gain
+		integralLimit:    getEnvFloat("PID_INTEGRAL_LIMIT", 10000), // Anti-windup limit
+		stabilityScore:   1.0,
 	}, nil
 }
 
@@ -96,13 +110,39 @@ func (cl *ControlLoop) evaluate() error {
 		return fmt.Errorf("failed to query cardinality: %w", err)
 	}
 
-	// Calculate error and PID terms
-	error := currentTS - cl.targetTS
-	cl.integralError += error
-	derivative := error - cl.lastError
+	now := time.Now()
+	dt := now.Sub(cl.lastTime).Seconds()
+	if dt <= 0 {
+		dt = 60.0 // Default to 60s if first run
+	}
 	
-	// PID output (simplified for discrete control)
-	pidOutput := 0.5*error + 0.1*cl.integralError + 0.05*derivative
+	// Calculate error (negative error means we're below target)
+	error := currentTS - cl.targetTS
+	
+	// Proportional term
+	P := cl.Kp * error
+	
+	// Integral term with anti-windup
+	cl.integralError += error * dt
+	if cl.integralError > cl.integralLimit {
+		cl.integralError = cl.integralLimit
+	} else if cl.integralError < -cl.integralLimit {
+		cl.integralError = -cl.integralLimit
+	}
+	I := cl.Ki * cl.integralError
+	
+	// Derivative term (with filtering to reduce noise)
+	derivative := 0.0
+	if dt > 0 {
+		derivative = (error - cl.lastError) / dt
+	}
+	D := cl.Kd * derivative
+	
+	// Full PID output
+	pidOutput := P + I + D
+	
+	log.Printf("PID: Error=%.1f, P=%.2f, I=%.2f, D=%.2f, Output=%.2f, TS=%.0f", 
+		error, P, I, D, pidOutput, currentTS)
 	
 	// Determine new mode with hysteresis
 	newMode := cl.calculateMode(currentTS, pidOutput)
@@ -122,11 +162,17 @@ func (cl *ControlLoop) evaluate() error {
 		}
 		
 		cl.transitionCount++
+		oldMode := cl.currentMode
 		cl.currentMode = newMode
-		cl.lastUpdateTime = time.Now()
+		cl.lastUpdateTime = now
 		
-		log.Printf("Control mode changed: %s -> %s (TS: %.0f, Target: %.0f, Error: %.2f)",
-			cl.currentMode, newMode, currentTS, cl.targetTS, error)
+		log.Printf("Control mode changed: %s -> %s (TS: %.0f, Target: %.0f, PID: %.2f)",
+			oldMode, newMode, currentTS, cl.targetTS, pidOutput)
+		
+		// Reset integral on mode change to prevent windup
+		if abs(cl.integralError) > cl.targetTS*0.5 {
+			cl.integralError *= 0.5 // Soft reset
+		}
 	}
 	
 	// Update stability score
@@ -134,6 +180,7 @@ func (cl *ControlLoop) evaluate() error {
 	
 	// Store state for next iteration
 	cl.lastError = error
+	cl.lastTime = now
 	
 	return nil
 }
@@ -226,6 +273,10 @@ func (cl *ControlLoop) GetMetrics() map[string]interface{} {
 		"integral_error":    cl.integralError,
 		"last_error":        cl.lastError,
 		"uptime_seconds":    time.Since(cl.lastUpdateTime).Seconds(),
+		"pid_kp":            cl.Kp,
+		"pid_ki":            cl.Ki,
+		"pid_kd":            cl.Kd,
+		"pid_integral_limit": cl.integralLimit,
 	}
 }
 
@@ -270,13 +321,111 @@ func main() {
 		log.Fatalf("Failed to initialize control loop: %v", err)
 	}
 
-	// Start metrics endpoint
+	// Start API endpoints
 	go func() {
+		// Health check endpoint
+		http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{
+				"status": "healthy",
+				"version": "1.0.0",
+			})
+		})
+
+		// Metrics endpoint
 		http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
 			metrics := controlLoop.GetMetrics()
 			json.NewEncoder(w).Encode(metrics)
 		})
-		log.Fatal(http.ListenAndServe(":8080", nil))
+
+		// Mode change endpoint (for testing)
+		http.HandleFunc("/mode", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+
+			var req struct {
+				Mode   string `json:"mode"`
+				Reason string `json:"reason"`
+			}
+
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			// Validate mode
+			if req.Mode != "conservative" && req.Mode != "balanced" && req.Mode != "aggressive" {
+				http.Error(w, "Invalid mode", http.StatusBadRequest)
+				return
+			}
+
+			// Force mode change
+			controlLoop.mu.Lock()
+			controlLoop.currentMode = req.Mode
+			controlLoop.transitionCount++
+			controlLoop.mu.Unlock()
+
+			if err := controlLoop.updateControlFile(req.Mode, req.Reason); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{
+				"status": "success",
+				"mode": req.Mode,
+			})
+		})
+
+		// Anomaly webhook endpoint
+		http.HandleFunc("/anomaly", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+
+			var anomaly struct {
+				AnomalyID     string  `json:"anomaly_id"`
+				Severity      string  `json:"severity"`
+				MetricName    string  `json:"metric_name"`
+				CurrentValue  float64 `json:"current_value"`
+				ExpectedValue float64 `json:"expected_value"`
+				Confidence    float64 `json:"confidence"`
+				Timestamp     string  `json:"timestamp"`
+			}
+
+			if err := json.NewDecoder(r.Body).Decode(&anomaly); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			log.Printf("Received anomaly webhook: %+v", anomaly)
+
+			// Take action based on severity
+			if anomaly.Severity == "critical" || anomaly.Severity == "high" {
+				// Switch to aggressive mode if cardinality explosion
+				if anomaly.MetricName == "phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate" &&
+					anomaly.CurrentValue > float64(controlLoop.aggressiveMinTS) {
+					controlLoop.mu.Lock()
+					controlLoop.currentMode = "aggressive"
+					controlLoop.transitionCount++
+					controlLoop.mu.Unlock()
+					controlLoop.updateControlFile("aggressive", "anomaly_detected")
+				}
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{
+				"status": "acknowledged",
+				"anomaly_id": anomaly.AnomalyID,
+			})
+		})
+
+		log.Println("Control Actuator API listening on :8081")
+		log.Fatal(http.ListenAndServe(":8081", nil))
 	}()
 
 	// Run control loop

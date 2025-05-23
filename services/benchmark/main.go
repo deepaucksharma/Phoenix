@@ -440,25 +440,41 @@ func (bc *BenchmarkController) validateResults(result *BenchmarkResult, expected
 func (bc *BenchmarkController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/benchmark/run":
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		bc.handleRunBenchmark(w, r)
 	case "/benchmark/results":
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		bc.handleGetResults(w, r)
 	case "/benchmark/scenarios":
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		bc.handleListScenarios(w, r)
+	case "/benchmark/validate":
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		bc.handleValidateSLO(w, r)
 	case "/health":
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "OK")
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		bc.handleHealth(w, r)
 	default:
 		http.NotFound(w, r)
 	}
 }
 
 func (bc *BenchmarkController) handleRunBenchmark(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	var req struct {
 		Scenario string `json:"scenario"`
 	}
@@ -509,6 +525,73 @@ func (bc *BenchmarkController) handleListScenarios(w http.ResponseWriter, r *htt
 	json.NewEncoder(w).Encode(scenarios)
 }
 
+func (bc *BenchmarkController) handleValidateSLO(w http.ResponseWriter, r *http.Request) {
+	bc.mu.Lock()
+	results := bc.results
+	bc.mu.Unlock()
+	
+	// Define SLO thresholds
+	slos := map[string]interface{}{
+		"signal_preservation_min": 0.98,
+		"cardinality_reduction_min": 15.0,
+		"p99_latency_max_ms": 50.0,
+		"memory_usage_max_mb": 512.0,
+		"control_stability_min": 0.8,
+	}
+	
+	validation := map[string]interface{}{
+		"slos": slos,
+		"compliance": true,
+		"violations": []string{},
+		"results_checked": len(results),
+	}
+	
+	// Check each result against SLOs
+	for _, result := range results {
+		if sp, ok := result.Metrics["signal_preservation"]; ok && sp < slos["signal_preservation_min"].(float64) {
+			validation["compliance"] = false
+			validation["violations"] = append(validation["violations"].([]string), 
+				fmt.Sprintf("Signal preservation %.2f%% below minimum %.2f%% in %s", 
+					sp*100, slos["signal_preservation_min"].(float64)*100, result.Scenario))
+		}
+		
+		if cr, ok := result.Metrics["cardinality_reduction"]; ok && cr < slos["cardinality_reduction_min"].(float64) {
+			validation["compliance"] = false
+			validation["violations"] = append(validation["violations"].([]string),
+				fmt.Sprintf("Cardinality reduction %.1f%% below minimum %.1f%% in %s",
+					cr, slos["cardinality_reduction_min"].(float64), result.Scenario))
+		}
+		
+		if result.ResourceUsage.P99Latency > slos["p99_latency_max_ms"].(float64) {
+			validation["compliance"] = false
+			validation["violations"] = append(validation["violations"].([]string),
+				fmt.Sprintf("P99 latency %.1fms exceeds maximum %.1fms in %s",
+					result.ResourceUsage.P99Latency, slos["p99_latency_max_ms"].(float64), result.Scenario))
+		}
+		
+		if result.ResourceUsage.MaxMemory > slos["memory_usage_max_mb"].(float64) {
+			validation["compliance"] = false
+			validation["violations"] = append(validation["violations"].([]string),
+				fmt.Sprintf("Memory usage %.1fMB exceeds maximum %.1fMB in %s",
+					result.ResourceUsage.MaxMemory, slos["memory_usage_max_mb"].(float64), result.Scenario))
+		}
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(validation)
+}
+
+func (bc *BenchmarkController) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"status": "healthy",
+		"version": "1.0.0",
+		"scenarios_available": len(bc.scenarios),
+		"results_stored": len(bc.results),
+	}
+	json.NewEncoder(w).Encode(response)
+}
+
 // Helper functions
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
@@ -549,7 +632,7 @@ func main() {
 		log.Fatalf("Failed to initialize benchmark controller: %v", err)
 	}
 
-	port := getEnv("PORT", "8080")
+	port := getEnv("PORT", "8083")
 	log.Printf("Server listening on port %s", port)
 	
 	if err := http.ListenAndServe(":"+port, controller); err != nil {

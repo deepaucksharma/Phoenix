@@ -1,2 +1,0 @@
-# ConfigMaps are generated dynamically by kustomize configMapGenerator
-# This file serves as a placeholder for any static configmaps if needed
