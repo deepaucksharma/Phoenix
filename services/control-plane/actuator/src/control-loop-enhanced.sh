@@ -12,6 +12,14 @@ LOCK_FILE="/tmp/phoenix_control_lock"
 LOCK_TIMEOUT=30
 STATE_FILE="/tmp/phoenix_control_state.json"
 
+# Metric queries (defaults can be overridden via environment)
+METRIC_OPTIMISED_TS_QUERY="${METRIC_OPTIMISED_TS_QUERY:-phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{phoenix_pipeline_label=\"optimised\",job=\"otelcol-observer-metrics\"}}"
+METRIC_CARDINALITY_EXPLOSION_ALERT="${METRIC_CARDINALITY_EXPLOSION_ALERT:-phoenix_observer_kpi_store_phoenix_cardinality_explosion_alert_count{job=\"otelcol-observer-metrics\"}}"
+
+# Profile thresholds
+CONSERVATIVE_MAX_TS_THRESHOLD="${THRESHOLD_OPTIMIZATION_CONSERVATIVE_MAX_TS:-15000}"
+AGGRESSIVE_MIN_TS_THRESHOLD="${THRESHOLD_OPTIMIZATION_AGGRESSIVE_MIN_TS:-25000}"
+
 # Enhanced hysteresis and stability
 HYSTERESIS_FACTOR="${HYSTERESIS_FACTOR:-0.1}"
 STABILITY_PERIOD_SECONDS="${ADAPTIVE_CONTROLLER_STABILITY_SECONDS:-120}"
@@ -151,12 +159,56 @@ query_prometheus_with_validation() {
     echo "$value"
 }
 
-# Include original query_prometheus_value function here...
+# Helper to query Prometheus with retries and validation
 query_prometheus_value() {
-    # Original implementation from the file
     local query_string="$1"
     local default_value="${2:-0}"
-    # ... (rest of original implementation)
+    local response_file="/tmp/prom_response_$$.json"
+    local value
+    local http_status
+    local retry_count=3
+    local retry_delay=2
+
+    for ((attempt=1; attempt <= retry_count; attempt++)); do
+        http_status=$(curl -s -m 10 -G "${PROM_API_ENDPOINT}/query" \
+            --data-urlencode "query=${query_string}" \
+            -o "$response_file" \
+            -w "%{http_code}")
+
+        if [[ "$http_status" -eq 200 ]]; then
+            value=$(jq -r '.data.result[0].value[1] // "null"' "$response_file")
+            if [[ "$value" != "null" && -n "$value" ]]; then
+                break
+            fi
+        fi
+
+        if [[ "$attempt" -lt "$retry_count" ]]; then
+            log_warn "Prometheus query attempt $attempt/$retry_count failed. Retrying in ${retry_delay}s..."
+            sleep "$retry_delay"
+        fi
+    done
+
+    if [[ "$http_status" -ne 200 ]]; then
+        log_warn "Prometheus query failed for '$query_string'. HTTP Status: $http_status. Assuming default: $default_value. Response: $(cat $response_file || echo 'empty')"
+        value="$default_value"
+    elif [[ "$value" == "null" || -z "$value" ]]; then
+        log_warn "Metric for '$query_string' not found or no data after $retry_count attempts. Assuming default: $default_value."
+        value="$default_value"
+    fi
+
+    rm -f "$response_file"
+
+    if [[ -n "$value" ]]; then
+        sanitized_value=$(echo "$value" | awk '{printf "%.0f", $1}')
+        if [[ "$sanitized_value" =~ ^[0-9]+$ ]]; then
+            echo "$sanitized_value"
+            return 0
+        else
+            log_warn "Value '$value' is not a valid number. Using default: $default_value"
+        fi
+    fi
+
+    echo "$default_value"
 }
 
 # --- Main Enhanced Control Logic ---
@@ -165,6 +217,9 @@ main() {
     
     # Load previous state
     local state=$(load_state)
+    local PREV_OPTIMIZATION_PROFILE=$(echo "$state" | jq -r '.change_history[-1].profile // "balanced"')
+    local PREV_LAST_CHANGE=$(echo "$state" | jq -r '.change_history[-1].timestamp // 0')
+    PREV_OPTIMISED_TS_FROM_FILE=0
     
     # Check for emergency lockout
     if check_emergency_lockout "$state"; then
@@ -209,15 +264,60 @@ main() {
     if (( $(echo "$risk_score > $RISK_SCORE_THRESHOLD" | bc -l) )); then
         proposed_profile="aggressive"
         log_warn "High cardinality risk detected. Forcing aggressive optimization."
-        
+
         # Update emergency timestamp
         state=$(echo "$state" | jq ".last_emergency_timestamp = $(date +%s)")
     elif [ -n "$FORCED_PROFILE" ]; then
         proposed_profile="$FORCED_PROFILE"
     else
-        # Use normal threshold-based logic with hysteresis
-        # (Original implementation logic here)
-        proposed_profile="balanced" # Placeholder
+        # Threshold based logic with hysteresis
+        CONSERVATIVE_MAX_TS_NUM=$(echo "$CONSERVATIVE_MAX_TS_THRESHOLD" | bc)
+        AGGRESSIVE_MIN_TS_NUM=$(echo "$AGGRESSIVE_MIN_TS_THRESHOLD" | bc)
+        CURRENT_OPTIMISED_TS_NUM=$(echo "$current_optimised_ts" | bc)
+        HYSTERESIS_FACTOR_NUM=$(echo "$HYSTERESIS_FACTOR" | bc -l)
+        CONSERVATIVE_MAX_WITH_HYSTERESIS=$(echo "$CONSERVATIVE_MAX_TS_NUM * (1 + $HYSTERESIS_FACTOR_NUM)" | bc -l)
+        AGGRESSIVE_MIN_WITH_HYSTERESIS=$(echo "$AGGRESSIVE_MIN_TS_NUM * (1 - $HYSTERESIS_FACTOR_NUM)" | bc -l)
+
+        if [[ "$PREV_OPTIMIZATION_PROFILE" == "conservative" ]]; then
+            if (( $(echo "$CURRENT_OPTIMISED_TS_NUM > $CONSERVATIVE_MAX_WITH_HYSTERESIS" | bc -l) )); then
+                if (( $(echo "$CURRENT_OPTIMISED_TS_NUM > $AGGRESSIVE_MIN_TS_NUM" | bc -l) )); then
+                    proposed_profile="aggressive"
+                else
+                    proposed_profile="balanced"
+                fi
+            else
+                proposed_profile="conservative"
+            fi
+        elif [[ "$PREV_OPTIMIZATION_PROFILE" == "aggressive" ]]; then
+            if (( $(echo "$CURRENT_OPTIMISED_TS_NUM < $AGGRESSIVE_MIN_WITH_HYSTERESIS" | bc -l) )); then
+                if (( $(echo "$CURRENT_OPTIMISED_TS_NUM < $CONSERVATIVE_MAX_TS_NUM" | bc -l) )); then
+                    proposed_profile="conservative"
+                else
+                    proposed_profile="balanced"
+                fi
+            else
+                proposed_profile="aggressive"
+            fi
+        else
+            if (( $(echo "$CURRENT_OPTIMISED_TS_NUM > $AGGRESSIVE_MIN_TS_NUM" | bc -l) )); then
+                proposed_profile="aggressive"
+            elif (( $(echo "$CURRENT_OPTIMISED_TS_NUM < $CONSERVATIVE_MAX_TS_NUM" | bc -l) )); then
+                proposed_profile="conservative"
+            else
+                proposed_profile="balanced"
+            fi
+        fi
+
+        if [[ "$proposed_profile" != "$PREV_OPTIMIZATION_PROFILE" ]]; then
+            NOW=$(date +%s)
+            TIME_SINCE_LAST_CHANGE=$((NOW - PREV_LAST_CHANGE))
+            if (( TIME_SINCE_LAST_CHANGE < STABILITY_PERIOD_SECONDS )); then
+                log_info "Stability hold ($TIME_SINCE_LAST_CHANGE s < $STABILITY_PERIOD_SECONDS s). Maintaining '$PREV_OPTIMIZATION_PROFILE'."
+                proposed_profile="$PREV_OPTIMIZATION_PROFILE"
+            else
+                PREV_LAST_CHANGE=$NOW
+            fi
+        fi
     fi
     
     # Update state with new profile change

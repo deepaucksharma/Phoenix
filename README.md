@@ -117,6 +117,7 @@ Phoenix-vNext implements a sophisticated multi-tier architecture:
 - Hysteresis to prevent oscillation
 - Stability period enforcement
 - Metrics endpoint for observability
+- Bash-based enhanced fallback script (`services/control-plane/actuator/src/control-loop-enhanced.sh`)
 
 #### 3. **Anomaly Detector**
 - Statistical detection (Z-score)

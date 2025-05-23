@@ -72,6 +72,7 @@ The Go-based control actuator (`apps/control-actuator-go/`) provides:
 - **Hysteresis**: Prevents oscillation with configurable thresholds
 - **Stability Period**: Enforces minimum time between mode changes
 - **Metrics Endpoint**: Exposes control loop metrics for monitoring
+- **Fallback Script**: Bash implementation `control-loop-enhanced.sh` for basic environments
 
 ```go
 // PID calculation with discrete control output
