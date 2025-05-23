@@ -31,6 +31,23 @@ jobs:
         run: |
           sha256sum -c CHECKSUMS.txt || echo "Warning: Checksum mismatch detected"
 
+  test-js:
+    name: Test JS/TS Packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+
   test-go:
     name: Test Go Services
     runs-on: ubuntu-latest
@@ -64,7 +81,7 @@ jobs:
   test-integration:
     name: Integration Tests
     runs-on: ubuntu-latest
-    needs: [validate, test-go]
+    needs: [validate, test-go, test-js]
     steps:
       - uses: actions/checkout@v4
       
@@ -116,7 +133,7 @@ jobs:
   build:
     name: Build Docker Images
     runs-on: ubuntu-latest
-    needs: [test-go, test-integration]
+    needs: [test-go, test-js, test-integration]
     strategy:
       matrix:
         service:
