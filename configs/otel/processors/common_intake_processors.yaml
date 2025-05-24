@@ -1,26 +1,34 @@
-# Common Intake Processors for Phoenix
-# Shared across all pipelines for consistent processing
+# Common Intake Processors Template for Phoenix
+# This file serves as a TEMPLATE/EXAMPLE of common processor configurations.
+# The actual processors are defined inline in configs/otel/collectors/main.yaml
+# 
+# This template can be used as a reference when creating new collectors or
+# when you need to understand common processor patterns used in Phoenix.
 
 processors:
   # Memory limiter prevents OOM by checking memory usage
+  # Example configuration - adjust based on your needs
   memory_limiter:
     check_interval: 1s
-    limit_percentage: 75
+    limit_percentage: 75          # Alternative to limit_mib
     spike_limit_percentage: 30
     
   # Batch processor for efficiency
+  # Standard configuration for most use cases
   batch:
     timeout: 30s
     send_batch_size: 10000
     send_batch_max_size: 15000
     
   # Resource detection adds cloud/k8s metadata
+  # Common detectors for cloud environments
   resource:
     detectors: [env, system]
     timeout: 5s
     override: false
     
   # Resource processor adds custom attributes
+  # Example of adding service metadata
   resource/add_keys:
     attributes:
       - key: service.name
@@ -32,3 +40,9 @@ processors:
       - key: deployment.environment
         from_attribute: ENVIRONMENT
         action: insert
+
+# NOTE: To use these processors in your collector:
+# 1. Copy the relevant processor definitions
+# 2. Paste them into your collector's configuration
+# 3. Adjust values based on your specific requirements
+# 4. Reference them in your pipeline's processors list

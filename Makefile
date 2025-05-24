@@ -109,7 +109,7 @@ benchmark-logs:
 # Utility targets
 setup-env:
 	@echo "$(BLUE)Setting up environment...$(NC)"
-	./tools/scripts/initialize-environment.sh
+	./scripts/consolidated/core/initialize-environment.sh
 	@echo "$(GREEN)Environment setup complete!$(NC)"
 
 validate-config:
