@@ -1,1 +1,0 @@
-../../scripts/consolidated/testing/test_core_functionality.sh

@@ -1,0 +1,107 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: phoenixprocesspipelines.phoenix.io
+spec:
+  group: phoenix.io
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            required:
+            - experimentID
+            - variant
+            - configMap
+            properties:
+              experimentID:
+                type: string
+                pattern: '^exp-[a-z0-9]{8}$'
+              variant:
+                type: string
+                enum: ["baseline", "candidate"]
+              configMap:
+                type: string
+              collectorImage:
+                type: string
+                default: "otel/opentelemetry-collector-contrib:0.88.0"
+              nodeSelector:
+                type: object
+                additionalProperties:
+                  type: string
+              tolerations:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    key:
+                      type: string
+                    operator:
+                      type: string
+                    value:
+                      type: string
+                    effect:
+                      type: string
+                    tolerationSeconds:
+                      type: integer
+              requiresHostPID:
+                type: boolean
+                default: false
+          status:
+            type: object
+            properties:
+              phase:
+                type: string
+                enum: ["Pending", "Running", "Failed"]
+              readyNodes:
+                type: integer
+              totalNodes:
+                type: integer
+              conditions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                    status:
+                      type: string
+                    lastTransitionTime:
+                      type: string
+                    reason:
+                      type: string
+                    message:
+                      type: string
+    subresources:
+      status: {}
+    additionalPrinterColumns:
+    - name: Experiment
+      type: string
+      jsonPath: .spec.experimentID
+    - name: Variant
+      type: string
+      jsonPath: .spec.variant
+    - name: Phase
+      type: string
+      jsonPath: .status.phase
+    - name: Ready
+      type: string
+      jsonPath: .status.readyNodes
+    - name: Total
+      type: string
+      jsonPath: .status.totalNodes
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
+  scope: Namespaced
+  names:
+    plural: phoenixprocesspipelines
+    singular: phoenixprocesspipeline
+    kind: PhoenixProcessPipeline
+    shortNames:
+    - ppp

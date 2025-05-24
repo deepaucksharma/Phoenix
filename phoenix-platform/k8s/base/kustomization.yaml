@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: phoenix-system
+
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - api-gateway.yaml
+  - experiment-controller.yaml
+  - config-generator.yaml
+  - pipeline-operator.yaml
+  - loadsim-operator.yaml
+  - secrets.yaml
+  - configmaps.yaml
+  - network-policies.yaml
+
+commonLabels:
+  app.kubernetes.io/name: phoenix
+  app.kubernetes.io/part-of: phoenix-platform
+
+images:
+  - name: phoenix/api-gateway
+    newTag: latest
+  - name: phoenix/experiment-controller
+    newTag: latest
+  - name: phoenix/config-generator
+    newTag: latest
+  - name: phoenix/pipeline-operator
+    newTag: latest
+  - name: phoenix/loadsim-operator
+    newTag: latest
+  - name: phoenix/dashboard
+    newTag: latest

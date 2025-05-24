@@ -1,0 +1,199 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: experiments.phoenix.io
+spec:
+  group: phoenix.io
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            required:
+            - name
+            - duration
+            - variants
+            - loadProfile
+            properties:
+              name:
+                type: string
+                minLength: 3
+                maxLength: 63
+              description:
+                type: string
+                maxLength: 1024
+              owner:
+                type: string
+              duration:
+                type: string
+                pattern: '^[0-9]+[hm]$'
+              variants:
+                type: array
+                minItems: 2
+                maxItems: 2
+                items:
+                  type: object
+                  required:
+                  - name
+                  - pipeline
+                  properties:
+                    name:
+                      type: string
+                      enum: ["baseline", "candidate"]
+                    description:
+                      type: string
+                    pipeline:
+                      type: object
+                      properties:
+                        nodes:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                              type:
+                                type: string
+                                enum: ["filter", "transform", "aggregate", "sample"]
+                              position:
+                                type: object
+                                properties:
+                                  x:
+                                    type: number
+                                  y:
+                                    type: number
+                              config:
+                                type: object
+                                additionalProperties:
+                                  type: string
+                        connections:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              source:
+                                type: string
+                              target:
+                                type: string
+                    parameters:
+                      type: object
+                      additionalProperties:
+                        type: string
+              loadProfile:
+                type: object
+                properties:
+                  preset:
+                    type: string
+                    enum: ["realistic", "high-cardinality", "process-churn"]
+                  custom:
+                    type: object
+              targetNodes:
+                type: array
+                items:
+                  type: string
+              successCriteria:
+                type: object
+                properties:
+                  minCardinalityReduction:
+                    type: number
+                    minimum: 0
+                    maximum: 1
+                  maxCriticalProcessLoss:
+                    type: number
+                    minimum: 0
+                    maximum: 1
+                  maxLatencyIncrease:
+                    type: number
+                    minimum: 0
+                  minCostReduction:
+                    type: number
+                    minimum: 0
+                    maximum: 1
+              criticalProcesses:
+                type: array
+                items:
+                  type: string
+          status:
+            type: object
+            properties:
+              phase:
+                type: string
+                enum: ["Pending", "Generating", "Deploying", "Running", "Analyzing", "Completed", "Failed"]
+              message:
+                type: string
+              variants:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    status:
+                      type: string
+                    pipelineRef:
+                      type: string
+              metrics:
+                type: object
+                properties:
+                  baselineCardinality:
+                    type: integer
+                  variantCardinality:
+                    type: integer
+                  cardinalityReductionPercent:
+                    type: number
+                  baselineCostPerHour:
+                    type: number
+                  variantCostPerHour:
+                    type: number
+                  costReductionPercent:
+                    type: number
+              findings:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                    severity:
+                      type: string
+                    message:
+                      type: string
+              startTime:
+                type: string
+                format: date-time
+              completionTime:
+                type: string
+                format: date-time
+    subresources:
+      status: {}
+    additionalPrinterColumns:
+    - name: Owner
+      type: string
+      jsonPath: .spec.owner
+    - name: Phase
+      type: string
+      jsonPath: .status.phase
+    - name: Cardinality↓
+      type: string
+      jsonPath: .status.metrics.cardinalityReductionPercent
+    - name: Cost↓
+      type: string
+      jsonPath: .status.metrics.costReductionPercent
+    - name: Duration
+      type: string
+      jsonPath: .spec.duration
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
+  scope: Namespaced
+  names:
+    plural: experiments
+    singular: experiment
+    kind: Experiment
+    shortNames:
+    - exp

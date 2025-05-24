@@ -1,0 +1,120 @@
+receivers:
+  hostmetrics:
+    collection_interval: 10s
+    root_path: /hostfs
+    scrapers:
+      process:
+        include:
+          match_type: regexp
+          names: [".*"]
+        exclude:
+          names: ["otelcol", "gopsutil_*"]
+        metrics:
+          process.cpu.time:
+            enabled: true
+          process.cpu.utilization:
+            enabled: true
+          process.memory.physical:
+            enabled: true
+          process.memory.virtual:
+            enabled: true
+          process.disk.io:
+            enabled: true
+          process.threads:
+            enabled: true
+          process.open_file_descriptors:
+            enabled: true
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+  
+  cumulativetodelta:
+    include:
+      metrics:
+        - process.cpu.time
+        - process.disk.io
+  
+  resourcedetection/system:
+    detectors: [env, system, ec2, gcp, azure]
+    system:
+      hostname_sources: ["os"]
+    timeout: 2s
+    override: false
+  
+  resource/add_experiment_info:
+    attributes:
+      - key: phoenix.experiment.id
+        value: ${PHOENIX_EXPERIMENT_ID}
+        action: insert
+      - key: phoenix.variant
+        value: ${PHOENIX_VARIANT}
+        action: insert
+      - key: node.name
+        value: ${NODE_NAME}
+        action: upsert
+  
+  batch:
+    send_batch_size: 1000
+    timeout: 10s
+    send_batch_max_size: 2000
+
+exporters:
+  otlphttp/newrelic:
+    endpoint: ${NEW_RELIC_OTLP_ENDPOINT:-https://otlp.nr-data.net}
+    headers:
+      api-key: ${NEW_RELIC_API_KEY}
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 2
+      queue_size: 1000
+  
+  prometheus:
+    endpoint: 0.0.0.0:8888
+    namespace: phoenix
+    const_labels:
+      experiment_id: ${PHOENIX_EXPERIMENT_ID}
+      variant: ${PHOENIX_VARIANT}
+    resource_to_telemetry_conversion:
+      enabled: true
+    enable_open_metrics: true
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  
+  pprof:
+    endpoint: 0.0.0.0:1777
+  
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+service:
+  extensions: [health_check, pprof, zpages]
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      processors: 
+        - memory_limiter
+        - cumulativetodelta
+        - resourcedetection/system
+        - resource/add_experiment_info
+        - batch
+      exporters: [otlphttp/newrelic, prometheus]
+  
+  telemetry:
+    logs:
+      level: info
+      output_paths: ["stdout"]
+      error_output_paths: ["stderr"]
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8889
