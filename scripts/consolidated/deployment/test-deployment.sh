@@ -25,7 +25,6 @@ REQUIRED_DIRS=(
     "services/control-plane/actuator"
     "services/generators/synthetic"
     "services/generators/complex"
-    "services/validator"
     "infrastructure/docker/compose"
     "configs/monitoring/prometheus"
     "configs/monitoring/grafana"

@@ -127,11 +127,8 @@ update_configs() {
 build_services() {
     echo -e "\n${YELLOW}Building services...${NC}"
     
-    # Build specific services that have been updated
-    echo -e "${BLUE}Building validator service...${NC}"
-    docker build -f services/validator/Dockerfile -t phoenix-validator:latest services/validator/
-    
-    echo -e "${BLUE}Building other services...${NC}"
+    # Build updated services
+    echo -e "${BLUE}Building services...${NC}"
     make build-docker || true
 }
 
