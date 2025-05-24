@@ -89,7 +89,7 @@ receivers:
 
 processors:
   memory_limiter:
-    check_interval: 5s
+    check_interval: 1s
     limit_mib: 204
     spike_limit_mib: 64
 

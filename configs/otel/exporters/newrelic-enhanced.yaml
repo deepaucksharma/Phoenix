@@ -1,9 +1,20 @@
-# Enhanced New Relic OTLP Exporter Configuration
+# Enhanced New Relic OTLP Exporter Configuration Template
+# This file serves as a TEMPLATE/REFERENCE for New Relic exporter configurations.
+# The actual exporters are defined inline in configs/otel/collectors/main.yaml
+# with pipeline-specific API keys (NEW_RELIC_LICENSE_KEY_FULL, _OPTIMISED, _EXPERIMENTAL).
+#
+# Use this template when:
+# - Setting up a new collector that needs New Relic integration
+# - Understanding the full range of New Relic exporter options
+# - Creating a simpler deployment with a single API key
+
 exporters:
+  # Example configuration using a single API key for all pipelines
+  # Note: Production configs in main.yaml use separate keys per pipeline
   otlp/newrelic_full:
     endpoint: ${env:NEW_RELIC_OTLP_ENDPOINT}
     headers:
-      api-key: ${env:NEW_RELIC_LICENSE_KEY}
+      api-key: ${env:NEW_RELIC_LICENSE_KEY}  # Single key variant
     compression: gzip
     retry_on_failure:
       enabled: true
@@ -19,7 +30,7 @@ exporters:
   otlp/newrelic_optimized:
     endpoint: ${env:NEW_RELIC_OTLP_ENDPOINT}
     headers:
-      api-key: ${env:NEW_RELIC_LICENSE_KEY}
+      api-key: ${env:NEW_RELIC_LICENSE_KEY}  # Single key variant
     compression: gzip
     retry_on_failure:
       enabled: true
@@ -35,7 +46,7 @@ exporters:
   otlp/newrelic_experimental:
     endpoint: ${env:NEW_RELIC_OTLP_ENDPOINT}
     headers:
-      api-key: ${env:NEW_RELIC_LICENSE_KEY}
+      api-key: ${env:NEW_RELIC_LICENSE_KEY}  # Single key variant
     compression: gzip
     retry_on_failure:
       enabled: true
@@ -49,6 +60,7 @@ exporters:
     timeout: 30s
 
 # New Relic specific processors for enrichment
+# These can be used in conjunction with the exporters above
 processors:
   attributes/newrelic:
     actions:
@@ -109,3 +121,11 @@ processors:
           - "^phoenix.*"
           - "^system.*"
           - "^container.*"
+
+# PRODUCTION NOTE:
+# The main.yaml collector uses pipeline-specific API keys:
+# - NEW_RELIC_LICENSE_KEY_FULL for full fidelity pipeline
+# - NEW_RELIC_LICENSE_KEY_OPTIMISED for optimized pipeline  
+# - NEW_RELIC_LICENSE_KEY_EXPERIMENTAL for experimental pipeline
+#
+# This allows for separate New Relic accounts/billing per pipeline.

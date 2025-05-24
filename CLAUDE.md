@@ -4,23 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Phoenix-vNext is a production-ready 3-Pipeline Cardinality Optimization System for OpenTelemetry metrics collection and processing. The system uses adaptive cardinality management with dynamic switching between optimization profiles (conservative, balanced, aggressive) based on metric volume and system performance through a PID-like control algorithm implemented in Go.
+Phoenix-vNext is a production-ready 3-Pipeline Cardinality Optimization System for OpenTelemetry metrics collection and processing. The system uses adaptive cardinality management with dynamic switching between optimization profiles (conservative, balanced, aggressive) based on metric volume and system performance through a PID controller implemented in Go.
 
 ## Architecture
 
 ### Core System Components
-- **Main Collector** (`otelcol-main`): Runs 3 parallel pipelines with different cardinality optimization levels using shared processing (40% overhead reduction)
+- **Main Collector** (`otelcol-main`): Runs 3 parallel pipelines with different cardinality optimization levels
 - **Observer Collector** (`otelcol-observer`): Control plane that monitors pipeline metrics and system performance
 - **Control Actuator** (`control-actuator-go`): Go-based PID controller with hysteresis and stability management
-- **Anomaly Detector** (`anomaly-detector`): Multi-algorithm detection (Z-score, rate of change, pattern matching) with webhook integration
-- **Benchmark Controller** (`benchmark`): Performance validation with 4 test scenarios and CI/CD integration
+- **Anomaly Detector** (`anomaly-detector`): Multi-algorithm detection (Z-score, rate of change, pattern matching)
+- **Benchmark Controller** (`benchmark-controller`): Performance validation with 4 test scenarios
 - **Synthetic Generator** (`synthetic-metrics-generator`): Go-based load generator for testing
 
 ### Pipeline Architecture
-The system operates 3 distinct pipelines in parallel with shared processing:
+The system operates 3 distinct pipelines in parallel:
 1. **Full Fidelity Pipeline** (`pipeline_full_fidelity`) - Complete metrics baseline without optimization
 2. **Optimized Pipeline** (`pipeline_optimised`) - Moderate cardinality reduction with configurable aggregation
-3. **Experimental TopK Pipeline** (`pipeline_experimental_topk`) - Advanced optimization using TopK sampling techniques
+3. **Experimental TopK Pipeline** (`pipeline_experimental_topk`) - Advanced optimization using TopK sampling
 
 ### Adaptive Control System
 - Observer monitors `phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate` metrics
@@ -32,47 +32,15 @@ The system operates 3 distinct pipelines in parallel with shared processing:
 - PID algorithm: `pidOutput = 0.5*error + 0.1*integral + 0.05*derivative`
 - Hysteresis factor (10%) prevents rapid oscillation
 
-### Performance Targets
-- Signal preservation: >98%
-- Cardinality reduction: 15-40% (mode dependent)
-- Control loop latency: <100ms
-- Memory usage: <512MB baseline
-- P99 processing latency: <50ms
-
 ## Development Commands
 
-### Consolidated Script System
-Phoenix now uses a unified script management system for all operations:
-
-```bash
-# Master script manager - single entry point for all scripts
-./scripts/consolidated/phoenix-scripts.sh
-
-# Quick commands
-./scripts/consolidated/phoenix-scripts.sh help           # Show all available commands
-./scripts/consolidated/phoenix-scripts.sh init           # Initialize environment
-./scripts/consolidated/phoenix-scripts.sh verify-system  # Comprehensive system verification
-./scripts/consolidated/phoenix-scripts.sh start          # Start all services
-./scripts/consolidated/phoenix-scripts.sh stop           # Stop all services
-./scripts/consolidated/phoenix-scripts.sh clean          # Clean everything
-./scripts/consolidated/phoenix-scripts.sh logs <service> # View service logs
-
-# Script categories:
-# - core/        : Environment setup, initialization
-# - testing/     : Verification and validation scripts  
-# - deployment/  : Docker and cloud deployment
-# - monitoring/  : Health checks and monitoring
-# - maintenance/ : Cleanup and utility scripts
-# - legacy/      : Backward compatibility (./run-phoenix.sh etc.)
-```
-
-### Legacy Quick Start (still supported)
+### Quick Start
 ```bash
 # Initialize environment (creates data dirs, control files, .env from template)
 ./scripts/consolidated/core/initialize-environment.sh
 
 # Start full stack
-./run-phoenix.sh  # (symlinked to consolidated script)
+./run-phoenix.sh
 
 # Or use docker-compose directly
 docker-compose up -d
@@ -132,18 +100,7 @@ curl http://localhost:8082/health  # Anomaly detector health
 
 ### Testing & Validation
 ```bash
-# Use consolidated testing scripts
-./scripts/consolidated/phoenix-scripts.sh verify-system     # Complete system verification
-./scripts/consolidated/phoenix-scripts.sh test-integration  # Run integration tests
-./scripts/consolidated/phoenix-scripts.sh validate-configs  # Validate all configurations
-
-# Individual verification scripts
-./scripts/consolidated/testing/verify-services.sh           # Service health checks
-./scripts/consolidated/testing/verify-apis.sh               # API endpoint testing
-./scripts/consolidated/testing/verify-configs.sh            # Configuration validation
-./scripts/consolidated/testing/full-verification.sh         # Complete verification
-
-# Legacy testing (still supported)
+# Run integration tests
 ./tests/integration/test_core_functionality.sh
 
 # Generate synthetic load
@@ -158,7 +115,7 @@ curl -X POST http://localhost:8083/benchmark/run \
 # Monitor control signal changes
 watch cat configs/control/optimization_mode.yaml
 
-# Validate configurations manually
+# Validate configurations
 docker-compose config
 sha256sum configs/otel/collectors/*.yaml configs/templates/control/*.yaml > CHECKSUMS.txt
 ```
@@ -179,24 +136,21 @@ terraform init && terraform apply
 ## Configuration Architecture
 
 ### OpenTelemetry Configurations
-- `configs/otel/collectors/main.yaml`: Core collector with 3-pipeline configuration
-- `configs/otel/collectors/main-optimized.yaml`: Enhanced version with shared processing
+- `configs/otel/collectors/main.yaml`: Core collector with 3-pipeline configuration (all processors/exporters defined inline)
 - `configs/otel/collectors/observer.yaml`: Monitoring collector that exposes KPI metrics
-- `configs/otel/processors/common_intake_processors.yaml`: Shared processor configurations
-- `configs/otel/exporters/newrelic-enhanced.yaml`: New Relic OTLP integration
+- `configs/otel/processors/common_intake_processors.yaml`: Template/reference for common processor patterns (not actively included)
+- `configs/otel/exporters/newrelic-enhanced.yaml`: Template/reference for New Relic integration (production uses pipeline-specific keys)
 
 ### Control System
 - `configs/control/optimization_mode.yaml`: Dynamic control file modified by actuator
-- `configs/templates/control/optimization_mode_template.yaml`: Template defining control file schema (relocated)
+- `configs/templates/control/optimization_mode_template.yaml`: Template defining control file schema
 - Version tracking with `config_version` field
 - Correlation IDs for tracking changes
 
 ### Monitoring Stack
-- `configs/monitoring/prometheus/prometheus.yaml`: Prometheus scrape configuration (fixed YAML syntax)
-- `configs/monitoring/prometheus/rules/phoenix_core_rules.yml`: Core recording rules (simplified)
-- `configs/monitoring/prometheus/rules/phoenix_advanced_rules.yml`: Advanced metrics (optional)
+- `configs/monitoring/prometheus/prometheus.yaml`: Prometheus scrape configuration
+- `configs/monitoring/prometheus/rules/phoenix_rules_consolidated.yml`: Canonical recording rules (colon-notation)
 - `configs/monitoring/grafana/`: Datasource and dashboard provisioning
-- `monitoring/grafana/dashboards/`: Phoenix dashboards (adaptive control, ultra overview)
 
 ## Key Environment Variables
 
@@ -427,45 +381,6 @@ curl "http://localhost:9090/api/v1/query_range?query=phoenix:cardinality_growth_
 # Check for memory leaks
 docker stats --no-stream
 
-# Verify all services are healthy using consolidated scripts
-./scripts/consolidated/phoenix-scripts.sh verify-system
+# Verify all services are healthy
+for port in 8081 8082 8083; do echo "Port $port:"; curl -s http://localhost:$port/health | jq; done
 ```
-
-## Recent System Updates (Current Session)
-
-### Script Consolidation Completed
-- **24 shell scripts** consolidated from 8 locations into organized categories under `scripts/consolidated/`
-- **Master script interface**: `./scripts/consolidated/phoenix-scripts.sh` provides unified access to all scripts
-- **Categories**: core, testing, deployment, monitoring, maintenance, utils, legacy
-- **Backward compatibility**: Legacy scripts maintained via symbolic links
-
-### Configuration Fixes Applied
-1. **Prometheus YAML Syntax**: Fixed invalid YAML format in `configs/monitoring/prometheus/prometheus.yaml`
-2. **OTEL Memory Limiter**: Added missing `check_interval: 1s` to both main.yaml and observer.yaml collectors
-3. **Template Paths**: Updated initialization script to use correct template path (`configs/templates/control/`)
-4. **Docker Compose**: Removed deprecated `version` attributes to eliminate warnings
-
-### Project Cleanup Completed
-- **665KB+ removed**: Eliminated redundant files, archive directories, duplicate configurations
-- **Directory restructure**: Templates moved to `configs/templates/` for better organization
-- **Service cleanup**: Removed unused service directories while maintaining core functionality
-
-### Testing Framework Enhanced
-- **Comprehensive verification**: 50+ test checks across services, APIs, and configurations
-- **Graceful error handling**: Tests continue on failures with detailed reporting
-- **JSON safety**: API tests include proper JSON validation and error handling
-- **Service-specific checks**: Health endpoints, port availability, configuration validation
-
-### Current System Status
-- **Main collector**: Configuration fixed, needs restart with restored full config
-- **Observer collector**: Not yet started, pending main collector stability  
-- **Control actuator**: Go service ready to start once collectors are operational
-- **Prometheus/Grafana**: Basic monitoring operational with simplified rule set
-- **Testing framework**: Fully operational and comprehensive
-
-### Next Steps
-1. Restore full OTEL collector configuration and restart main collector
-2. Start observer collector and verify KPI metrics exposure
-3. Start control actuator Go service and verify control loop operation
-4. Complete full system integration testing
-5. Validate end-to-end cardinality optimization workflow

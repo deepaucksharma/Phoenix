@@ -147,7 +147,7 @@ services:
     image: prom/prometheus:v2.47.0
     container_name: phoenix-prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--config.file=/etc/prometheus/prometheus.yaml'
       - '--storage.tsdb.path=/prometheus'
       - '--storage.tsdb.retention.time=30d'
       - '--web.console.libraries=/etc/prometheus/console_libraries'
@@ -155,7 +155,7 @@ services:
       - '--web.enable-lifecycle'
       - '--web.enable-admin-api'
     volumes:
-      - ./configs/monitoring/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - ./configs/monitoring/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
       - ./configs/monitoring/prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
     ports:
