@@ -16,9 +16,9 @@
     "lint": "turbo run lint",
     "clean": "turbo run clean",
     "dev": "turbo run dev --parallel",
-    "deploy:dev": "docker-compose -f infrastructure/docker/compose/base.yaml -f infrastructure/docker/compose/dev.yaml up -d",
-    "deploy:prod": "docker-compose -f infrastructure/docker/compose/base.yaml -f infrastructure/docker/compose/prod.yaml up -d",
-    "logs": "docker-compose -f infrastructure/docker/compose/base.yaml logs -f",
+    "deploy:dev": "docker-compose -f docker-compose.yaml -f docker-compose.override.yml up -d",
+    "deploy:prod": "docker-compose -f docker-compose.yaml -f docker-compose.override.yml up -d",
+    "logs": "docker-compose logs -f",
     "health-check": "node tools/scripts/health-check.js"
   },
   "devDependencies": {
