@@ -1,0 +1,155 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: phoenix
+      POSTGRES_USER: phoenix
+      POSTGRES_PASSWORD: phoenix
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U phoenix"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Service
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    environment:
+      DATABASE_URL: postgres://phoenix:phoenix@postgres/phoenix?sslmode=disable
+      JWT_SECRET: development-secret-change-me
+      GRPC_PORT: 5050
+      HTTP_PORT: 8080
+      GIT_REPO_URL: https://github.com/phoenix/configs
+      GIT_TOKEN: ${GIT_TOKEN}
+    ports:
+      - "5050:5050"
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Dashboard
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/dashboard/Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    environment:
+      VITE_API_URL: http://localhost:8080/api/v1
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./configs/monitoring/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+    volumes:
+      - ./configs/monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./configs/monitoring/grafana/dashboards_provider.yaml:/etc/grafana/provisioning/dashboards/phoenix.yaml
+      - ./configs/monitoring/grafana/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/prometheus.yaml
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Process Simulator (for development)
+  simulator:
+    build:
+      context: .
+      dockerfile: docker/simulator/Dockerfile
+    environment:
+      PROFILE: realistic
+      DURATION: 1h
+      PROCESS_COUNT: 100
+    profiles:
+      - simulation
+
+  # MinIO (S3-compatible storage for development)
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    profiles:
+      - full
+
+  # Redis (for caching and pub/sub)
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - full
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:
+  minio_data:
+  redis_data:
+
+networks:
+  default:
+    name: phoenix-network

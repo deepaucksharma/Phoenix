@@ -1,1 +1,0 @@
-../../scripts/consolidated/core/initialize-environment.sh

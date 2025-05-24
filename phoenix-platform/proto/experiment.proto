@@ -1,0 +1,219 @@
+syntax = "proto3";
+
+package phoenix.v1;
+
+option go_package = "github.com/phoenix/platform/pkg/api/v1;v1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+service ExperimentService {
+  rpc CreateExperiment(CreateExperimentRequest) returns (CreateExperimentResponse);
+  rpc GetExperiment(GetExperimentRequest) returns (Experiment);
+  rpc ListExperiments(ListExperimentsRequest) returns (ListExperimentsResponse);
+  rpc UpdateExperiment(UpdateExperimentRequest) returns (Experiment);
+  rpc DeleteExperiment(DeleteExperimentRequest) returns (DeleteExperimentResponse);
+  rpc GetExperimentStatus(GetExperimentStatusRequest) returns (ExperimentStatus);
+  rpc StreamExperimentUpdates(StreamExperimentUpdatesRequest) returns (stream ExperimentUpdate);
+  rpc PromoteVariant(PromoteVariantRequest) returns (PromoteVariantResponse);
+}
+
+message CreateExperimentRequest {
+  ExperimentSpec spec = 1;
+}
+
+message CreateExperimentResponse {
+  string experiment_id = 1;
+  string status = 2;
+}
+
+message GetExperimentRequest {
+  string experiment_id = 1;
+}
+
+message ListExperimentsRequest {
+  string owner = 1;
+  string status = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+message ListExperimentsResponse {
+  repeated Experiment experiments = 1;
+  int32 total = 2;
+}
+
+message UpdateExperimentRequest {
+  string experiment_id = 1;
+  ExperimentSpec spec = 2;
+}
+
+message DeleteExperimentRequest {
+  string experiment_id = 1;
+}
+
+message DeleteExperimentResponse {
+  bool success = 1;
+}
+
+message GetExperimentStatusRequest {
+  string experiment_id = 1;
+}
+
+message StreamExperimentUpdatesRequest {
+  string experiment_id = 1;
+  repeated string metrics = 2;
+}
+
+message PromoteVariantRequest {
+  string experiment_id = 1;
+  string variant = 2;
+}
+
+message PromoteVariantResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message Experiment {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string owner = 4;
+  ExperimentSpec spec = 5;
+  ExperimentStatus status = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message ExperimentSpec {
+  google.protobuf.Duration duration = 1;
+  repeated PipelineVariant variants = 2;
+  LoadProfile load_profile = 3;
+  repeated string target_nodes = 4;
+  SuccessCriteria success_criteria = 5;
+  repeated string critical_processes = 6;
+}
+
+message PipelineVariant {
+  string name = 1;
+  string description = 2;
+  VisualPipeline pipeline = 3;
+  map<string, string> parameters = 4;
+}
+
+message VisualPipeline {
+  repeated ProcessorNode nodes = 1;
+  repeated Connection connections = 2;
+}
+
+message ProcessorNode {
+  string id = 1;
+  ProcessorType type = 2;
+  Position position = 3;
+  map<string, string> config = 4;
+}
+
+enum ProcessorType {
+  PROCESSOR_TYPE_UNSPECIFIED = 0;
+  PROCESSOR_TYPE_FILTER = 1;
+  PROCESSOR_TYPE_TRANSFORM = 2;
+  PROCESSOR_TYPE_AGGREGATE = 3;
+  PROCESSOR_TYPE_SAMPLE = 4;
+}
+
+message Position {
+  double x = 1;
+  double y = 2;
+}
+
+message Connection {
+  string source = 1;
+  string target = 2;
+}
+
+message LoadProfile {
+  oneof profile {
+    string preset = 1;
+    CustomProfile custom = 2;
+  }
+}
+
+message CustomProfile {
+  repeated ProcessPattern patterns = 1;
+  double churn_rate = 2;
+}
+
+message ProcessPattern {
+  string name_template = 1;
+  string cpu_pattern = 2;
+  string mem_pattern = 3;
+  google.protobuf.Duration lifetime = 4;
+  int32 count = 5;
+}
+
+message SuccessCriteria {
+  double min_cardinality_reduction = 1;
+  double max_critical_process_loss = 2;
+  double max_latency_increase = 3;
+  double min_cost_reduction = 4;
+}
+
+message ExperimentStatus {
+  enum Phase {
+    PHASE_UNSPECIFIED = 0;
+    PHASE_PENDING = 1;
+    PHASE_GENERATING = 2;
+    PHASE_DEPLOYING = 3;
+    PHASE_RUNNING = 4;
+    PHASE_ANALYZING = 5;
+    PHASE_COMPLETED = 6;
+    PHASE_FAILED = 7;
+  }
+  
+  Phase phase = 1;
+  string message = 2;
+  repeated VariantStatus variants = 3;
+  MetricsSummary metrics = 4;
+  repeated Finding findings = 5;
+}
+
+message VariantStatus {
+  string name = 1;
+  string status = 2;
+  string pipeline_ref = 3;
+}
+
+message MetricsSummary {
+  int64 baseline_cardinality = 1;
+  int64 variant_cardinality = 2;
+  double cardinality_reduction_percent = 3;
+  double baseline_cost_per_hour = 4;
+  double variant_cost_per_hour = 5;
+  double cost_reduction_percent = 6;
+  repeated ProcessCoverage critical_process_coverage = 7;
+}
+
+message ProcessCoverage {
+  string process_name = 1;
+  bool covered = 2;
+}
+
+message Finding {
+  string type = 1;
+  string severity = 2;
+  string message = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+message ExperimentUpdate {
+  string experiment_id = 1;
+  string status = 2;
+  map<string, MetricValue> metrics = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+message MetricValue {
+  double value = 1;
+  string unit = 2;
+}

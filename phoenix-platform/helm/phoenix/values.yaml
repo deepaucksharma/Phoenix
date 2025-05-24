@@ -1,0 +1,366 @@
+# Default values for phoenix.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+global:
+  # -- Global domain for ingress
+  domain: phoenix.example.com
+  # -- Global storage class
+  storageClass: ""
+  # -- Global image pull secrets
+  imagePullSecrets: []
+
+# -- String to partially override phoenix.fullname
+nameOverride: ""
+# -- String to fully override phoenix.fullname
+fullnameOverride: ""
+
+# Dashboard configuration
+dashboard:
+  enabled: true
+  replicaCount: 2
+  
+  image:
+    repository: phoenix/dashboard
+    pullPolicy: IfNotPresent
+    tag: ""
+  
+  service:
+    type: ClusterIP
+    port: 80
+  
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - host: dashboard.phoenix.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: dashboard-tls
+        hosts:
+          - dashboard.phoenix.example.com
+  
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+
+# API Gateway configuration
+apiGateway:
+  enabled: true
+  replicaCount: 2
+  
+  image:
+    repository: kong
+    pullPolicy: IfNotPresent
+    tag: "3.4"
+  
+  service:
+    type: LoadBalancer
+    httpPort: 80
+    httpsPort: 443
+    adminPort: 8444
+  
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+# Experiment Controller configuration
+experimentController:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: phoenix/experiment-controller
+    pullPolicy: IfNotPresent
+    tag: ""
+  
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+# Config Generator configuration
+generator:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: phoenix/config-generator
+    pullPolicy: IfNotPresent
+    tag: ""
+  
+  git:
+    repoUrl: https://github.com/phoenix/configs
+    branch: main
+    credentials:
+      secretName: git-credentials
+      sshKeyPath: /etc/git/ssh-key
+  
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+# Pipeline Operator configuration
+pipelineOperator:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: phoenix/pipeline-operator
+    pullPolicy: IfNotPresent
+    tag: ""
+  
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Load Simulation Operator configuration
+loadsimOperator:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: phoenix/loadsim-operator
+    pullPolicy: IfNotPresent
+    tag: ""
+  
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Process Simulator configuration
+processSimulator:
+  image:
+    repository: phoenix/process-simulator
+    pullPolicy: IfNotPresent
+    tag: ""
+
+# OTel Collector configuration
+collectors:
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    pullPolicy: IfNotPresent
+    tag: "0.88.0"
+  
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+# New Relic configuration
+newrelic:
+  endpoint: https://otlp.nr-data.net
+  apiKey:
+    secretName: newrelic-secret
+    key: api-key
+
+# ArgoCD configuration
+argocd:
+  enabled: false
+  namespace: argocd
+  project: phoenix
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+
+# Service Account
+serviceAccount:
+  # -- Specifies whether a service account should be created
+  create: true
+  # -- Annotations to add to the service account
+  annotations: {}
+  # -- The name of the service account to use.
+  name: ""
+
+# RBAC
+rbac:
+  # -- Specifies whether RBAC resources should be created
+  create: true
+
+# Pod Security Context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+# Security Context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop:
+    - ALL
+
+# Network Policies
+networkPolicy:
+  enabled: true
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Prometheus
+prometheus:
+  enabled: true
+  server:
+    retention: 30d
+    persistentVolume:
+      enabled: true
+      size: 100Gi
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+      requests:
+        cpu: 500m
+        memory: 2Gi
+  
+  alertmanager:
+    enabled: false
+  
+  pushgateway:
+    enabled: false
+  
+  nodeExporter:
+    enabled: false
+
+# Grafana
+grafana:
+  enabled: true
+  adminPassword: changeme
+  
+  persistence:
+    enabled: true
+    size: 10Gi
+  
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://{{ .Release.Name }}-prometheus-server
+        access: proxy
+        isDefault: true
+      - name: NewRelic
+        type: prometheus
+        url: https://prometheus-api.newrelic.com
+        access: proxy
+        jsonData:
+          httpHeaderName1: 'Api-Key'
+        secureJsonData:
+          httpHeaderValue1: '${NEW_RELIC_API_KEY}'
+  
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+      - name: phoenix
+        orgId: 1
+        folder: Phoenix
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 10
+        options:
+          path: /var/lib/grafana/dashboards/phoenix
+  
+  dashboardsConfigMaps:
+    phoenix: "phoenix-dashboards"
+
+# PostgreSQL
+postgresql:
+  enabled: true
+  auth:
+    database: phoenix
+    username: phoenix
+    existingSecret: postgresql-secret
+    secretKeys:
+      adminPasswordKey: postgres-password
+      userPasswordKey: password
+  
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 250m
+        memory: 512Mi
+
+# External Secrets
+externalSecrets:
+  enabled: false
+  backendType: secretsManager
+  region: us-east-1
+  roleArn: ""
+
+# Monitoring
+monitoring:
+  # -- Enable ServiceMonitor creation for Prometheus Operator
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    path: /metrics
+    labels: {}
+  
+  # -- Enable PrometheusRule creation for Prometheus Operator
+  prometheusRule:
+    enabled: false
+    labels: {}
+
+# Affinity
+affinity: {}
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Topology spread constraints
+topologySpreadConstraints: []

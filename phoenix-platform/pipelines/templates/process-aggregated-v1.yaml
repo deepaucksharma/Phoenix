@@ -1,0 +1,224 @@
+receivers:
+  hostmetrics:
+    collection_interval: 10s
+    root_path: /hostfs
+    scrapers:
+      process:
+        include:
+          match_type: regexp
+          names: [".*"]
+        exclude:
+          names: ["otelcol", "gopsutil_*"]
+        metrics:
+          process.cpu.time:
+            enabled: true
+          process.cpu.utilization:
+            enabled: true
+          process.memory.physical:
+            enabled: true
+          process.memory.virtual:
+            enabled: true
+          process.disk.io:
+            enabled: true
+          process.threads:
+            enabled: true
+          process.open_file_descriptors:
+            enabled: true
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+  
+  cumulativetodelta:
+    include:
+      metrics:
+        - process.cpu.time
+        - process.disk.io
+  
+  resourcedetection/system:
+    detectors: [env, system, ec2, gcp, azure]
+    system:
+      hostname_sources: ["os"]
+    timeout: 2s
+    override: false
+  
+  resource/add_experiment_info:
+    attributes:
+      - key: phoenix.experiment.id
+        value: ${PHOENIX_EXPERIMENT_ID}
+        action: insert
+      - key: phoenix.variant
+        value: ${PHOENIX_VARIANT}
+        action: insert
+      - key: node.name
+        value: ${NODE_NAME}
+        action: upsert
+  
+  transform/classify_processes:
+    metric_statements:
+      - context: datapoint
+        statements:
+          # Critical infrastructure processes
+          - set(attributes["process.priority"], "critical") 
+            where attributes["process.executable.name"] matches "^(nginx|apache|haproxy|envoy)"
+          - set(attributes["process.priority"], "critical") 
+            where attributes["process.executable.name"] matches "^(postgres|mysql|mongodb|redis|elasticsearch)"
+          - set(attributes["process.priority"], "critical") 
+            where attributes["process.executable.name"] matches "^(kafka|rabbitmq|nats)"
+          - set(attributes["process.priority"], "critical")
+            where attributes["process.executable.name"] matches "^(kubelet|dockerd|containerd)"
+          
+          # High priority system processes  
+          - set(attributes["process.priority"], "high")
+            where attributes["process.executable.name"] matches "^(systemd|init|kernel)"
+          - set(attributes["process.priority"], "high")
+            where attributes["process.executable.name"] matches "^(sshd|chronyd|networkd)"
+          
+          # Medium priority application processes
+          - set(attributes["process.priority"], "medium")
+            where attributes["process.executable.name"] matches "^(python|java|node|ruby|go)"
+            and attributes["process.memory.physical"] > 100000000  # >100MB
+          
+          # Everything else is low priority
+          - set(attributes["process.priority"], "low")
+            where attributes["process.priority"] == nil
+  
+  transform/prepare_aggregation:
+    metric_statements:
+      - context: datapoint
+        statements:
+          # Mark low-priority processes for aggregation
+          - set(attributes["process.aggregate"], "true")
+            where attributes["process.priority"] == "low"
+          
+          # Group by category
+          - set(attributes["process.category"], "browsers")
+            where attributes["process.executable.name"] matches "^(chrome|firefox|safari|edge)"
+          - set(attributes["process.category"], "dev_tools")
+            where attributes["process.executable.name"] matches "^(code|idea|eclipse|vim|emacs)"
+          - set(attributes["process.category"], "communication")
+            where attributes["process.executable.name"] matches "^(slack|teams|zoom|discord)"
+          - set(attributes["process.category"], "monitoring")
+            where attributes["process.executable.name"] matches "^(datadog|newrelic|prometheus)"
+          - set(attributes["process.category"], "utilities")
+            where attributes["process.executable.name"] matches "^(grep|sed|awk|find|ls|ps)"
+          - set(attributes["process.category"], "other")
+            where attributes["process.category"] == nil and attributes["process.aggregate"] == "true"
+  
+  # Keep non-aggregated processes
+  filter/individual:
+    metrics:
+      datapoint:
+        - 'attributes["process.aggregate"] != "true"'
+  
+  # Keep aggregated processes  
+  filter/aggregated:
+    metrics:
+      datapoint:
+        - 'attributes["process.aggregate"] == "true"'
+  
+  # Aggregate low priority processes by category
+  groupbyattrs/aggregate_low_priority:
+    keys:
+      - host.name
+      - process.category
+      - process.owner
+    aggregation_type: sum
+  
+  # Transform aggregated metrics to use category as process name
+  transform/rename_aggregated:
+    metric_statements:
+      - context: datapoint
+        statements:
+          - set(attributes["process.executable.name"], Concat(["aggregated_", attributes["process.category"]], ""))
+            where attributes["process.category"] != nil
+  
+  batch/individual:
+    send_batch_size: 1000
+    timeout: 10s
+    send_batch_max_size: 2000
+  
+  batch/aggregated:
+    send_batch_size: 500
+    timeout: 10s
+    send_batch_max_size: 1000
+
+exporters:
+  otlphttp/newrelic:
+    endpoint: ${NEW_RELIC_OTLP_ENDPOINT:-https://otlp.nr-data.net}
+    headers:
+      api-key: ${NEW_RELIC_API_KEY}
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 2
+      queue_size: 1000
+  
+  prometheus:
+    endpoint: 0.0.0.0:8888
+    namespace: phoenix
+    const_labels:
+      experiment_id: ${PHOENIX_EXPERIMENT_ID}
+      variant: ${PHOENIX_VARIANT}
+    resource_to_telemetry_conversion:
+      enabled: true
+    enable_open_metrics: true
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  
+  pprof:
+    endpoint: 0.0.0.0:1777
+  
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+service:
+  extensions: [health_check, pprof, zpages]
+  pipelines:
+    # Pipeline for individual high-priority processes
+    metrics/individual:
+      receivers: [hostmetrics]
+      processors:
+        - memory_limiter
+        - cumulativetodelta
+        - resourcedetection/system
+        - resource/add_experiment_info
+        - transform/classify_processes
+        - transform/prepare_aggregation
+        - filter/individual
+        - batch/individual
+      exporters: [otlphttp/newrelic, prometheus]
+    
+    # Pipeline for aggregated low-priority processes
+    metrics/aggregated:
+      receivers: [hostmetrics]
+      processors:
+        - memory_limiter
+        - cumulativetodelta
+        - resourcedetection/system
+        - resource/add_experiment_info
+        - transform/classify_processes
+        - transform/prepare_aggregation
+        - filter/aggregated
+        - groupbyattrs/aggregate_low_priority
+        - transform/rename_aggregated
+        - batch/aggregated
+      exporters: [otlphttp/newrelic, prometheus]
+  
+  telemetry:
+    logs:
+      level: info
+      output_paths: ["stdout"]
+      error_output_paths: ["stderr"]
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8889

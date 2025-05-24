@@ -1,0 +1,165 @@
+---
+# ServiceAccount for Phoenix Controller
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: phoenix-controller
+  namespace: phoenix-system
+  labels:
+    app.kubernetes.io/name: phoenix
+    app.kubernetes.io/component: controller
+
+---
+# ServiceAccount for Phoenix Collectors
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: phoenix-collector
+  namespace: phoenix-system
+  labels:
+    app.kubernetes.io/name: phoenix
+    app.kubernetes.io/component: collector
+
+---
+# ClusterRole for Phoenix Controller
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: phoenix-controller
+  labels:
+    app.kubernetes.io/name: phoenix
+    app.kubernetes.io/component: controller
+rules:
+# Core resources
+- apiGroups: [""]
+  resources: ["configmaps", "secrets", "services", "pods", "namespaces"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["pods/log", "pods/status"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+
+# Apps resources
+- apiGroups: ["apps"]
+  resources: ["daemonsets", "deployments", "replicasets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# Batch resources
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# Phoenix CRDs
+- apiGroups: ["phoenix.io"]
+  resources: ["experiments", "experiments/status"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["phoenix.io"]
+  resources: ["phoenixprocesspipelines", "phoenixprocesspipelines/status"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["phoenix.io"]
+  resources: ["loadsimulationjobs", "loadsimulationjobs/status"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# Monitoring resources
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["servicemonitors", "prometheusrules"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+
+# RBAC resources
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+# ClusterRole for Phoenix Collector
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: phoenix-collector
+  labels:
+    app.kubernetes.io/name: phoenix
+    app.kubernetes.io/component: collector
+rules:
+# Read pod and node information
+- apiGroups: [""]
+  resources: ["pods", "nodes", "nodes/stats", "nodes/proxy"]
+  verbs: ["get", "list"]
+# Read metrics
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+
+---
+# ClusterRoleBinding for Phoenix Controller
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: phoenix-controller
+  labels:
+    app.kubernetes.io/name: phoenix
+    app.kubernetes.io/component: controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: phoenix-controller
+subjects:
+- kind: ServiceAccount
+  name: phoenix-controller
+  namespace: phoenix-system
+
+---
+# ClusterRoleBinding for Phoenix Collector
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: phoenix-collector
+  labels:
+    app.kubernetes.io/name: phoenix
+    app.kubernetes.io/component: collector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: phoenix-collector
+subjects:
+- kind: ServiceAccount
+  name: phoenix-collector
+  namespace: phoenix-system
+
+---
+# Role for leader election
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: phoenix-leader-election
+  namespace: phoenix-system
+  labels:
+    app.kubernetes.io/name: phoenix
+    app.kubernetes.io/component: controller
+rules:
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+
+---
+# RoleBinding for leader election
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: phoenix-leader-election
+  namespace: phoenix-system
+  labels:
+    app.kubernetes.io/name: phoenix
+    app.kubernetes.io/component: controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: phoenix-leader-election
+subjects:
+- kind: ServiceAccount
+  name: phoenix-controller
+  namespace: phoenix-system

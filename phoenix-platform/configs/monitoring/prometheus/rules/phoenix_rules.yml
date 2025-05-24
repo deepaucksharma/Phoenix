@@ -1,0 +1,160 @@
+groups:
+  - name: phoenix_experiment_metrics
+    interval: 30s
+    rules:
+      # Cardinality reduction metric
+      - record: phoenix:cardinality_reduction:percent
+        expr: |
+          (
+            phoenix_process_cardinality{variant="baseline"} - 
+            phoenix_process_cardinality{variant="candidate"}
+          ) / phoenix_process_cardinality{variant="baseline"} * 100
+        labels:
+          metric_type: "efficiency"
+      
+      # Cost estimation (assuming $0.25 per GB)
+      - record: phoenix:estimated_cost:hourly
+        expr: |
+          (
+            rate(phoenix_pipeline_bytes_exported[5m]) * 60 * 60 / 1073741824
+          ) * 0.25
+        labels:
+          metric_type: "cost"
+      
+      # Process coverage for critical processes
+      - record: phoenix:critical_process_coverage:percent
+        expr: |
+          count(
+            count by (process_executable_name) (
+              process_cpu_time{
+                variant="candidate",
+                process_priority="critical"
+              }
+            )
+          ) / 
+          count(
+            count by (process_executable_name) (
+              process_cpu_time{
+                variant="baseline",
+                process_priority="critical"
+              }
+            )
+          ) * 100
+        labels:
+          metric_type: "quality"
+      
+      # Collector overhead metrics
+      - record: phoenix:collector_overhead:cpu_cores
+        expr: |
+          rate(container_cpu_usage_seconds_total{
+            pod=~"phoenix-collector-.*"
+          }[5m])
+        labels:
+          metric_type: "performance"
+      
+      - record: phoenix:collector_overhead:memory_bytes
+        expr: |
+          container_memory_working_set_bytes{
+            pod=~"phoenix-collector-.*"
+          }
+        labels:
+          metric_type: "performance"
+
+  - name: phoenix_experiment_alerts
+    rules:
+      - alert: ExperimentCardinalityExplosion
+        expr: phoenix_process_cardinality > 10000
+        for: 5m
+        labels:
+          severity: warning
+          component: experiment
+        annotations:
+          summary: "High cardinality detected in experiment {{ $labels.experiment_id }}"
+          description: "Variant {{ $labels.variant }} has {{ $value }} unique time series, which exceeds the threshold of 10,000"
+          runbook_url: "https://wiki.phoenix.io/runbooks/high-cardinality"
+      
+      - alert: CriticalProcessMissing
+        expr: phoenix:critical_process_coverage:percent < 95
+        for: 10m
+        labels:
+          severity: critical
+          component: experiment
+        annotations:
+          summary: "Critical processes missing in experiment {{ $labels.experiment_id }}"
+          description: "Only {{ $value }}% of critical processes are being monitored in the candidate variant"
+          runbook_url: "https://wiki.phoenix.io/runbooks/missing-critical-processes"
+      
+      - alert: CollectorMemoryHigh
+        expr: |
+          phoenix:collector_overhead:memory_bytes / 
+          container_spec_memory_limit_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: collector
+        annotations:
+          summary: "Phoenix collector memory usage high"
+          description: "Collector {{ $labels.pod }} is using {{ $value | humanizePercentage }} of its memory limit"
+          runbook_url: "https://wiki.phoenix.io/runbooks/collector-memory-high"
+      
+      - alert: ExperimentCostIncreased
+        expr: |
+          (
+            phoenix:estimated_cost:hourly{variant="candidate"} - 
+            phoenix:estimated_cost:hourly{variant="baseline"}
+          ) / phoenix:estimated_cost:hourly{variant="baseline"} > 0.1
+        for: 15m
+        labels:
+          severity: warning
+          component: experiment
+        annotations:
+          summary: "Experiment cost increased for {{ $labels.experiment_id }}"
+          description: "The candidate variant is {{ $value | humanizePercentage }} more expensive than baseline"
+
+  - name: phoenix_platform_alerts
+    rules:
+      - alert: PhoenixAPIDown
+        expr: up{job="phoenix-api"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Phoenix API is down"
+          description: "Phoenix API has been down for more than 5 minutes"
+          runbook_url: "https://wiki.phoenix.io/runbooks/api-down"
+      
+      - alert: PhoenixExperimentControllerDown
+        expr: up{job="phoenix-experiment-controller"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: controller
+        annotations:
+          summary: "Phoenix Experiment Controller is down"
+          description: "The experiment controller has been down for more than 5 minutes"
+          runbook_url: "https://wiki.phoenix.io/runbooks/controller-down"
+      
+      - alert: HighExperimentFailureRate
+        expr: |
+          rate(phoenix_experiments_created_total{status="failed"}[1h]) /
+          rate(phoenix_experiments_created_total[1h]) > 0.1
+        for: 30m
+        labels:
+          severity: warning
+          component: platform
+        annotations:
+          summary: "High experiment failure rate"
+          description: "More than 10% of experiments are failing over the last hour"
+      
+      - alert: CollectorDeploymentFailed
+        expr: |
+          kube_daemonset_status_number_ready{daemonset=~"phoenix-collector-.*"} /
+          kube_daemonset_status_desired_number_scheduled{daemonset=~"phoenix-collector-.*"} < 0.9
+        for: 10m
+        labels:
+          severity: warning
+          component: collector
+        annotations:
+          summary: "Phoenix collector deployment incomplete"
+          description: "Less than 90% of collector pods are ready for {{ $labels.daemonset }}"

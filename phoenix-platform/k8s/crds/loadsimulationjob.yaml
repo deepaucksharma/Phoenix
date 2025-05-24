@@ -1,0 +1,107 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: loadsimulationjobs.phoenix.io
+spec:
+  group: phoenix.io
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            required:
+            - experimentID
+            - profile
+            - duration
+            properties:
+              experimentID:
+                type: string
+                pattern: '^exp-[a-z0-9]{8}$'
+              profile:
+                type: string
+                enum: ["realistic", "high-cardinality", "process-churn", "custom"]
+              duration:
+                type: string
+                pattern: '^[0-9]+[hm]$'
+              processCount:
+                type: integer
+                minimum: 10
+                maximum: 10000
+                default: 100
+              nodeSelector:
+                type: object
+                additionalProperties:
+                  type: string
+              customProfile:
+                type: object
+                properties:
+                  patterns:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        nameTemplate:
+                          type: string
+                        cpuPattern:
+                          type: string
+                          enum: ["steady", "spiky", "growing", "random"]
+                        memPattern:
+                          type: string
+                          enum: ["steady", "spiky", "growing", "random"]
+                        lifetime:
+                          type: string
+                        count:
+                          type: integer
+                  churnRate:
+                    type: number
+                    minimum: 0
+                    maximum: 1
+          status:
+            type: object
+            properties:
+              phase:
+                type: string
+                enum: ["Pending", "Running", "Completed", "Failed"]
+              startTime:
+                type: string
+                format: date-time
+              completionTime:
+                type: string
+                format: date-time
+              activeProcesses:
+                type: integer
+              message:
+                type: string
+    subresources:
+      status: {}
+    additionalPrinterColumns:
+    - name: Experiment
+      type: string
+      jsonPath: .spec.experimentID
+    - name: Profile
+      type: string
+      jsonPath: .spec.profile
+    - name: Duration
+      type: string
+      jsonPath: .spec.duration
+    - name: Phase
+      type: string
+      jsonPath: .status.phase
+    - name: Active
+      type: integer
+      jsonPath: .status.activeProcesses
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
+  scope: Namespaced
+  names:
+    plural: loadsimulationjobs
+    singular: loadsimulationjob
+    kind: LoadSimulationJob
+    shortNames:
+    - lsj
