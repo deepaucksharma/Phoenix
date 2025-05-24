@@ -393,7 +393,7 @@ terraform apply
 
 # Deploy Phoenix
 cd ../../../..
-./infrastructure/scripts/deploy-aws.sh
+./scripts/consolidated/deployment/deploy-aws.sh
 ```
 
 ### Azure AKS Deployment
@@ -409,22 +409,9 @@ terraform apply
 
 # Deploy Phoenix
 cd ../../../..
-./infrastructure/scripts/deploy-azure.sh
+./scripts/consolidated/deployment/deploy-azure.sh
 ```
 
-### Cloud Deployment
-
-```bash
-# Using Helm for container services
-helm install phoenix ./infrastructure/helm/phoenix \
-  --namespace phoenix \
-  --create-namespace \
-  --values ./infrastructure/helm/phoenix/values.yaml
-
-# Using Terraform for infrastructure
-cd infrastructure/terraform/environments/aws
-terraform init && terraform apply
-```
 
 ## 💻 Development
 

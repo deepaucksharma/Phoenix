@@ -214,8 +214,6 @@ echo -e "\n${YELLOW}🏗️ Infrastructure Validation${NC}"
 
 run_test "Terraform AWS module exists" "[ -d infrastructure/terraform/modules/aws-phoenix ]"
 run_test "Terraform environments exist" "[ -d infrastructure/terraform/environments/aws ]"
-run_test "Helm charts exist" "[ -d infrastructure/helm ]"
-run_test "Helm chart exists" "[ -d infrastructure/helm/phoenix ]"
 
 # 11. Environment Configuration Validation
 echo -e "\n${YELLOW}🌍 Environment Configuration Validation${NC}"
