@@ -60,7 +60,7 @@ docker-compose up -d
 # OR: ./scripts/consolidated/testing/full-verification.sh
 
 # Access monitoring
-open http://localhost:3000  # Grafana (admin/admin)
+open http://localhost:3000  # Grafana (${GRAFANA_ADMIN_USER}/${GRAFANA_ADMIN_PASSWORD})
 open http://localhost:9090  # Prometheus
 
 # Run a benchmark test
@@ -285,7 +285,7 @@ curl -s http://localhost:9090/api/v1/query?query=phoenix:signal_preservation_sco
 ## 📈 Monitoring
 
 ### Access Points
-- **Grafana**: http://localhost:3000 (admin/admin)
+- **Grafana**: http://localhost:3000 (default: ${GRAFANA_ADMIN_USER}/${GRAFANA_ADMIN_PASSWORD})
 - **Prometheus**: http://localhost:9090
 - **Control API**: http://localhost:8081/metrics
 - **Anomaly API**: http://localhost:8082/alerts

@@ -134,7 +134,7 @@ docs-serve:
 # Performance monitoring
 monitor:
 	@echo "$(BLUE)Opening monitoring dashboards...$(NC)"
-	@echo "Grafana: http://localhost:3000 (admin/admin)"
+       @echo "Grafana: http://localhost:3000 (${GRAFANA_ADMIN_USER:-admin}/${GRAFANA_ADMIN_PASSWORD:-admin})"
 	@echo "Prometheus: http://localhost:9090"
 	@echo "Collector Metrics: http://localhost:8888/metrics"
 

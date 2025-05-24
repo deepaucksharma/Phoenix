@@ -210,5 +210,5 @@ echo "  (cd '$PROJECT_ROOT' && sha256sum configs/otel/collectors/*.yaml configs/
 echo ""
 echo "To start the stack: docker compose up -d"
 echo "To monitor logs: docker compose logs -f [otelcol-main|otelcol-observer|control-loop-actuator|synthetic-metrics-generator]"
-echo "Grafana: http://localhost:3000 (Default: admin/${GF_SECURITY_ADMIN_PASSWORD:-admin} or as per .env)"
+echo "Grafana: http://localhost:3000 (Default: ${GRAFANA_ADMIN_USER:-admin}/${GRAFANA_ADMIN_PASSWORD:-admin} or as per .env)"
 echo "Prometheus: http://localhost:9090"
