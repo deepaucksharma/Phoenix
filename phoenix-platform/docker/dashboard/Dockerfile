@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Copy package files
 COPY dashboard/package*.json ./
-RUN npm ci --only=production
+RUN npm ci
 
 # Copy source code
 COPY dashboard/ .
@@ -14,7 +14,7 @@ COPY dashboard/ .
 RUN npm run build
 
 # Runtime stage
-FROM nginx:alpine
+FROM nginx:1.25-alpine
 
 # Copy custom nginx config
 COPY docker/dashboard/nginx.conf /etc/nginx/nginx.conf
