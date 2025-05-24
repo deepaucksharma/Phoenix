@@ -126,12 +126,6 @@ update_configs() {
 # Build services
 build_services() {
     echo -e "\n${YELLOW}Building services...${NC}"
-    
-    # Build specific services that have been updated
-    echo -e "${BLUE}Building validator service...${NC}"
-    docker build -f services/validator/Dockerfile -t phoenix-validator:latest services/validator/
-    
-    echo -e "${BLUE}Building other services...${NC}"
     make build-docker || true
 }
 
@@ -139,10 +133,8 @@ build_services() {
 start_services() {
     echo -e "\n${YELLOW}Starting Phoenix services...${NC}"
     
-    # Use the modular docker-compose
-    $COMPOSE_CMD -f infrastructure/docker/compose/base.yaml \
-                 -f infrastructure/docker/compose/dev.yaml \
-                 up -d
+    # Start using the standard docker-compose configuration
+    $COMPOSE_CMD -f docker-compose.yaml -f docker-compose.override.yml up -d
     
     echo -e "${GREEN}✓ Services started${NC}"
 }

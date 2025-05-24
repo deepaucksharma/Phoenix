@@ -415,16 +415,12 @@ cd ../../../..
 ### Cloud Deployment
 
 ```bash
-# Using Helm for container services
-helm install phoenix ./infrastructure/helm/phoenix \
-  --namespace phoenix \
-  --create-namespace \
-  --values ./infrastructure/helm/phoenix/values.yaml
-
 # Using Terraform for infrastructure
 cd infrastructure/terraform/environments/aws
 terraform init && terraform apply
 ```
+
+Helm charts previously referenced here have been removed from the repository.
 
 ## 💻 Development
 
@@ -579,3 +575,4 @@ Apache License 2.0 - see [LICENSE](LICENSE) for details.
 - **Issues**: [GitHub Issues](https://github.com/deepaucksharma/Phoenix/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/deepaucksharma/Phoenix/discussions)
 - **Security**: security@phoenix-project.io
+
