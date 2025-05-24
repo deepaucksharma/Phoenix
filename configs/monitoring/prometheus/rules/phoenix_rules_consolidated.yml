@@ -1,0 +1,166 @@
+# Phoenix Consolidated Prometheus Recording Rules and Alerts
+# This is the canonical rule set for Phoenix-vNext monitoring
+# Uses colon-notation for recording rules as per Prometheus best practices
+
+groups:
+  # Core Metrics Group
+  - name: phoenix_core_metrics
+    interval: 30s
+    rules:
+      # Signal Preservation Score
+      - record: phoenix:signal_preservation_score
+        expr: |
+          (
+            sum(rate(phoenix_opt_final_output_process_cpu_time[5m]))
+            /
+            sum(rate(phoenix_full_final_output_process_cpu_time[5m]))
+          )
+      
+      # Cardinality Efficiency Ratio
+      - record: phoenix:cardinality_efficiency_ratio
+        expr: |
+          1 - (
+            count(count by (__name__)({__name__=~"phoenix_opt_final_output_.*"}))
+            /
+            count(count by (__name__)({__name__=~"phoenix_full_final_output_.*"}))
+          )
+      
+      # Pipeline Latency P99
+      - record: phoenix:pipeline_latency_ms_p99
+        expr: |
+          histogram_quantile(0.99, 
+            sum(rate(otelcol_processor_batch_batch_send_size_bucket[5m])) by (le, pipeline)
+          )
+      
+      # Pipeline Throughput
+      - record: phoenix:pipeline_throughput_metrics_per_sec
+        expr: |
+          sum(rate(otelcol_processor_batch_batch_send_size_count[5m])) by (pipeline)
+      
+      # Resource Efficiency Score
+      - record: phoenix:resource_efficiency_score
+        expr: |
+          (
+            sum(rate(phoenix_opt_final_output_process_cpu_time[5m]))
+            /
+            sum(rate(container_cpu_usage_seconds_total{container="otelcol-main"}[5m]))
+          )
+      
+      # Collector Memory Usage
+      - record: phoenix:collector_memory_usage_mb
+        expr: |
+          sum(container_memory_usage_bytes{container="otelcol-main"}) / 1024 / 1024
+
+  # Control System Metrics
+  - name: phoenix_control_metrics
+    interval: 30s
+    rules:
+      # Control Stability Score
+      - record: phoenix:control_stability_score
+        expr: |
+          1 - (
+            rate(phoenix_control_mode_transitions_total[10m])
+            /
+            (10 * 60 / avg_over_time(phoenix_control_loop_interval_seconds[10m]))
+          )
+      
+      # Control Loop Effectiveness
+      - record: phoenix:control_loop_effectiveness
+        expr: |
+          1 - abs(
+            (phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate{phoenix_pipeline_label="optimised"} 
+            - 20000) / 20000
+          )
+      
+      # Control Mode Transitions
+      - record: phoenix:control_mode_transitions_per_hour
+        expr: |
+          rate(phoenix_control_mode_transitions_total[1h]) * 3600
+
+  # Anomaly Detection Metrics
+  - name: phoenix_anomaly_metrics
+    interval: 30s
+    rules:
+      # Cardinality Z-Score
+      - record: phoenix:cardinality_zscore
+        expr: |
+          (
+            phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate
+            - avg_over_time(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[1h])
+          ) / stddev_over_time(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[1h])
+      
+      # Cardinality Growth Rate
+      - record: phoenix:cardinality_growth_rate
+        expr: |
+          rate(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[5m])
+      
+      # Cardinality Explosion Risk
+      - record: phoenix:cardinality_explosion_risk
+        expr: |
+          (
+            rate(phoenix_observer_kpi_store_phoenix_pipeline_output_cardinality_estimate[5m]) > 100
+            and
+            phoenix:cardinality_zscore > 3
+          )
+
+  # Alerts
+  - name: phoenix_alerts
+    interval: 30s
+    rules:
+      # Signal Preservation Alert
+      - alert: PhoenixSignalDegradation
+        expr: phoenix:signal_preservation_score < 0.95
+        for: 5m
+        labels:
+          severity: warning
+          component: pipeline
+        annotations:
+          summary: "Signal preservation below threshold"
+          description: "Signal preservation score is {{ $value | humanizePercentage }} (threshold: 95%)"
+      
+      # Cardinality Explosion Alert
+      - alert: PhoenixCardinalityExplosion
+        expr: phoenix:cardinality_growth_rate > 1000 and phoenix:cardinality_zscore > 3
+        for: 2m
+        labels:
+          severity: critical
+          component: cardinality
+        annotations:
+          summary: "Cardinality explosion detected"
+          description: "Cardinality growing at {{ $value }} series/sec with z-score > 3"
+      
+      # Resource Exhaustion Alert
+      - alert: PhoenixResourceExhaustion
+        expr: phoenix:collector_memory_usage_mb > (0.9 * 1024)
+        for: 5m
+        labels:
+          severity: critical
+          component: resources
+        annotations:
+          summary: "Collector approaching memory limit"
+          description: "Memory usage at {{ $value }}MB (90% of limit)"
+      
+      # Control Loop Instability Alert
+      - alert: PhoenixControlLoopInstability
+        expr: phoenix:control_stability_score < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          component: control
+        annotations:
+          summary: "Control loop experiencing instability"
+          description: "Stability score is {{ $value | humanizePercentage }} (threshold: 80%)"
+      
+      # SLO Violation Alert
+      - alert: PhoenixSLOViolation
+        expr: |
+          phoenix:signal_preservation_score < 0.98
+          or phoenix:cardinality_efficiency_ratio < 0.15
+          or phoenix:pipeline_latency_ms_p99 > 50
+        for: 10m
+        labels:
+          severity: warning
+          component: slo
+        annotations:
+          summary: "Phoenix SLO violation detected"
+          description: "One or more SLO targets not met for 10 minutes"

@@ -1,1 +1,0 @@
-scripts/consolidated/deployment/deploy-azure.sh

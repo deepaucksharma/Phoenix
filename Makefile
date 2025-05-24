@@ -18,17 +18,26 @@ install:
 	npm install
 	@echo "$(GREEN)Dependencies installed!$(NC)"
 
-## Build all projects
+## Build all projects (Node.js packages via Turborepo)
 build:
-	@echo "$(BLUE)Building all projects...$(NC)"
+	@echo "$(BLUE)Building all Node.js projects via Turborepo...$(NC)"
+	@echo "$(YELLOW)Note: Go services are built within Docker containers$(NC)"
 	npm run build
-	@echo "$(GREEN)Build complete!$(NC)"
+	@echo "$(GREEN)Node.js build complete!$(NC)"
 
-## Build Docker images
+## Build Docker images (includes Go services)
 build-docker:
-	@echo "$(BLUE)Building Docker images...$(NC)"
-	npm run build:docker
+	@echo "$(BLUE)Building Docker images (includes all Go services)...$(NC)"
+	docker-compose build
 	@echo "$(GREEN)Docker images built!$(NC)"
+
+## Build Go services locally
+build-go:
+	@echo "$(BLUE)Building Go services locally...$(NC)"
+	cd apps/control-actuator-go && go build -o ../../bin/control-actuator
+	cd apps/anomaly-detector && go build -o ../../bin/anomaly-detector
+	cd services/benchmark && go build -o ../../bin/benchmark-controller
+	@echo "$(GREEN)Go services built in bin/ directory!$(NC)"
 
 ## Run tests
 test:
@@ -132,6 +141,11 @@ monitor:
 ## Show help
 help:
 	@echo "$(BLUE)Phoenix Monorepo Commands$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Build Information:$(NC)"
+	@echo "  - 'make build' builds Node.js packages via Turborepo"
+	@echo "  - 'make build-docker' builds all Docker images (recommended for Go services)"
+	@echo "  - 'make build-go' builds Go services locally (requires Go 1.21+)"
 	@echo ""
 	@echo "$(YELLOW)Main targets:$(NC)"
 	@grep -E '^## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'

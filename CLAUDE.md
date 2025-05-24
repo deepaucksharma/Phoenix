@@ -136,10 +136,10 @@ terraform init && terraform apply
 ## Configuration Architecture
 
 ### OpenTelemetry Configurations
-- `configs/otel/collectors/main.yaml`: Core collector with 3-pipeline configuration
+- `configs/otel/collectors/main.yaml`: Core collector with 3-pipeline configuration (all processors/exporters defined inline)
 - `configs/otel/collectors/observer.yaml`: Monitoring collector that exposes KPI metrics
-- `configs/otel/processors/common_intake_processors.yaml`: Shared processor configurations
-- `configs/otel/exporters/newrelic-enhanced.yaml`: New Relic OTLP integration
+- `configs/otel/processors/common_intake_processors.yaml`: Template/reference for common processor patterns (not actively included)
+- `configs/otel/exporters/newrelic-enhanced.yaml`: Template/reference for New Relic integration (production uses pipeline-specific keys)
 
 ### Control System
 - `configs/control/optimization_mode.yaml`: Dynamic control file modified by actuator
@@ -149,9 +149,7 @@ terraform init && terraform apply
 
 ### Monitoring Stack
 - `configs/monitoring/prometheus/prometheus.yaml`: Prometheus scrape configuration
-- `configs/monitoring/prometheus/rules/phoenix_rules.yml`: Core recording rules
-- `configs/monitoring/prometheus/rules/phoenix_documented_metrics.yml`: Colon-notation metrics
-- `configs/monitoring/prometheus/rules/phoenix_core_rules.yml`: Basic alerting rules
+- `configs/monitoring/prometheus/rules/phoenix_rules_consolidated.yml`: Canonical recording rules (colon-notation)
 - `configs/monitoring/grafana/`: Datasource and dashboard provisioning
 
 ## Key Environment Variables
