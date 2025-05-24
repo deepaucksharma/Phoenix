@@ -47,8 +47,6 @@ This directory contains documentation for the Phoenix v3 Cardinality Optimizatio
 - Memory usage: <512MB baseline
 
 ## Historical Documentation
-Historical reports and analysis documents are preserved in the [archive](archive/) directory:
-- `reports-2025-05-24/` - Repository cleanup, system reviews, and test results
-- Previous cleanup and migration documents
-
-All critical information from these documents has been incorporated into the main documentation.
+Historical reports and analysis documents were previously stored in an `archive/` directory.
+That directory has been removed after consolidation, and all critical information has been
+incorporated into the main documentation.
