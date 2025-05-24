@@ -12,21 +12,32 @@ servers:
     description: Local development
 
 paths:
-  /control:
+  /health:
     get:
-      summary: Get current control mode
-      operationId: getControlMode
+      summary: Health check
+      operationId: getHealth
       responses:
         '200':
-          description: Current control mode
+          description: Service health status
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ControlStatus'
-    
+                $ref: '#/components/schemas/HealthStatus'
+  /metrics:
+    get:
+      summary: Get current KPI metrics
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Current metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KPIMetrics'
+  /mode:
     post:
-      summary: Override control mode
-      operationId: setControlMode
+      summary: Force control mode
+      operationId: setMode
       requestBody:
         required: true
         content:
@@ -44,36 +55,23 @@ paths:
           description: Invalid request
         '409':
           description: Conflict with current state
-
-  /status:
-    get:
-      summary: Get system status
-      operationId: getStatus
+  /anomaly:
+    post:
+      summary: Send anomaly report
+      operationId: reportAnomaly
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnomalyReport'
       responses:
         '200':
-          description: System status
+          description: Anomaly acknowledged
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SystemStatus'
-
-  /metrics:
-    get:
-      summary: Get current KPI metrics
-      operationId: getMetrics
-      parameters:
-        - name: pipeline
-          in: query
-          schema:
-            type: string
-            enum: [full_fidelity, optimized, experimental_topk, observatory]
-      responses:
-        '200':
-          description: Current metrics
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KPIMetrics'
+                $ref: '#/components/schemas/AnomalyResponse'
 
 components:
   schemas:
@@ -200,4 +198,46 @@ components:
           type: string
           format: date-time
         reason:
+          type: string
+    HealthStatus:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+        version:
+          type: string
+
+    AnomalyReport:
+      type: object
+      required:
+        - anomaly_id
+        - severity
+        - metric_name
+      properties:
+        anomaly_id:
+          type: string
+        severity:
+          type: string
+        metric_name:
+          type: string
+        current_value:
+          type: number
+        expected_value:
+          type: number
+        confidence:
+          type: number
+        timestamp:
+          type: string
+
+    AnomalyResponse:
+      type: object
+      required:
+        - status
+        - anomaly_id
+      properties:
+        status:
+          type: string
+        anomaly_id:
           type: string
